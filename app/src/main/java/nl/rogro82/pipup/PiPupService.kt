@@ -290,6 +290,7 @@ class PiPupService : Service(), WebServer.Handler {
         const val APPLICATION_JSON = "application/json"
 
         fun OK(message: String? = null): NanoHTTPD.Response = newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", message)
-        fun InvalidRequest(message: String? = null): NanoHTTPD.Response = newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: $message")
+        fun InvalidRequest(message: String? = null): NanoHTTPD.Response = 
+            newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: ${message ?: "Unknown error"}")
     }
 }
