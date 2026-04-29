@@ -34,7 +34,7 @@ class PiPupService : Service(), WebServer.Handler {
         val pendingIntent = PendingIntent.getActivity(
             this, 0,
             Intent(this, MainActivity::class.java), 
-            PendingIntent.FLAG_IMMUTABLE // Füge dieses Flag hinzu
+            PendingIntent.FLAG_IMMUTABLE
         )
 
         val mBuilder = NotificationCompat.Builder(this, "service_channel")
