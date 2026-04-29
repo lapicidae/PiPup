@@ -216,7 +216,7 @@ class PiPupService : Service(), WebServer.Handler {
                                         val backgroundColor = params["backgroundColor"]
                                             ?: PopupProps.DEFAULT_BACKGROUND_COLOR
 
-                                        val title = params["title"]
+                                        val title = params["title"] ?: ""
 
                                         val titleSize = params["titleSize"]?.toFloatOrNull()
                                             ?: PopupProps.DEFAULT_TITLE_SIZE
@@ -224,7 +224,7 @@ class PiPupService : Service(), WebServer.Handler {
                                         val titleColor = params["titleColor"]
                                             ?: PopupProps.DEFAULT_TITLE_COLOR
 
-                                        val message = params["message"]
+                                        val message = params["message"] ?: ""
 
                                         val messageSize = params["messageSize"]?.toFloatOrNull()
                                             ?: PopupProps.DEFAULT_TITLE_SIZE
@@ -270,8 +270,8 @@ class PiPupService : Service(), WebServer.Handler {
 
 
                             } catch (ex: Throwable) {
-                                Log.e(LOG_TAG, ex.message)
-                                InvalidRequest(ex.message ?: "Unknown error")
+                                Log.e(LOG_TAG, ex.message ?: "Error")
+                                InvalidRequest(ex.message ?: "Unknown error") 
                             }
                         }
                         else -> InvalidRequest("unknown uri: ${session.uri}")
@@ -293,8 +293,8 @@ class PiPupService : Service(), WebServer.Handler {
             newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", message ?: "")
 
         fun InvalidRequest(message: String? = null): NanoHTTPD.Response {
-            val responseText = "invalid request: ${message ?: "Unknown error"}"
-            return newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", responseText)
+            val errorDetail = message ?: "Unknown error"
+            return newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: $errorDetail")
         }
     }
 }
