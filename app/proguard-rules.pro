@@ -6,46 +6,46 @@
 #   http://developer.android.com/guide/developing/tools/proguard.html
 
 
-# --- General Android / Kotlin Rules ---
+# --- Code Shrinking & Obfuscation Settings ---
 
-# Preserve line numbers and source file names for meaningful stack traces in logs
+# Maintain line numbers and source file names for readable stack traces in production logs
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
 
-# --- Jackson (JSON Parsing) Rules ---
+# --- Dependency Resolution Rules ---
+# The following rules suppress warnings regarding optional dependencies or 
+# classes from the Java Desktop environment that are not present on Android.
+-dontwarn java.beans.**
+-dontwarn javax.annotation.**
+-dontwarn org.w3c.dom.bootstrap.DOMImplementationRegistry
+-dontwarn com.fasterxml.jackson.databind.ext.Java7SupportImpl
 
-# Preserve Jackson's core classes and annotations
+
+# --- Jackson (JSON Framework) ---
+# Ensure Jackson can access annotations and handle reflection for JSON mapping
 -keep class com.fasterxml.jackson.** { *; }
 -keepnames class com.fasterxml.jackson.** { *; }
 -keep @com.fasterxml.jackson.annotation.JsonIgnoreProperties class * { *; }
 -keepattributes *Annotation*,EnclosingMethod,Signature
 
 
-# --- Project Specific Data Models ---
-
-# IMPORTANT: Keep your data classes (like PopupProps) because Jackson uses reflection 
-# to map JSON keys to these class properties.
+# --- Application Models ---
+# Prevent R8 from stripping or renaming data classes used for JSON reflection
 -keep class nl.rogro82.pipup.PopupProps { *; }
 -keep class nl.rogro82.pipup.PopupProps$** { *; }
-
-# If you have other models in this package, keep them all:
 -keep class nl.rogro82.pipup.models.** { *; }
 
 
-# --- Glide (Image Loading) Rules ---
-
-# Preserve Glide's generated API and integration modules
+# --- Glide (Image Processing) ---
+# Preserve Glide's annotation processor output and integration modules
 -keep public class * extends com.bumptech.glide.module.AppGlideModule
 -keep public class * extends com.bumptech.glide.module.LibraryGlideModule
 -keep class com.bumptech.glide.GeneratedAppGlideModuleImpl { *; }
-
-# Preserve Glide's annotations
 -keep @com.bumptech.glide.annotation.GlideModule class * { *; }
 
 
-# --- NanoHTTPD Rules ---
-
-# Ensure the web server components are not stripped or renamed
+# --- NanoHTTPD (Web Server) ---
+# Keep the embedded server logic intact
 -keep class fi.iki.elonen.NanoHTTPD* { *; }
 -keepclassmembers class fi.iki.elonen.NanoHTTPD* { *; }
