@@ -40,9 +40,9 @@ jobs:
         run: chmod +x ./gradlew
 
       - name: Build APKs
-        # Builds both to ensure you have the choice, 
-        # or just assembleRelease if you want to save time.
-        run: ./gradlew clean assembleDebug assembleRelease
+        # Executes the build and passes the release_type (release/prerelease) to Gradle
+        # to ensure the resulting APK filenames reflect the selected status.
+        run: ./gradlew clean assembleDebug assembleRelease -PappStatus=${{ github.event.inputs.release_type }}
 
       - name: Generate Tag Name
         id: tag

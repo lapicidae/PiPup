@@ -84,14 +84,21 @@ android {
     }
 
     /**
-     * Customizes the output APK filenames using the version name from defaultConfig.
-     * Example: PiPup-0.1.5-2026-04-30-release.apk
+     * Customizes the output APK filenames using the version name and build status.
+     * The status is dynamically set via the 'appStatus' property (e.g., from a GitHub Workflow)
+     * or defaults to the build type (debug/release).
+     * 
+     * Example: PiPup-0.1.5-2026-04-30-prerelease.apk
      */
     applicationVariants.all { variant ->
         variant.outputs.all { output ->
             def version = variant.versionName
             def type = variant.buildType.name
-            outputFileName = "PiPup-${version}-${type}.apk"
+
+            // Use the injected appStatus property or fallback to the build type name
+            def status = project.hasProperty("appStatus") ? project.getProperty("appStatus") : type
+
+            outputFileName = "PiPup-${version}-${status}.apk"
         }
     }
 }
