@@ -33,7 +33,7 @@ jobs:
       run: ./gradlew assembleRelease
 
     - name: Release
-      uses: softprops/action-gh-release@v2
+      uses: softprops/action-gh-release@v3
       with:
         files: ${{ github.workspace }}/app/build/outputs/apk/release/app-release-unsigned.apk
 
