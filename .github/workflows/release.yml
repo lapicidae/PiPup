@@ -3,10 +3,11 @@
 
 name: Release
 
-on:
-  release:
-    types:
-      - "published"
+on: 
+  workflow_dispatch:
+#  release:
+#    types:
+#      - "published"
 
 jobs:
   build:
