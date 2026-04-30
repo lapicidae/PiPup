@@ -56,7 +56,7 @@ android {
     }
 
     buildTypes {
-		release {
+        release {
             minifyEnabled true // Enable optimization for Prerelease
             shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -65,11 +65,11 @@ android {
             // for testing purposes without needing a production certificate.
             signingConfig signingConfigs.debug
         }
-		debug {
+        debug {
             applicationIdSuffix ".debug" // Allows installing both versions side-by-side
             debuggable true
-			// Minification disabled for easier debugging during development
-			minifyEnabled false
+            // Minification disabled for easier debugging during development
+            minifyEnabled false
         }
     }
 
@@ -81,6 +81,18 @@ android {
     kotlinOptions {
         // Ensure Kotlin compiler targets the same JVM version as Java
         jvmTarget = '17'
+    }
+
+    /**
+     * Customizes the output APK filenames using the version name from defaultConfig.
+     * Example: PiPup-0.1.5-2026-04-30-release.apk
+     */
+    applicationVariants.all { variant ->
+        variant.outputs.all { output ->
+            def version = variant.versionName
+            def type = variant.buildType.name
+            outputFileName = "PiPup-${version}-${type}.apk"
+        }
     }
 }
 
