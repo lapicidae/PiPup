@@ -3,21 +3,18 @@
 version: 2
 updates:
 
+
   # Maintain GitHub Actions by checking for updates to workflow steps
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      # Daily checks ensure security patches for actions are applied quickly
       interval: "daily"
-    labels:
-      - "ci-cd"
-      - "automated-update"
+
 
   # Maintain Android/Gradle dependencies
   - package-ecosystem: "gradle"
     directory: "/"
     schedule:
-      # Weekly interval to balance between staying current and reducing PR noise
       interval: "monthly"
     open-pull-requests-limit: 5
     # Group related updates to minimize the number of open pull requests
@@ -30,6 +27,3 @@ updates:
       jackson-stack:
         patterns:
           - "com.fasterxml.jackson.*"
-    labels:
-      - "dependencies"
-      - "gradle-update"
