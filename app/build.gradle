@@ -35,7 +35,7 @@ android {
     compileSdk 34
 
     // Define namespace for the generated R and BuildConfig classes
-    namespace 'nl.rogro82.pipup'
+    namespace = "nl.rogro82.pipup"
 
     compileOptions {
         // Use Java 17 for compilation to support modern Kotlin features
@@ -57,13 +57,13 @@ android {
 
     buildTypes {
         release {
-            minifyEnabled true // Enable optimization for Prerelease
-            shrinkResources true
+            minifyEnabled = true
+            shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 
             // This allows the release build to be signed with the debug key
             // for testing purposes without needing a production certificate.
-            signingConfig signingConfigs.debug
+            signingConfig = signingConfigs.release
         }
         debug {
             // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
@@ -74,8 +74,8 @@ android {
     }
 
     buildFeatures {
-        buildConfig true
-        viewBinding true
+        buildConfig = true
+        viewBinding = true
     }
 
     kotlinOptions {
