@@ -66,7 +66,7 @@ android {
             signingConfig signingConfigs.debug
         }
         debug {
-            applicationIdSuffix ".debug" // Allows installing both versions side-by-side
+            // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
             debuggable true
             // Minification disabled for easier debugging during development
             minifyEnabled false

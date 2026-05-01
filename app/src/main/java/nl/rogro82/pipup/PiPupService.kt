@@ -8,6 +8,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import androidx.core.app.NotificationCompat
 import android.util.Log
 import android.view.Gravity
@@ -19,9 +20,8 @@ import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoHTTPD.newFixedLengthResponse
 import java.io.File
 
-
 class PiPupService : Service(), WebServer.Handler {
-    private val mHandler: Handler = Handler()
+    private val mHandler: Handler = Handler(Looper.getMainLooper())
     private var mOverlay: FrameLayout? = null
     private var mPopup: PopupView? = null
     private lateinit var mWebServer: WebServer
@@ -57,12 +57,11 @@ class PiPupService : Service(), WebServer.Handler {
 
     override fun onDestroy() {
         super.onDestroy()
-
         mWebServer.stop()
     }
 
-    override fun onBind(intent: Intent): IBinder {
-        TODO("Return the communication channel to the service.")
+    override fun onBind(intent: Intent): IBinder? {
+        return null
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -82,7 +81,6 @@ class PiPupService : Service(), WebServer.Handler {
     }
 
     private fun removePopup(removeOverlay: Boolean = false) {
-
         mHandler.removeCallbacksAndMessages(null)
 
         mPopup = mPopup?.let {
@@ -91,12 +89,10 @@ class PiPupService : Service(), WebServer.Handler {
         }
 
         mOverlay?.apply {
-
             removeAllViews()
             if (removeOverlay) {
                 val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                wm.removeViewImmediate(mOverlay)
-
+                wm.removeViewImmediate(this)
                 mOverlay = null
             }
         }
@@ -105,24 +101,21 @@ class PiPupService : Service(), WebServer.Handler {
     @Suppress("DEPRECATION")
     private fun createPopup(popup: PopupProps) {
         try {
-
             Log.d(LOG_TAG, "Create popup: $popup")
 
             // remove current popup
-
             removePopup()
 
             // create or reuse the current overlay
-
             mOverlay = when (val overlay = mOverlay) {
                 is FrameLayout -> overlay
                 else -> FrameLayout(this).apply {
-
                     setPadding(20, 20, 20, 20)
 
-                    val layoutFlags: Int = when {
-                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O -> WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                        else -> WindowManager.LayoutParams.TYPE_TOAST
+                    val layoutFlags: Int = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    } else {
+                        WindowManager.LayoutParams.TYPE_TOAST
                     }
 
                     val params = WindowManager.LayoutParams(
@@ -137,18 +130,14 @@ class PiPupService : Service(), WebServer.Handler {
                     wm.addView(this, params)
                 }
             }.also {
-
                 // inflate the popup layout
-
                 mPopup = PopupView.build(this, popup)
 
                 it.addView(mPopup, FrameLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT
-                ). apply {
-
+                ).apply {
                     // position the popup
-
                     gravity = when(popup.position) {
                         PopupProps.Position.TopRight -> Gravity.TOP or Gravity.END
                         PopupProps.Position.TopLeft -> Gravity.TOP or Gravity.START
@@ -160,7 +149,6 @@ class PiPupService : Service(), WebServer.Handler {
             }
 
             // schedule removal
-
             mHandler.postDelayed({
                 removePopup(true)
             }, (popup.duration * 1000).toLong())
@@ -174,7 +162,6 @@ class PiPupService : Service(), WebServer.Handler {
         return session?.let {
             when(session.method) {
                 NanoHTTPD.Method.POST -> {
-
                     when(session.uri) {
                         "/cancel" -> {
                             mHandler.post {
@@ -187,57 +174,33 @@ class PiPupService : Service(), WebServer.Handler {
                                 val contentType = session.headers["content-type"] ?: APPLICATION_JSON
                                 val popup = when {
                                     contentType.startsWith(APPLICATION_JSON) -> {
-
-                                        // try to handle it as json
-
                                         val contentLength = session.headers["content-length"]?.toInt() ?: 0
                                         val content = ByteArray(contentLength)
-
                                         session.inputStream.read(content, 0, contentLength)
 
                                         Json.readValue(content, PopupProps::class.java)
                                             ?: throw Exception("failed to parse input")
-
                                     }
                                     contentType.startsWith(MULTIPART_FORM_DATA) -> {
-
                                         val files = mutableMapOf<String, String>()
                                         session.parseBody(files)
 
-                                        // flatten parameters
-
                                         val params = session.parameters.mapValues { it.value.firstOrNull() }
-
-                                        val duration = params["duration"]?.toIntOrNull()
-                                            ?: PopupProps.DEFAULT_DURATION
-
+                                        val duration = params["duration"]?.toIntOrNull() ?: PopupProps.DEFAULT_DURATION
                                         val position = PopupProps.Position.values()[params["position"]?.toIntOrNull() ?: 0]
-
-                                        val backgroundColor = params["backgroundColor"]
-                                            ?: PopupProps.DEFAULT_BACKGROUND_COLOR
-
+                                        val backgroundColor = params["backgroundColor"] ?: PopupProps.DEFAULT_BACKGROUND_COLOR
                                         val title = params["title"] ?: ""
-
-                                        val titleSize = params["titleSize"]?.toFloatOrNull()
-                                            ?: PopupProps.DEFAULT_TITLE_SIZE
-
-                                        val titleColor = params["titleColor"]
-                                            ?: PopupProps.DEFAULT_TITLE_COLOR
-
+                                        val titleSize = params["titleSize"]?.toFloatOrNull() ?: PopupProps.DEFAULT_TITLE_SIZE
+                                        val titleColor = params["titleColor"] ?: PopupProps.DEFAULT_TITLE_COLOR
                                         val message = params["message"] ?: ""
-
-                                        val messageSize = params["messageSize"]?.toFloatOrNull()
-                                            ?: PopupProps.DEFAULT_TITLE_SIZE
-
-                                        val messageColor = params["messageColor"]
-                                            ?: PopupProps.DEFAULT_TITLE_COLOR
+                                        val messageSize = params["messageSize"]?.toFloatOrNull() ?: PopupProps.DEFAULT_TITLE_SIZE
+                                        val messageColor = params["messageColor"] ?: PopupProps.DEFAULT_TITLE_COLOR
 
                                         val media = when(val image = files["image"]) {
                                             is String -> {
                                                 File(image).absoluteFile.let {
                                                     val bitmap = BitmapFactory.decodeStream(it.inputStream())
                                                     val imageWidth = params["imageWidth"]?.toIntOrNull() ?: PopupProps.DEFAULT_MEDIA_WIDTH
-
                                                     PopupProps.Media.Bitmap(image = bitmap, width = imageWidth)
                                                 }
                                             }
@@ -247,7 +210,7 @@ class PiPupService : Service(), WebServer.Handler {
                                         PopupProps(
                                             duration = duration,
                                             position = position,
-                                            backgroundColor =  backgroundColor,
+                                            backgroundColor = backgroundColor,
                                             title = title,
                                             titleSize = titleSize,
                                             titleColor = titleColor,
@@ -261,13 +224,10 @@ class PiPupService : Service(), WebServer.Handler {
                                 }
 
                                 Log.d(LOG_TAG, "received popup: $popup")
-
                                 mHandler.post {
                                     createPopup(popup)
                                 }
-
                                 OK("$popup")
-
 
                             } catch (ex: Throwable) {
                                 Log.e(LOG_TAG, ex.message ?: "Error")

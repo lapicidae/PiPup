@@ -1,4 +1,4 @@
-name: Manual Build & Release Manager
+name: Build & Release
 
 on:
   workflow_dispatch:

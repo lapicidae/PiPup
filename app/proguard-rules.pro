@@ -31,10 +31,23 @@
 
 
 # --- Application Models ---
+
 # Prevent R8 from stripping or renaming data classes used for JSON reflection
 -keep class nl.rogro82.pipup.PopupProps { *; }
 -keep class nl.rogro82.pipup.PopupProps$** { *; }
 -keep class nl.rogro82.pipup.models.** { *; }
+
+# CRITICAL: Keep all members (fields and methods) within these classes.
+# Without this, R8 might rename 'title' to 'a', causing Jackson to fail.
+-keepclassmembers class nl.rogro82.pipup.PopupProps { *; }
+-keepclassmembers class nl.rogro82.pipup.models.** { *; }
+
+# Preserve specific Jackson annotations to ensure mapping works at runtime
+-keepclassmembers class * {
+    @com.fasterxml.jackson.annotation.JsonCreator *;
+    @com.fasterxml.jackson.annotation.JsonProperty *;
+    @com.fasterxml.jackson.annotation.JsonValue *;
+}
 
 
 # --- Glide (Image Processing) ---
@@ -43,6 +56,10 @@
 -keep public class * extends com.bumptech.glide.module.LibraryGlideModule
 -keep class com.bumptech.glide.GeneratedAppGlideModuleImpl { *; }
 -keep @com.bumptech.glide.annotation.GlideModule class * { *; }
+
+# Specifically keep the OkHttp integration found in your logs
+-keep class com.bumptech.glide.integration.okhttp3.OkHttpLibraryGlideModule { *; }
+-keep class nl.rogro82.pipup.OkHttpLibraryGlideModule { *; }
 
 
 # --- NanoHTTPD (Web Server) ---
