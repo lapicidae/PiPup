@@ -63,7 +63,7 @@ android {
 
             // This allows the release build to be signed with the debug key
             // for testing purposes without needing a production certificate.
-            signingConfig = signingConfigs.release
+			signingConfig = signingConfigs.debug
         }
         debug {
             // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
