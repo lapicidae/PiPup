@@ -1,0 +1,32 @@
+[versions]
+appcompat = "1.7.1"
+constraintlayout = "2.2.1"
+coreKtx = "1.18.0"
+glide = "5.0.7"
+googleDevtoolsKsp = "2.3.6"
+gradle = "9.2.1"
+jacksonDatabind = "2.21.3"
+jacksonModuleKotlin = "2.21.3"
+kotlin = "2.3.21"
+leanback = "1.2.0"
+nanohttpd = "2.3.1"
+
+[libraries]
+annotations = { group = "com.github.bumptech.glide", name = "annotations", version.ref = "glide" }
+appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+compiler = { group = "com.github.bumptech.glide", name = "ksp", version.ref = "glide" }
+constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
+core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
+gradle = { group = "com.android.tools.build", name = "gradle", version.ref = "gradle" }
+jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jacksonDatabind" }
+jackson-module-kotlin = { group = "com.fasterxml.jackson.module", name = "jackson-module-kotlin", version.ref = "jacksonModuleKotlin" }
+kotlin-gradle-plugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
+ksp-gradle-plugin = { group = "com.google.devtools.ksp", name = "com.google.devtools.ksp.gradle.plugin", version.ref = "googleDevtoolsKsp" }
+kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
+leanback = { group = "androidx.leanback", name = "leanback", version.ref = "leanback" }
+nanohttpd = { group = "org.nanohttpd", name = "nanohttpd", version.ref = "nanohttpd" }
+okhttp3-integration = { group = "com.github.bumptech.glide", name = "okhttp3-integration", version.ref = "glide" }
+
+[plugins]
+google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "googleDevtoolsKsp" }

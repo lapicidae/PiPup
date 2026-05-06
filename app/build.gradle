@@ -1,55 +1,139 @@
+import java.text.SimpleDateFormat
+
+/**
+ * Standard Android Build Configuration for PiPup.
+ * This script automates the versioning process using timestamps.
+ */
+
 apply plugin: 'com.android.application'
+apply plugin: 'com.google.devtools.ksp'
 
-apply plugin: 'kotlin-android'
+/**
+ * Generates a unique integer version code based on the current date and hour.
+ * Format: yyMMddHH (e.g., 26043022 for April 30, 2026, 10 PM)
+ *
+ * @return A unique integer suitable for versionCode
+ */
+def getTimestampVersion() {
+    def date = new Date()
+    return Integer.parseInt(new SimpleDateFormat("yyMMddHH").format(date))
+}
 
-apply plugin: "kotlin-kapt"
+/**
+ * Generates a human-readable version name string.
+ * Format: yyyy-MM-dd (e.g., 2026-04-30)
+ *
+ * @return A formatted date string
+ */
+def getTimestampName() {
+    def date = new Date()
+    return new SimpleDateFormat("yyyy-MM-dd").format(date)
+}
 
 android {
-    compileSdk 34
+    compileSdk 37
+
+    // Define namespace for the generated R and BuildConfig classes
+    namespace = "nl.rogro82.pipup"
+
     compileOptions {
-        sourceCompatibility 17
-        targetCompatibility 17
+        // Use Java 17 for compilation to support modern Kotlin features
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
+
     defaultConfig {
         applicationId "nl.rogro82.pipup"
         minSdk 31
+
         //noinspection ExpiredTargetSdkVersion
         targetSdkVersion 34
-        versionCode 1
-        versionName "1"
+
+        // Automatic versioning logic
+        versionCode getTimestampVersion()
+        versionName "0.1.5-" + getTimestampName()
     }
+
     buildTypes {
         release {
-            minifyEnabled false
+            minifyEnabled = true
+            shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+
+            // This allows the release build to be signed with the debug key
+            // for testing purposes without needing a production certificate.
+			signingConfig = signingConfigs.debug
+        }
+        debug {
+            // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
+            versionNameSuffix "-debug"
+            debuggable true
+            // Minification disabled for easier debugging during development
+            minifyEnabled false
         }
     }
-    namespace 'nl.rogro82.pipup'
+
     buildFeatures {
-        buildConfig true
-        viewBinding true
+        buildConfig = true
+        viewBinding = true
     }
-    kotlinOptions {
-        jvmTarget = '17'
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
+    }
+
+}
+
+/**
+ * Customizes the output APK filenames using the version name and build status.
+ * Logic:
+ * 1. If it's a release build and 'appStatus' is provided, use that (e.g., prerelease).
+ * 2. Otherwise, use the build type name (debug/release).
+ * 3. As a safety measure, ensure the status is never empty.
+ */
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.outputs.each { output ->
+            def version = output.versionName.get()
+            def buildType = variant.name
+
+            // Determine status: use appStatus for releases, otherwise the buildType
+            def status = (buildType == "release" && project.hasProperty("appStatus"))
+                         ? project.getProperty("appStatus")
+                         : buildType
+
+            // Ensure status is not an empty string
+            def finalStatus = status ?: "build"
+
+            def newName = "PiPup-${version}-${finalStatus}.apk"
+            output.outputFileName.set(newName)
+        }
     }
 }
 
 dependencies {
+    // Local libraries
     implementation fileTree(dir: 'libs', include: ['*.jar'])
-    implementation"org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version"
-    implementation 'androidx.leanback:leanback:1.0.0'
-    implementation 'androidx.appcompat:appcompat:1.6.1'
 
+    // Core Kotlin and Android libraries
+    implementation libs.kotlin.stdlib
+    implementation libs.leanback
+    implementation libs.appcompat
+    implementation libs.core.ktx
+    implementation libs.constraintlayout
 
-    implementation 'com.github.bumptech.glide:glide:4.16.0'
-    implementation 'com.github.bumptech.glide:annotations:4.16.0'
-    // Skip this if you don't want to use integration libraries or configure Glide.
-    kapt 'com.github.bumptech.glide:compiler:4.16.0'
-    implementation "com.github.bumptech.glide:okhttp3-integration:4.11.0"
+    // Glide for image loading and processing
+    implementation libs.glide
+    implementation libs.annotations
+    ksp libs.compiler
+    implementation libs.okhttp3.integration
 
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.9.+'
-    implementation 'com.fasterxml.jackson.module:jackson-module-kotlin:2.9.+'
+    // Jackson for JSON parsing
+    implementation libs.jackson.databind
+    implementation libs.jackson.module.kotlin
 
-    implementation 'org.nanohttpd:nanohttpd:2.3.1'
-    implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
+    // Web server functionality
+    implementation libs.nanohttpd
 }

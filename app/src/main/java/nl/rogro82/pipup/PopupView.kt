@@ -11,6 +11,7 @@ import android.view.View
 import android.view.WindowManager
 import android.webkit.WebView
 import android.widget.*
+import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.HttpException
 import com.bumptech.glide.load.engine.DiskCacheStrategy
@@ -18,7 +19,6 @@ import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
-import nl.rogro82.pipup.PipUpGlideAppModule
 
 // TODO: convert dimensions from px to dp
 
@@ -132,7 +132,7 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                 frame.addView(imageView, layoutParams)
 
                 val uri = GlideUrl(media.uri)
-                GlideApp.with(context)
+                Glide.with(context)
                     .load(uri)
                     .timeout(20000)
                     .listener(object : RequestListener<Drawable> {
