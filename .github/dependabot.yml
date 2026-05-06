@@ -1,0 +1,41 @@
+# ====================================================================
+# Dependabot Configuration
+# Purpose: Automates dependency management for GitHub Actions and
+#          the Gradle ecosystem to ensure security and stability.
+# ====================================================================
+
+version: 2
+updates:
+
+  # Keep GitHub Actions up to date
+  # Checks for new versions of workflow steps (e.g., checkout, setup-java) daily.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+
+  # Maintain Android and Gradle dependencies
+  # Checks for updates to libraries defined in build.gradle files once a month.
+  - package-ecosystem: "gradle"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+
+    # Prevents automated PR fatigue by limiting active updates to 5 at a time.
+    open-pull-requests-limit: 5
+
+    # Logical Grouping Strategy
+    # Combines related updates into a single Pull Request to reduce CI build
+    # consumption and streamline the review process.
+    groups:
+      # Core Android & Kotlin: Groups internal framework updates
+      android-internal:
+        patterns:
+          - "androidx.*"
+          - "com.android.*"
+          - "org.jetbrains.kotlin.*"
+
+      # Data Processing: Groups Jackson library updates
+      jackson-stack:
+        patterns:
+          - "com.fasterxml.jackson.*"
