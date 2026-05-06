@@ -1,0 +1,60 @@
+# ====================================================================
+# GitHub Actions Workflow: Release Production APK
+# Purpose: Compiles a production-ready release APK and attaches it
+#          directly to a GitHub Release.
+# ====================================================================
+
+name: Release
+
+on:
+  # Manual trigger for controlled releases
+  workflow_dispatch:
+  # Note: Release-based triggers are currently commented out
+  # to prevent accidental automated deployments.
+#  release:
+#    types:
+#      - "published"
+
+jobs:
+  build:
+    name: Build and Deploy Release Asset
+    runs-on: ubuntu-latest
+
+    # Required permissions for creating and updating GitHub Releases
+    permissions:
+      contents: write
+
+    steps:
+      # Step 1: Clone the repository onto the virtual runner
+      - name: Checkout Source Code
+        uses: actions/checkout@v6
+
+      # Step 2: Configure Java Environment
+      # Sets up JDK 17 with Temurin and configures server-id for
+      # potential publication to Maven-style repositories.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          server-id: github
+          settings-path: ${{ github.workspace }}
+
+      # Step 3: Initialize Gradle
+      # Automates Gradle environment setup, including dependency caching
+      # and build-scan integration.
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      # Step 4: Compile Production Binary
+      # Generates the release-ready APK (typically unsigned in this configuration).
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      # Step 5: Publish Asset to GitHub Release
+      # Attaches the build artifact to the current tag/release.
+      # Path assumes a standard Android project structure.
+      - name: Attach APK to GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          files: ${{ github.workspace }}/app/build/outputs/apk/release/app-release-unsigned.apk

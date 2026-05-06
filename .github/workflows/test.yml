@@ -1,0 +1,69 @@
+# ====================================================================
+# GitHub Actions Workflow: Test Build APK
+# Purpose: Validates code integrity by performing a clean debug build
+#          on every push or pull request to primary branches.
+# ====================================================================
+
+name: Test Build APK
+
+on:
+  # Trigger on pushes to production and development branches
+  push:
+    branches: [ master, main ]
+  # Trigger on pull requests targeting production and development branches
+  pull_request:
+    branches: [ master, main ]
+  # Allow manual execution via the GitHub Actions UI
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build and Package Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Clone the repository onto the runner
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # Step 2: Configure the Java Runtime Environment (JRE)
+      # Uses Temurin distribution (OpenJDK) and enables Gradle caching
+      # to significantly reduce subsequent build times.
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Provision the necessary Android SDK components
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Step 4: Ensure the Gradle wrapper has execution permissions
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      # Step 5: Execute a clean build and assemble the Debug APK
+      # Includes '--warning-mode all' to identify deprecated API usage or configuration issues.
+      - name: Build Debug APK
+        run: ./gradlew clean assembleDebug --warning-mode all
+
+      # Step 6: Persist the generated APK as a workflow artifact
+      # Artifacts are stored for 7 days to conserve storage while allowing review.
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: app-debug-apk
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+      # Step 7: Export Gradle Problem Reports
+      # This step runs even if the build fails ('always()') to aid in debugging.
+      - name: Upload Problems Report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: gradle-problems-report
+          path: build/reports/problems/
+          retention-days: 7

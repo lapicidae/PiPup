@@ -1,0 +1,91 @@
+# ====================================================================
+# GitHub Actions Workflow: Manual Build & Release Dispatcher
+# Purpose: Generates a build via a manual input form. Allows choosing
+#          between Pre-release/Final and adding a custom version note.
+# ====================================================================
+
+name: Build & Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Allows the user to toggle between 'prerelease' and 'release' status
+      release_type:
+        description: 'Select the release type'
+        required: true
+        default: 'prerelease'
+        type: choice
+        options:
+          - prerelease
+          - release
+      # Optional field for changelog summaries or build context
+      version_note:
+        description: 'Note for the release'
+        required: false
+        default: 'Manual Build'
+
+jobs:
+  build_and_publish:
+    name: Build, Tag, and Deploy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Essential for creating the Release and pushing the Tag
+
+    steps:
+      # Step 1: Initialize environment and fetch source
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      # Step 2: Configure Java environment with integrated caching
+      - name: Setup Java
+        uses: actions/setup-java@v5
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      # Step 3: Provision Android SDK build tools
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      # Step 4: Prepare the wrapper for execution
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
+
+      # Step 5: Execute Parallel Compilation
+      # Builds both Debug and Release variants. Passes the 'appStatus'
+      # parameter to Gradle for internal version/filename handling.
+      - name: Build APKs
+        run: ./gradlew clean assembleDebug assembleRelease -PappStatus=${{ github.event.inputs.release_type }}
+
+      # Step 6: Dynamic Tag Generation
+      # Generates a unique version tag based on the current timestamp (e.g., v2026.05.06-1830)
+      # and prepares a human-readable date for the Release title.
+      - name: Generate Tag Name
+        id: tag
+        run: |
+          echo "tag_name=v$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
+          echo "display_date=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
+
+      # Step 7: Create GitHub Release and Upload Artifacts
+      # Configures the release visibility and metadata based on user inputs.
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ steps.tag.outputs.tag_name }}
+          # Dynamically sets the title based on the selected release type
+          name: "${{ github.event.inputs.release_type == 'release' && 'Final Release' || 'Pre-Release' }} ${{ steps.tag.outputs.display_date }}"
+          body: |
+            ### Build Information
+            - **Type:** ${{ github.event.inputs.release_type }}
+            - **Note:** ${{ github.event.inputs.version_note }}
+            - **Build Date:** ${{ steps.tag.outputs.display_date }}
+          draft: false
+          # Sets the 'Pre-release' flag on GitHub if 'prerelease' was selected
+          prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
+          # Uploads both Debug and Release APKs to the asset section
+          files: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
