@@ -135,7 +135,7 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                 frame.addView(imageView, layoutParams)
 
                 val uri = GlideUrl(media.uri)
-                Glide.with(context)
+                val glideRequest = Glide.with(context)
                     .`as`(Drawable::class.java) // Support both Bitmap and PictureDrawable (SVG)
                     .load(uri)
                     .timeout(20000)
@@ -171,9 +171,20 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                             return false
                         }
                     })
-                    .diskCacheStrategy(DiskCacheStrategy.NONE)
-                    .skipMemoryCache(true)
-                    .into(imageView)
+
+                if (media.cache) {
+                    // Enable intelligent caching: automatic disk strategy and memory caching
+                    glideRequest
+                        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
+                        .skipMemoryCache(false)
+                } else {
+                    // Caching explicitly disabled by requester
+                    glideRequest
+                        .diskCacheStrategy(DiskCacheStrategy.NONE)
+                        .skipMemoryCache(true)
+                }
+
+                glideRequest.into(imageView)
 
             } catch(e: Throwable) {
                 removeView(frame)
@@ -227,6 +238,13 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     mediaPlaybackRequiresUserGesture = false
+                    
+                    // Configure caching based on request
+                    cacheMode = if (media.cache) {
+                        android.webkit.WebSettings.LOAD_DEFAULT
+                    } else {
+                        android.webkit.WebSettings.LOAD_NO_CACHE
+                    }
                 }
                 loadUrl(media.uri)
             }

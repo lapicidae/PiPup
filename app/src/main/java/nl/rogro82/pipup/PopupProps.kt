@@ -26,8 +26,17 @@ data class PopupProps(
     )
     sealed class Media {
         data class Video(val uri: String, val width: Int = DEFAULT_MEDIA_WIDTH): Media()
-        data class Image(val uri: String, val width: Int = DEFAULT_MEDIA_WIDTH): Media()
-        data class Web(val uri: String, val width: Int = 640, val height: Int = 480): Media()
+        data class Image(
+            val uri: String,
+            val width: Int = DEFAULT_MEDIA_WIDTH,
+            val cache: Boolean = true
+        ) : Media()
+        data class Web(
+            val uri: String,
+            val width: Int = 640,
+            val height: Int = 480,
+            val cache: Boolean = true
+        ) : Media()
         data class Bitmap(val image: android.graphics.Bitmap, val width: Int = DEFAULT_MEDIA_WIDTH): Media()
     }
 
