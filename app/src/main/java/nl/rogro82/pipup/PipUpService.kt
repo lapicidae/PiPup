@@ -22,7 +22,7 @@ import java.util.*
 
 /**
  * Core foreground service that manages the PiPup web server, overlay window,
- * and a notification queue for sequential display.
+ * and a notification queue for sequential display with resource-ready synchronization.
  */
 class PipUpService : Service(), WebServer.Handler {
     private val mHandler: Handler = Handler(Looper.getMainLooper())
@@ -33,14 +33,7 @@ class PipUpService : Service(), WebServer.Handler {
     private var mPopupProps: PopupProps? = null
     private lateinit var mWebServer: WebServer
 
-    /**
-     * Queue to store incoming notification requests for sequential processing.
-     */
     private val mNotificationQueue: Queue<PopupProps> = LinkedList()
-    
-    /**
-     * Flag indicating if a notification is currently being displayed.
-     */
     private var mIsDisplaying = false
 
     override fun onCreate() {
@@ -174,30 +167,64 @@ class PipUpService : Service(), WebServer.Handler {
     private fun processNextNotification() {
         val nextPopup = mNotificationQueue.poll()
         if (nextPopup != null) {
-            createPopup(nextPopup)
+            preparePopup(nextPopup)
         }
     }
 
     /**
-     * Displays a popup notification immediately.
+     * Prepares a popup view but does not show it until the media is ready.
      */
-    private fun createPopup(popup: PopupProps) {
+    private fun preparePopup(popup: PopupProps) {
         try {
-            Log.d(LOG_TAG, "Creating popup: $popup")
+            Log.d(LOG_TAG, "Preparing popup: $popup")
             mIsDisplaying = true
-            
-            ensureOverlay().apply { visibility = View.VISIBLE }
-            
-            mPopup = inflatePopupView(popup)
+
+            // Ensure overlay exists but keep it hidden
+            ensureOverlay().apply { 
+                visibility = View.GONE 
+                removeAllViews()
+            }
+
+            val popupView = inflatePopupView(popup)
+            mPopup = popupView
             mPopupProps = popup
-            positionPopup(mPopup!!, popup)
-            
-            // Schedule removal based on duration
-            mHandler.postDelayed({ removePopup() }, mPopupProps, (popup.duration * 1000).toLong())
+
+            // Synchronization listener: Show when media is ready
+            popupView.readyListener = object : PopupView.ReadyListener {
+                override fun onReady() {
+                    // Remove safety timeout as we are ready
+                    mHandler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
+                    showPopup(popupView, popup)
+                }
+            }
+
+            positionPopup(popupView, popup)
+
+            // Safety timeout: If media fails to load within 10s, show it anyway or skip
+            mHandler.postAtTime({
+                Log.w(LOG_TAG, "Media load timeout reached for $popup")
+                showPopup(popupView, popup)
+            }, SAFETY_TIMEOUT_TOKEN, android.os.SystemClock.uptimeMillis() + 10000)
+
         } catch (ex: Throwable) {
-            Log.e(LOG_TAG, "Error creating popup", ex)
+            Log.e(LOG_TAG, "Error preparing popup", ex)
             mIsDisplaying = false
-            processNextNotification() // Try next one if current fails
+            processNextNotification()
+        }
+    }
+
+    /**
+     * Actually displays the prepared popup on the screen.
+     */
+    private fun showPopup(view: PopupView, props: PopupProps) {
+        mHandler.post {
+            if (mPopup == view) {
+                Log.d(LOG_TAG, "Displaying popup now")
+                mOverlay?.visibility = View.VISIBLE
+                
+                // Schedule removal based on display duration
+                mHandler.postDelayed({ removePopup() }, props, (props.duration * 1000).toLong())
+            }
         }
     }
 
@@ -304,6 +331,8 @@ class PipUpService : Service(), WebServer.Handler {
         const val PIPUP_NOTIFICATION_ID = 123
         const val MULTIPART_FORM_DATA = "multipart/form-data"
         const val APPLICATION_JSON = "application/json"
+        
+        private val SAFETY_TIMEOUT_TOKEN = Any()
 
         fun ok(message: String? = null): NanoHTTPD.Response = 
             newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", message)

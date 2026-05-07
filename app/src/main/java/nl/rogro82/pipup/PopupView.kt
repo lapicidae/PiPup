@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.WindowManager
 import android.webkit.WebView
+import android.webkit.WebViewClient
 import android.widget.*
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.DataSource
@@ -20,13 +21,36 @@ import com.bumptech.glide.load.model.GlideUrl
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
 
-// TODO: convert dimensions from px to dp
-
+/**
+ * Base class for all popup notification views.
+ * 
+ * Each subclass handles a specific type of media (Image, Video, Web, etc.).
+ * The view reports its readiness via the [ReadyListener] to allow the service
+ * to coordinate the display timing.
+ */
 @SuppressLint("ViewConstructor")
 sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(context) {
 
+    /**
+     * Interface to notify when the popup media has been fully loaded.
+     */
+    interface ReadyListener {
+        /**
+         * Called when the media is ready to be displayed.
+         */
+        fun onReady()
+    }
+
+    /**
+     * Listener to be notified when the view is ready for display.
+     */
+    var readyListener: ReadyListener? = null
+
+    /**
+     * Common initialization for all popup types.
+     */
     open fun create() {
-        inflate(context, R.layout.popup,this)
+        inflate(context, R.layout.popup, this)
 
         layoutParams = LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -36,17 +60,17 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
             minimumWidth = 240
         }
 
-        setPadding(20,20,20,20)
+        setPadding(20, 20, 20, 20)
 
         val title = findViewById<TextView>(R.id.popup_title)
         val message = findViewById<TextView>(R.id.popup_message)
         val frame = findViewById<FrameLayout>(R.id.popup_frame)
 
-        if(popup.media == null) {
+        if (popup.media == null) {
             removeView(frame)
         }
 
-        if(popup.title.isNullOrEmpty()) {
+        if (popup.title.isNullOrEmpty()) {
             removeView(title)
         } else {
             title.text = popup.title
@@ -54,7 +78,7 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
             title.setTextColor(Color.parseColor(popup.titleColor))
         }
 
-        if(popup.message.isNullOrEmpty()) {
+        if (popup.message.isNullOrEmpty()) {
             removeView(message)
         } else {
             message.text = popup.message
@@ -65,20 +89,32 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
         setBackgroundColor(Color.parseColor(popup.backgroundColor))
     }
 
+    /**
+     * Cleans up resources when the popup is destroyed.
+     */
     open fun destroy() {}
 
+    /**
+     * Default text-only popup.
+     */
     private class Default(context: Context, popup: PopupProps) : PopupView(context, popup) {
-        init { create() }
+        init { 
+            create()
+            // Text-only popups are ready immediately
+            post { readyListener?.onReady() }
+        }
     }
 
-    private class Video(context: Context, popup: PopupProps, val media: PopupProps.Media.Video): PopupView(context, popup) {
+    /**
+     * Video media popup.
+     */
+    private class Video(context: Context, popup: PopupProps, val media: PopupProps.Media.Video) : PopupView(context, popup) {
         private lateinit var mVideoView: VideoView
 
         init { create() }
 
         override fun create() {
             super.create()
-
             visibility = View.INVISIBLE
 
             val frame = findViewById<FrameLayout>(R.id.popup_frame)
@@ -87,56 +123,50 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                 setVideoURI(Uri.parse(media.uri))
                 setOnPreparedListener {
                     it.setOnVideoSizeChangedListener { _, _, _ ->
-
-                        // resize video and show popup view
-
                         layoutParams = FrameLayout.LayoutParams(media.width, WindowManager.LayoutParams.WRAP_CONTENT).apply {
                             gravity = Gravity.CENTER
                         }
-
                         this@Video.visibility = View.VISIBLE
+                        // Video is ready when the first frame is prepared and sized
+                        readyListener?.onReady()
                     }
                 }
-
                 start()
             }
-
             frame.addView(mVideoView, FrameLayout.LayoutParams(1, 1))
         }
 
         override fun destroy() {
             try {
-                if(mVideoView.isPlaying) {
+                if (mVideoView.isPlaying) {
                     mVideoView.stopPlayback()
                 }
-            } catch(_: Throwable) {}
+            } catch (_: Throwable) {}
         }
     }
 
-    private class Image(context: Context, popup: PopupProps, val media: PopupProps.Media.Image): PopupView(context, popup) {
+    /**
+     * Image media popup using Glide.
+     */
+    private class Image(context: Context, popup: PopupProps, val media: PopupProps.Media.Image) : PopupView(context, popup) {
         init { create() }
 
         override fun create() {
             super.create()
-
             val frame = findViewById<FrameLayout>(R.id.popup_frame)
 
             try {
                 val imageView = ImageView(context)
-                
-                // SVG rendering via PictureDrawable requires software rendering
                 imageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
-                val layoutParams =
-                    FrameLayout.LayoutParams(media.width, WindowManager.LayoutParams.WRAP_CONTENT).apply {
-                        gravity = Gravity.CENTER
-                    }
-
+                val layoutParams = FrameLayout.LayoutParams(media.width, WindowManager.LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.CENTER
+                }
                 frame.addView(imageView, layoutParams)
 
                 val uri = GlideUrl(media.uri)
                 val glideRequest = Glide.with(context)
-                    .`as`(Drawable::class.java) // Support both Bitmap and PictureDrawable (SVG)
+                    .`as`(Drawable::class.java)
                     .load(uri)
                     .timeout(20000)
                     .listener(object : RequestListener<Drawable> {
@@ -146,19 +176,12 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                             target: Target<Drawable>,
                             p3: Boolean
                         ): Boolean {
-                            Log.e(PipUpService.LOG_TAG, "onLoadFailed", p0)
-                            if(p0!=null){
-                                p0.logRootCauses(LOG_TAG)
-                                for (t in p0.causes) {
-                                    if (t is HttpException) {
-                                        Log.e(LOG_TAG, "Request failed due to HttpException!", t)
-                                        break
-                                    }
-                                }
-                            }
-                            //do something if error loading
+                            Log.e(LOG_TAG, "Image load failed", p0)
+                            // Notify ready even on failure so the notification isn't stuck
+                            readyListener?.onReady()
                             return false
                         }
+
                         override fun onResourceReady(
                             resource: Drawable,
                             model: Any,
@@ -166,51 +189,50 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                             dataSource: DataSource,
                             p4: Boolean
                         ): Boolean {
-                            Log.d(PipUpService.LOG_TAG, "OnResourceReady")
-                            //do something when picture already loaded
+                            Log.d(LOG_TAG, "Image resource ready")
+                            readyListener?.onReady()
                             return false
                         }
                     })
 
                 if (media.cache) {
-                    // Enable intelligent caching: automatic disk strategy and memory caching
-                    glideRequest
-                        .diskCacheStrategy(DiskCacheStrategy.AUTOMATIC)
-                        .skipMemoryCache(false)
+                    glideRequest.diskCacheStrategy(DiskCacheStrategy.AUTOMATIC).skipMemoryCache(false)
                 } else {
-                    // Caching explicitly disabled by requester
-                    glideRequest
-                        .diskCacheStrategy(DiskCacheStrategy.NONE)
-                        .skipMemoryCache(true)
+                    glideRequest.diskCacheStrategy(DiskCacheStrategy.NONE).skipMemoryCache(true)
                 }
 
                 glideRequest.into(imageView)
 
-            } catch(e: Throwable) {
+            } catch (e: Throwable) {
                 removeView(frame)
+                post { readyListener?.onReady() }
             }
         }
     }
 
-    private class Bitmap(context: Context, popup: PopupProps, val media: PopupProps.Media.Bitmap): PopupView(context, popup) {
+    /**
+     * Bitmap media popup (already in-memory).
+     */
+    private class Bitmap(context: Context, popup: PopupProps, val media: PopupProps.Media.Bitmap) : PopupView(context, popup) {
         var mImageView: ImageView? = null
 
-        init { create() }
+        init { 
+            create()
+            // Bitmaps are ready immediately as they are passed as objects
+            post { readyListener?.onReady() }
+        }
 
         override fun create() {
             super.create()
-
             val frame = findViewById<FrameLayout>(R.id.popup_frame)
             mImageView = ImageView(context).apply {
                 setImageBitmap(media.image)
             }
 
             val scaledHeight = ((media.width.toFloat() / media.image.width) * media.image.height).toInt()
-            val layoutParams =
-                FrameLayout.LayoutParams(media.width, scaledHeight).apply {
-                    gravity = Gravity.CENTER
-                }
-
+            val layoutParams = FrameLayout.LayoutParams(media.width, scaledHeight).apply {
+                gravity = Gravity.CENTER
+            }
             frame.addView(mImageView, layoutParams)
         }
 
@@ -218,44 +240,42 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
             try {
                 mImageView?.setImageDrawable(null)
                 media.image.recycle()
-            } catch(_: Throwable) {}
+            } catch (_: Throwable) {}
         }
     }
 
-    private class Web(context: Context, popup: PopupProps, val media: PopupProps.Media.Web): PopupView(context, popup) {
+    /**
+     * Web media popup.
+     */
+    private class Web(context: Context, popup: PopupProps, val media: PopupProps.Media.Web) : PopupView(context, popup) {
         var mWebView: WebView? = null
         init { create() }
 
         @SuppressLint("SetJavaScriptEnabled")
         override fun create() {
             super.create()
-
             val frame = findViewById<FrameLayout>(R.id.popup_frame)
             mWebView = WebView(context).apply {
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView?, url: String?) {
+                        Log.d(LOG_TAG, "Web page finished loading")
+                        readyListener?.onReady()
+                    }
+                }
                 with(settings) {
                     loadWithOverviewMode = true
                     useWideViewPort = true
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     mediaPlaybackRequiresUserGesture = false
-                    
-                    // Configure caching based on request
-                    cacheMode = if (media.cache) {
-                        android.webkit.WebSettings.LOAD_DEFAULT
-                    } else {
-                        android.webkit.WebSettings.LOAD_NO_CACHE
-                    }
+                    cacheMode = if (media.cache) android.webkit.WebSettings.LOAD_DEFAULT else android.webkit.WebSettings.LOAD_NO_CACHE
                 }
                 loadUrl(media.uri)
             }
 
-            val layoutParams = FrameLayout.LayoutParams(
-                media.width,
-                media.height
-            ).apply {
+            val layoutParams = FrameLayout.LayoutParams(media.width, media.height).apply {
                 gravity = Gravity.CENTER
             }
-
             frame.addView(mWebView, layoutParams)
         }
 
@@ -271,8 +291,10 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
     companion object {
         const val LOG_TAG = "PopupView"
 
-        fun build(context: Context, popup: PopupProps): PopupView
-        {
+        /**
+         * Factory method to build the appropriate PopupView based on media type.
+         */
+        fun build(context: Context, popup: PopupProps): PopupView {
             return when (popup.media) {
                 is PopupProps.Media.Web -> Web(context, popup, popup.media)
                 is PopupProps.Media.Video -> Video(context, popup, popup.media)
