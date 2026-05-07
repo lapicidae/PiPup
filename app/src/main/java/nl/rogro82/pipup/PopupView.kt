@@ -123,6 +123,9 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
 
             try {
                 val imageView = ImageView(context)
+                
+                // SVG rendering via PictureDrawable requires software rendering
+                imageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
                 val layoutParams =
                     FrameLayout.LayoutParams(media.width, WindowManager.LayoutParams.WRAP_CONTENT).apply {
@@ -133,6 +136,7 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
 
                 val uri = GlideUrl(media.uri)
                 Glide.with(context)
+                    .`as`(Drawable::class.java) // Support both Bitmap and PictureDrawable (SVG)
                     .load(uri)
                     .timeout(20000)
                     .listener(object : RequestListener<Drawable> {

@@ -119,6 +119,7 @@ dependencies {
 
     // Core Kotlin and Android libraries
     implementation libs.kotlin.stdlib
+    implementation libs.androidsvg
     implementation libs.leanback
     implementation libs.appcompat
     implementation libs.core.ktx

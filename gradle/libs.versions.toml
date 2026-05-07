@@ -3,6 +3,7 @@ appcompat = "1.7.1"
 constraintlayout = "2.2.1"
 coreKtx = "1.18.0"
 glide = "5.0.7"
+androidsvg = "1.4"
 googleDevtoolsKsp = "2.3.6"
 gradle = "9.2.1"
 jacksonDatabind = "2.21.3"
@@ -17,6 +18,7 @@ appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "a
 compiler = { group = "com.github.bumptech.glide", name = "ksp", version.ref = "glide" }
 constraintlayout = { group = "androidx.constraintlayout", name = "constraintlayout", version.ref = "constraintlayout" }
 core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidsvg = { group = "com.caverock", name = "androidsvg-aar", version.ref = "androidsvg" }
 glide = { group = "com.github.bumptech.glide", name = "glide", version.ref = "glide" }
 gradle = { group = "com.android.tools.build", name = "gradle", version.ref = "gradle" }
 jackson-databind = { group = "com.fasterxml.jackson.core", name = "jackson-databind", version.ref = "jacksonDatabind" }
