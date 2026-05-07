@@ -66,7 +66,6 @@ android {
         }
         debug {
             // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
-            versionNameSuffix "-debug"
             debuggable true
             // Minification disabled for easier debugging during development
             minifyEnabled false
@@ -96,18 +95,17 @@ android {
 androidComponents {
     onVariants(selector().all()) { variant ->
         variant.outputs.each { output ->
-            def version = output.versionName.get()
+            def baseVersion = output.versionName.get()
             def buildType = variant.name
 
-            // Determine status: use appStatus for releases, otherwise the buildType
-            def status = (buildType == "release" && project.hasProperty("appStatus"))
-                         ? project.getProperty("appStatus")
+            // Determine status: 
+            // 1. Use 'appStatus' property if provided (e.g., for custom release labels)
+            // 2. Otherwise use the build type (debug/release)
+            def status = project.hasProperty("appStatus") 
+                         ? project.getProperty("appStatus") 
                          : buildType
 
-            // Ensure status is not an empty string
-            def finalStatus = status ?: "build"
-
-            def newName = "PiPup-${version}-${finalStatus}.apk"
+            def newName = "PiPup-${baseVersion}-${status}.apk"
             output.outputFileName.set(newName)
         }
     }

@@ -1,2 +1,3 @@
 <resources>
+    <color name="debug_color">#FFA500</color> <!-- Orange -->
 </resources>

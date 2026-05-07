@@ -44,10 +44,18 @@ class MainActivity : Activity() {
 
         textViewVersion.apply {
             visibility = View.VISIBLE
-            text = resources.getString(
-                R.string.version_number,
-                BuildConfig.VERSION_NAME
-            )
+            if (BuildConfig.DEBUG) {
+                text = resources.getString(
+                    R.string.version_number_debug,
+                    BuildConfig.VERSION_NAME
+                )
+                setTextColor(resources.getColor(R.color.debug_color, null))
+            } else {
+                text = resources.getString(
+                    R.string.version_number,
+                    BuildConfig.VERSION_NAME
+                )
+            }
         }
 
         when(val ipAddress = getIpAddress()) {
