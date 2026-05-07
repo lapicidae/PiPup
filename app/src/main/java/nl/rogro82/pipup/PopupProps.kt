@@ -8,7 +8,7 @@ data class PopupProps(
     val position: Position = DEFAULT_POSITION,
     val backgroundColor: String = DEFAULT_BACKGROUND_COLOR,
     val title: String? = null,
-    val titleSize: Float = 14f,
+    val titleSize: Float = DEFAULT_TITLE_SIZE,
     val titleColor: String = DEFAULT_TITLE_COLOR,
     val message: String? = null,
     val messageSize: Float = DEFAULT_MESSAGE_SIZE,
@@ -25,19 +25,29 @@ data class PopupProps(
         JsonSubTypes.Type(Media.Web::class, name = "web")
     )
     sealed class Media {
-        data class Video(val uri: String, val width: Int = DEFAULT_MEDIA_WIDTH): Media()
+        data class Video(
+            val uri: String,
+            val width: Int = DEFAULT_MEDIA_WIDTH,
+            val scale: Boolean = true
+        ) : Media()
         data class Image(
             val uri: String,
             val width: Int = DEFAULT_MEDIA_WIDTH,
-            val cache: Boolean = true
+            val cache: Boolean = true,
+            val scale: Boolean = true
         ) : Media()
         data class Web(
             val uri: String,
             val width: Int = 640,
             val height: Int = 480,
-            val cache: Boolean = true
+            val cache: Boolean = true,
+            val scale: Boolean = true
         ) : Media()
-        data class Bitmap(val image: android.graphics.Bitmap, val width: Int = DEFAULT_MEDIA_WIDTH): Media()
+        data class Bitmap(
+            val image: android.graphics.Bitmap,
+            val width: Int = DEFAULT_MEDIA_WIDTH,
+            val scale: Boolean = true
+        ) : Media()
     }
 
     enum class Position(index: Int) {

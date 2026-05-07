@@ -57,10 +57,11 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
             WindowManager.LayoutParams.WRAP_CONTENT
         ).apply {
             orientation = VERTICAL
-            minimumWidth = 240
+            minimumWidth = Utils.dpToPx(context, 240)
         }
 
-        setPadding(20, 20, 20, 20)
+        val padding = Utils.dpToPx(context, 20)
+        setPadding(padding, padding, padding, padding)
 
         val title = findViewById<TextView>(R.id.popup_title)
         val message = findViewById<TextView>(R.id.popup_message)
@@ -123,7 +124,8 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                 setVideoURI(Uri.parse(media.uri))
                 setOnPreparedListener {
                     it.setOnVideoSizeChangedListener { _, _, _ ->
-                        layoutParams = FrameLayout.LayoutParams(media.width, WindowManager.LayoutParams.WRAP_CONTENT).apply {
+                        val widthPx = if (media.scale) Utils.getScaledPixels(context, media.width) else media.width
+                        layoutParams = FrameLayout.LayoutParams(widthPx, WindowManager.LayoutParams.WRAP_CONTENT).apply {
                             gravity = Gravity.CENTER
                         }
                         this@Video.visibility = View.VISIBLE
@@ -159,7 +161,8 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                 val imageView = ImageView(context)
                 imageView.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
 
-                val layoutParams = FrameLayout.LayoutParams(media.width, WindowManager.LayoutParams.WRAP_CONTENT).apply {
+                val widthPx = if (media.scale) Utils.getScaledPixels(context, media.width) else media.width
+                val layoutParams = FrameLayout.LayoutParams(widthPx, WindowManager.LayoutParams.WRAP_CONTENT).apply {
                     gravity = Gravity.CENTER
                 }
                 frame.addView(imageView, layoutParams)
@@ -229,8 +232,9 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                 setImageBitmap(media.image)
             }
 
-            val scaledHeight = ((media.width.toFloat() / media.image.width) * media.image.height).toInt()
-            val layoutParams = FrameLayout.LayoutParams(media.width, scaledHeight).apply {
+            val widthPx = if (media.scale) Utils.getScaledPixels(context, media.width) else media.width
+            val scaledHeight = ((widthPx.toFloat() / media.image.width) * media.image.height).toInt()
+            val layoutParams = FrameLayout.LayoutParams(widthPx, scaledHeight).apply {
                 gravity = Gravity.CENTER
             }
             frame.addView(mImageView, layoutParams)
@@ -273,7 +277,9 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
                 loadUrl(media.uri)
             }
 
-            val layoutParams = FrameLayout.LayoutParams(media.width, media.height).apply {
+            val widthPx = if (media.scale) Utils.getScaledPixels(context, media.width) else media.width
+            val heightPx = if (media.scale) Utils.getScaledPixels(context, media.height) else media.height
+            val layoutParams = FrameLayout.LayoutParams(widthPx, heightPx).apply {
                 gravity = Gravity.CENTER
             }
             frame.addView(mWebView, layoutParams)
