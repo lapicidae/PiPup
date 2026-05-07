@@ -18,9 +18,11 @@ import android.widget.FrameLayout
 import fi.iki.elonen.NanoHTTPD
 import fi.iki.elonen.NanoHTTPD.newFixedLengthResponse
 import java.io.File
+import java.util.*
 
 /**
- * Core foreground service that manages the PiPup web server and overlay window.
+ * Core foreground service that manages the PiPup web server, overlay window,
+ * and a notification queue for sequential display.
  */
 class PipUpService : Service(), WebServer.Handler {
     private val mHandler: Handler = Handler(Looper.getMainLooper())
@@ -30,6 +32,16 @@ class PipUpService : Service(), WebServer.Handler {
     private var mPopup: PopupView? = null
     private var mPopupProps: PopupProps? = null
     private lateinit var mWebServer: WebServer
+
+    /**
+     * Queue to store incoming notification requests for sequential processing.
+     */
+    private val mNotificationQueue: Queue<PopupProps> = LinkedList()
+    
+    /**
+     * Flag indicating if a notification is currently being displayed.
+     */
+    private var mIsDisplaying = false
 
     override fun onCreate() {
         super.onCreate()
@@ -89,6 +101,10 @@ class PipUpService : Service(), WebServer.Handler {
             it.removeAllViews()
             it.visibility = View.GONE
         }
+        mIsDisplaying = false
+        
+        // Process the next notification in the queue
+        processNextNotification()
     }
 
     /**
@@ -143,28 +159,45 @@ class PipUpService : Service(), WebServer.Handler {
     }
 
     /**
-     * Displays a new popup notification.
+     * Adds a notification to the queue and triggers processing.
+     */
+    private fun enqueueNotification(popup: PopupProps) {
+        mNotificationQueue.add(popup)
+        if (!mIsDisplaying) {
+            processNextNotification()
+        }
+    }
+
+    /**
+     * Processes the next notification in the queue.
+     */
+    private fun processNextNotification() {
+        val nextPopup = mNotificationQueue.poll()
+        if (nextPopup != null) {
+            createPopup(nextPopup)
+        }
+    }
+
+    /**
+     * Displays a popup notification immediately.
      */
     private fun createPopup(popup: PopupProps) {
         try {
             Log.d(LOG_TAG, "Creating popup: $popup")
+            mIsDisplaying = true
             
-            // If the same popup is already showing, just extend the timer
-            if (mPopupProps == popup) {
-                mHandler.removeCallbacksAndMessages(mPopupProps)
-            } else {
-                removePopup()
-                ensureOverlay().apply { visibility = View.VISIBLE }
-                
-                mPopup = inflatePopupView(popup)
-                mPopupProps = popup
-                positionPopup(mPopup!!, popup)
-            }
+            ensureOverlay().apply { visibility = View.VISIBLE }
             
-            // Schedule removal
+            mPopup = inflatePopupView(popup)
+            mPopupProps = popup
+            positionPopup(mPopup!!, popup)
+            
+            // Schedule removal based on duration
             mHandler.postDelayed({ removePopup() }, mPopupProps, (popup.duration * 1000).toLong())
         } catch (ex: Throwable) {
             Log.e(LOG_TAG, "Error creating popup", ex)
+            mIsDisplaying = false
+            processNextNotification() // Try next one if current fails
         }
     }
 
@@ -173,7 +206,6 @@ class PipUpService : Service(), WebServer.Handler {
      */
     private fun parseJsonPopupProps(session: NanoHTTPD.IHTTPSession): PopupProps? {
         return try {
-            // Jackson can read directly from the InputStream, avoiding large byte arrays
             Json.readValue(session.inputStream, PopupProps::class.java)
         } catch (ex: Exception) {
             Log.e(LOG_TAG, "Failed to parse JSON: ${ex.message}")
@@ -204,7 +236,6 @@ class PipUpService : Service(), WebServer.Handler {
             val media = when (val imagePath = files["image"]) {
                 is String -> {
                     File(imagePath).absoluteFile.let { file ->
-                        // Consider moving bitmap decoding to a background thread if it blocks the UI excessively
                         val bitmap = BitmapFactory.decodeStream(file.inputStream())
                         val imageWidth = params["imageWidth"]?.toIntOrNull() ?: PopupProps.DEFAULT_MEDIA_WIDTH
                         PopupProps.Media.Bitmap(image = bitmap, width = imageWidth)
@@ -237,8 +268,11 @@ class PipUpService : Service(), WebServer.Handler {
                 NanoHTTPD.Method.POST -> {
                     when (session.uri) {
                         "/cancel" -> {
-                            mHandler.post { removePopup() }
-                            ok()
+                            mHandler.post { 
+                                mNotificationQueue.clear()
+                                removePopup() 
+                            }
+                            ok("Queue cleared and current notification cancelled")
                         }
                         "/notify" -> {
                             val contentType = session.headers["content-type"] ?: APPLICATION_JSON
@@ -251,9 +285,9 @@ class PipUpService : Service(), WebServer.Handler {
                                 }
                             }
                             popup?.let {
-                                Log.d(LOG_TAG, "Received notification request")
-                                mHandler.post { createPopup(it) }
-                                ok("Notification processed")
+                                Log.d(LOG_TAG, "Received notification request, adding to queue")
+                                mHandler.post { enqueueNotification(it) }
+                                ok("Notification enqueued")
                             } ?: invalidRequest("Failed to parse popup data")
                         }
                         else -> invalidRequest("Unknown URI: ${session.uri}")
