@@ -290,39 +290,44 @@ class PipUpService : Service(), WebServer.Handler {
     }
 
     override fun handleHttpRequest(session: NanoHTTPD.IHTTPSession?): NanoHTTPD.Response {
-        return session?.let {
-            when (session.method) {
-                NanoHTTPD.Method.POST -> {
-                    when (session.uri) {
-                        "/cancel" -> {
-                            mHandler.post { 
-                                mNotificationQueue.clear()
-                                removePopup() 
-                            }
-                            ok("Queue cleared and current notification cancelled")
-                        }
-                        "/notify" -> {
-                            val contentType = session.headers["content-type"] ?: APPLICATION_JSON
-                            val popup = when {
-                                contentType.startsWith(APPLICATION_JSON) -> parseJsonPopupProps(session)
-                                contentType.startsWith(MULTIPART_FORM_DATA) -> parseMultipartPopupProps(session)
-                                else -> {
-                                    Log.e(LOG_TAG, "Invalid content-type: $contentType")
-                                    null
+        return try {
+            session?.let {
+                when (session.method) {
+                    NanoHTTPD.Method.POST -> {
+                        when (session.uri) {
+                            "/cancel" -> {
+                                mHandler.post { 
+                                    mNotificationQueue.clear()
+                                    removePopup() 
                                 }
+                                ok("Queue cleared and current notification cancelled")
                             }
-                            popup?.let {
-                                Log.d(LOG_TAG, "Received notification request, adding to queue")
-                                mHandler.post { enqueueNotification(it) }
-                                ok("Notification enqueued")
-                            } ?: invalidRequest("Failed to parse popup data")
+                            "/notify" -> {
+                                val contentType = session.headers["content-type"] ?: APPLICATION_JSON
+                                val popup = when {
+                                    contentType.startsWith(APPLICATION_JSON) -> parseJsonPopupProps(session)
+                                    contentType.startsWith(MULTIPART_FORM_DATA) -> parseMultipartPopupProps(session)
+                                    else -> {
+                                        Log.e(LOG_TAG, "Invalid content-type: $contentType")
+                                        null
+                                    }
+                                }
+                                popup?.let {
+                                    Log.d(LOG_TAG, "Received notification request, adding to queue")
+                                    mHandler.post { enqueueNotification(it) }
+                                    ok("Notification enqueued")
+                                } ?: invalidRequest("Failed to parse popup data")
+                            }
+                            else -> invalidRequest("Unknown URI: ${session.uri}")
                         }
-                        else -> invalidRequest("Unknown URI: ${session.uri}")
                     }
+                    else -> invalidRequest("Invalid method")
                 }
-                else -> invalidRequest("Invalid method")
-            }
-        } ?: invalidRequest()
+            } ?: invalidRequest("Session is null")
+        } catch (ex: Exception) {
+            Log.e(LOG_TAG, "Critical error handling HTTP request", ex)
+            invalidRequest("Internal server error: ${ex.message}")
+        }
     }
 
     companion object {
@@ -334,10 +339,17 @@ class PipUpService : Service(), WebServer.Handler {
         
         private val SAFETY_TIMEOUT_TOKEN = Any()
 
-        fun ok(message: String? = null): NanoHTTPD.Response = 
-            newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", message)
+        fun ok(message: String? = null): NanoHTTPD.Response {
+            val response = newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", message ?: "OK")
+            // Ensure connection is not closed prematurely by explicitly setting headers if needed
+            response.addHeader("Connection", "close")
+            return response
+        }
             
-        fun invalidRequest(message: String? = null): NanoHTTPD.Response = 
-            newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Invalid request: $message")
+        fun invalidRequest(message: String? = null): NanoHTTPD.Response {
+            val response = newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Invalid request: ${message ?: "Unknown error"}")
+            response.addHeader("Connection", "close")
+            return response
+        }
     }
 }
