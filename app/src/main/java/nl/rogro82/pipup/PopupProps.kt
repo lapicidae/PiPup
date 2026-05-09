@@ -14,6 +14,9 @@ data class PopupProps(
     val messageSize: Float = DEFAULT_MESSAGE_SIZE,
     val messageColor: String = DEFAULT_MESSAGE_COLOR,
     val messageIcon: String? = null,
+    val borderRadius: Int = 0,
+    val borderWidth: Int = 0,
+    val borderColor: String = "#00000000",
     val media: Media? = null
 ) {
     @JsonTypeInfo(

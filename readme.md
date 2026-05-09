@@ -4,11 +4,11 @@ PiPup is an application that allows displaying user-defined custom notifications
 
 The most common use-case for this application is for sending notifications, from a home-automation solution, to your Android TV.
 
-![](https://github.com/rogro82/PiPup/raw/master/graphics/screenshot-1.png)
+![](graphics/screenshot-1.png)
 
 **Some example scenarios:**
 
-- Show a snapshot of your camera on your TV (eg on a motion trigger)
+- Show a snapshot of your camera on your TV (e.g. on a motion trigger)
 - Display a notification with the video of your camera when someone is at your door
 - Send a notification when your dryer/washingmachine is ready
 - Anything else you might find useful
@@ -38,11 +38,11 @@ PiPup uses an embedded webserver (NanoHTTPD) which runs on port 7979.
 
 #### To send notifications with an external media resource (image, url or webview) use application/json
 
-| Property      | Value            |
-| ------------- | ---------------- |
-| Path:         | /notify          |
-| Method:       | POST             |
-| Content-Type: | application/json |
+| _Property_        | _Value_          |
+| ----------------- | ---------------- |
+| **Path:**         | /notify          |
+| **Method:**       | POST             |
+| **Content-Type:** | application/json |
 
 Example json data:
 
@@ -57,6 +57,9 @@ Example json data:
   "messageColor": "#000000",
   "messageSize": 14,
   "backgroundColor": "#ffffff",
+  "borderRadius": 20,
+  "borderWidth": 2,
+  "borderColor": "#000000",
   "media": {
     "image": {
       "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png",
@@ -76,44 +79,54 @@ All fields are optional and for `media` you can specify 3 types:
 
 The `image`, `video`, and `web` objects support additional **optional** flags:
 
-| Field     | Type    | Default | Description                                                   |
-| --------- | ------- | ------- | ------------------------------------------------------------- |
-| **cache** | Boolean | true    | Toggles disk and memory caching for images and web content    |
-| **scale** | Boolean | true    | Automatically scales dimensions relative to a 1080p reference |
+| _Field_   | _Type_  | _Default_ | _Description_                                                 |
+| --------- | ------- | --------- | ------------------------------------------------------------- |
+| **cache** | Boolean | true      | Toggles disk and memory caching for images and web content    |
+| **scale** | Boolean | true      | Automatically scales dimensions relative to a 1080p reference |
+
+#### Background Styling
+
+You can customize the appearance of the notification background using the following optional top-level properties:
+
+| _Field_             | _Type_  | _Default_ | _Description_                                                    |
+| ------------------- | ------- | --------- | ---------------------------------------------------------------- |
+| **backgroundColor** | String  | #CC000000 | Color of the background in `[AA]RRGGBB` format                   |
+| **borderRadius**    | Integer | 0         | Radius in pixels (scaled) to round the corners of the background |
+| **borderWidth**     | Integer | 0         | Width of the border around the notification in pixels (scaled)   |
+| **borderColor**     | String  | #00000000 | Color of the border in `[AA]RRGGBB` format                       |
 
 #### To send notifications with an image file use multipart/form-data
 
-| Property      | Value               |
-| ------------- | ------------------- |
-| Path:         | /notify             |
-| Method:       | POST                |
-| Content-Type: | multipart/form-data |
+| _Property_        | _Value_             |
+| ----------------- | ------------------- |
+| **Path:**         | /notify             |
+| **Method:**       | POST                |
+| **Content-Type:** | multipart/form-data |
 
 Form-fields:
 
-| Field           | Type                                         |
-| --------------- | -------------------------------------------- |
-| duration        | Integer (default=30)                         |
-| position        | Integer (0..4, default=0)                    |
-| title           | String                                       |
-| titleSize       | Integer (default=16)                         |
-| titleColor      | string (default=#FFFFFF, format=[AA]RRGGBB   |
-| message         | String                                       |
-| messageSize     | Integer (default=12)                         |
-| messageColor    | String (default=#FFFFFF, format=[AA]RRGGBB   |
-| backgroundColor | String (default=#CC000000, format=[AA]RRGGBB |
-| image           | File                                         |
-| imageWidth      | Integer (default=480)                        |
+| _Field_          | _Type_  | _Default_ | _Description_                                    |
+| ---------------- | ------- | --------- | ------------------------------------------------ |
+| **duration**     | Integer | 30        | Duration in seconds                              |
+| **position**     | Integer | 0         | Position index (0..4)                            |
+| **title**        | String  |           | Title text                                       |
+| **titleSize**    | Float   | 14        | Title font size                                  |
+| **titleColor**   | string  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format   |
+| **message**      | String  |           | Message text                                     |
+| **messageSize**  | Float   | 14        | Message font size                                |
+| **messageColor** | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format |
+| **image**        | File    |           | Local image file (multipart only)                |
+| **imageWidth**   | Integer | 480       | Width in pixels                                  |
 
 `position` is an enum ranging from 0 to 4
 
-|     | Position    |
-| --: | ----------- |
-|   0 | TopRight    |
-|   1 | TopLeft     |
-|   2 | BottomRight |
-|   3 | BottomLeft  |
-|   4 | Center      |
+|       | _Position_  |
+| ----: | ----------- |
+| **0** | TopRight    |
+| **1** | TopLeft     |
+| **2** | BottomRight |
+| **3** | BottomLeft  |
+| **4** | Center      |
 
 Color-properties are in `[AA]RRGGBB` where the alpha channel is optional e.g. #FFFFFF or #CCFFFFFF
 
@@ -121,10 +134,10 @@ Color-properties are in `[AA]RRGGBB` where the alpha channel is optional e.g. #F
 
 To clear the notification queue and remove the currently displayed notification:
 
-| Property | Value   |
-| -------- | ------- |
-| Path:    | /cancel |
-| Method:  | POST    |
+| _Property_  | _Value_ |
+| ----------- | ------- |
+| **Path:**   | /cancel |
+| **Method:** | POST    |
 
 ### Contributors:
 

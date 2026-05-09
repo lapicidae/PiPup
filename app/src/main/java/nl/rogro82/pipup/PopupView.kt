@@ -3,6 +3,7 @@ package nl.rogro82.pipup
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.util.Log
@@ -57,10 +58,10 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
             WindowManager.LayoutParams.WRAP_CONTENT
         ).apply {
             orientation = VERTICAL
-            minimumWidth = Utils.dpToPx(context, 240)
+            minimumWidth = Utils.getScaledPixels(context, 240)
         }
 
-        val padding = Utils.dpToPx(context, 20)
+        val padding = Utils.getScaledPixels(context, 20)
         setPadding(padding, padding, padding, padding)
 
         val title = findViewById<TextView>(R.id.popup_title)
@@ -87,7 +88,22 @@ sealed class PopupView(context: Context, val popup: PopupProps) : LinearLayout(c
             message.setTextColor(Color.parseColor(popup.messageColor))
         }
 
-        setBackgroundColor(Color.parseColor(popup.backgroundColor))
+        // Apply advanced background styling
+        val backgroundDrawable = GradientDrawable().apply {
+            setColor(Color.parseColor(popup.backgroundColor))
+            
+            if (popup.borderRadius > 0) {
+                cornerRadius = Utils.getScaledPixels(context, popup.borderRadius).toFloat()
+            }
+            
+            if (popup.borderWidth > 0) {
+                setStroke(
+                    Utils.getScaledPixels(context, popup.borderWidth),
+                    Color.parseColor(popup.borderColor)
+                )
+            }
+        }
+        background = backgroundDrawable
     }
 
     /**
