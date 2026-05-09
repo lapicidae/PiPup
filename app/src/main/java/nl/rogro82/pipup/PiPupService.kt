@@ -33,7 +33,7 @@ class PiPupService : Service(), WebServer.Handler {
 
         val pendingIntent = PendingIntent.getActivity(
             this, 0,
-            Intent(this, MainActivity::class.java), 
+            Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
 
@@ -231,7 +231,7 @@ class PiPupService : Service(), WebServer.Handler {
 
                             } catch (ex: Throwable) {
                                 Log.e(LOG_TAG, ex.message ?: "Error")
-                                InvalidRequest(ex.message ?: "Unknown error") 
+                                InvalidRequest(ex.message ?: "Unknown error")
                             }
                         }
                         else -> InvalidRequest("unknown uri: ${session.uri}")
@@ -249,7 +249,7 @@ class PiPupService : Service(), WebServer.Handler {
         const val MULTIPART_FORM_DATA = "multipart/form-data"
         const val APPLICATION_JSON = "application/json"
 
-        fun OK(message: String? = null): NanoHTTPD.Response = 
+        fun OK(message: String? = null): NanoHTTPD.Response =
             newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", message ?: "")
 
         fun InvalidRequest(message: String? = null): NanoHTTPD.Response {

@@ -6,15 +6,14 @@ The most common use-case for this application is for sending notifications, from
 
 ![](https://github.com/rogro82/PiPup/raw/master/graphics/screenshot-1.png)
 
-__Some example scenarios:__
+**Some example scenarios:**
 
 - Show a snapshot of your camera on your TV (eg on a motion trigger)
 - Display a notification with the video of your camera when someone is at your door
 - Send a notification when your dryer/washingmachine is ready
 - Anything else you might find useful
 
-
-__The application is currently in a `public beta`__
+**The application is currently in a `public beta`**
 
 To enter the `beta` and install the application on your device go to:  
 https://play.google.com/apps/testing/nl.rogro82.pipup
@@ -26,6 +25,7 @@ _Important: after installation / updating it is currently advised to restart you
 On Android TV (8.0+), when sideloading, you will need to set the permission for SYSTEM_ALERT_WINDOW manually (using adb) as there is no interface on Android TV to do this.
 
 To give the application the required permission to draw overlays you will need to run:
+
 ```
 adb shell appops set nl.rogro82.pipup SYSTEM_ALERT_WINDOW allow
 ```
@@ -37,7 +37,6 @@ PiPup uses an embedded webserver (NanoHTTPD) which runs on port 7979.
 ### Sending notifications
 
 #### To send notifications with an external media resource (image, url or webview) use application/json
-
 
 | Property      | Value            |
 | ------------- | ---------------- |
@@ -58,18 +57,29 @@ Example json data:
   "messageColor": "#000000",
   "messageSize": 14,
   "backgroundColor": "#ffffff",
-  "media": { "image": {
-    "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png", "width": 480
-  }}
+  "media": {
+    "image": {
+      "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png",
+      "width": 480
+    }
+  }
 }
 ```
+
 All fields are optional and for `media` you can specify 3 types:
 
-```json 
-{ "image": { "uri": "address_to_your_image", "width": 480 }}
-{ "video": { "uri": "address_to_your_video", "width": 480 }}
-{ "web":   { "uri": "address_to_your_resource", "width": 640, "height": 480 }}
+```json
+"image": { "uri": "...", "width": 480, "cache": true, "scale": true }
+"video": { "uri": "...", "width": 480, "scale": true }
+"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true }
 ```
+
+The `image`, `video`, and `web` objects support additional **optional** flags:
+
+| Field     | Type    | Default | Description                                                   |
+| --------- | ------- | ------- | ------------------------------------------------------------- |
+| **cache** | Boolean | true    | Toggles disk and memory caching for images and web content    |
+| **scale** | Boolean | true    | Automatically scales dimensions relative to a 1080p reference |
 
 #### To send notifications with an image file use multipart/form-data
 
@@ -97,16 +107,25 @@ Form-fields:
 
 `position` is an enum ranging from 0 to 4
 
-|  | Position    |
-| -----: | ----------- |
-| 0     | TopRight    |
-| 1     | TopLeft     |
-| 2     | BottomRight |
-| 3     | BottomLeft  |
-| 4     | Center      |
+|     | Position    |
+| --: | ----------- |
+|   0 | TopRight    |
+|   1 | TopLeft     |
+|   2 | BottomRight |
+|   3 | BottomLeft  |
+|   4 | Center      |
 
 Color-properties are in `[AA]RRGGBB` where the alpha channel is optional e.g. #FFFFFF or #CCFFFFFF
 
+### Cancel notifications
+
+To clear the notification queue and remove the currently displayed notification:
+
+| Property | Value   |
+| -------- | ------- |
+| Path:    | /cancel |
+| Method:  | POST    |
 
 ### Contributors:
+
     - Zaheer <zaheer.aws@gmail.com>

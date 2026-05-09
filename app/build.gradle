@@ -62,7 +62,7 @@ android {
 
             // This allows the release build to be signed with the debug key
             // for testing purposes without needing a production certificate.
-			signingConfig = signingConfigs.debug
+            signingConfig = signingConfigs.debug
         }
         debug {
             // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
@@ -98,11 +98,11 @@ androidComponents {
             def baseVersion = output.versionName.get()
             def buildType = variant.name
 
-            // Determine status: 
+            // Determine status:
             // 1. Use 'appStatus' property if provided (e.g., for custom release labels)
             // 2. Otherwise use the build type (debug/release)
-            def status = project.hasProperty("appStatus") 
-                         ? project.getProperty("appStatus") 
+            def status = project.hasProperty("appStatus")
+                         ? project.getProperty("appStatus")
                          : buildType
 
             def newName = "PiPup-${baseVersion}-${status}.apk"

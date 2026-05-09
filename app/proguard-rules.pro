@@ -14,7 +14,8 @@
 
 
 # --- Dependency Resolution Rules ---
-# The following rules suppress warnings regarding optional dependencies or 
+
+# The following rules suppress warnings regarding optional dependencies or
 # classes from the Java Desktop environment that are not present on Android.
 -dontwarn java.beans.**
 -dontwarn javax.annotation.**
@@ -23,6 +24,7 @@
 
 
 # --- Jackson (JSON Framework) ---
+
 # Ensure Jackson can access annotations and handle reflection for JSON mapping
 -keep class com.fasterxml.jackson.** { *; }
 -keepnames class com.fasterxml.jackson.** { *; }
@@ -51,6 +53,7 @@
 
 
 # --- Glide (Image Processing) ---
+
 # Preserve Glide's annotation processor output and integration modules
 -keep public class * extends com.bumptech.glide.module.AppGlideModule
 -keep public class * extends com.bumptech.glide.module.LibraryGlideModule
@@ -63,9 +66,11 @@
 
 
 # --- OkHttp / Conscrypt ---
+
 # Suppress warnings for missing Conscrypt classes. OkHttp uses them if present
 # but provides a fallback if they are missing.
 -dontwarn org.conscrypt.**
+
 
 # --- NanoHTTPD (Web Server) ---
 # Keep the embedded server logic intact
