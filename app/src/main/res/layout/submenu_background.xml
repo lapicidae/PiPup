@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_section_background"
+        android:textColor="#E8EAED"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_bg_color" android:textColor="#9AA0A6"/>
+    <Spinner android:id="@+id/spinner_bg_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <Button android:id="@+id/btn_edit_bg_hex" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_bg_color" tools:text="#000000" android:visibility="gone" style="@android:style/Widget.DeviceDefault.Button.Toggle" android:focusable="true" android:gravity="start|center_vertical" android:paddingStart="12dp" android:paddingEnd="12dp"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_opacity" android:textColor="#9AA0A6" android:layout_marginTop="24dp"/>
+    <SeekBar android:id="@+id/seekbar_bg_alpha" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="255" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
+
+</LinearLayout>

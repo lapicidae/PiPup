@@ -20,8 +20,8 @@ object Utils {
         try {
             val interfaces = getNetworkInterfaces()
             while (interfaces.hasMoreElements()) {
-                val iface = interfaces.nextElement()
-                val addresses = iface.inetAddresses
+                val networkInterface = interfaces.nextElement()
+                val addresses = networkInterface.inetAddresses
                 while (addresses.hasMoreElements()) {
                     val address = addresses.nextElement()
                     if (!address.isLoopbackAddress && address is Inet4Address) {

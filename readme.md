@@ -38,28 +38,31 @@ PiPup uses an embedded webserver (NanoHTTPD) which runs on port 7979.
 
 #### To send notifications with an external media resource (image, url or webview) use application/json
 
-| _Property_        | _Value_          |
-| ----------------- | ---------------- |
-| **Path:**         | /notify          |
-| **Method:**       | POST             |
-| **Content-Type:** | application/json |
+| _Property_        | _Value_                   |
+| ----------------- | ------------------------- |
+| **Path:**         | /notify, / or /api/notify |
+| **Method:**       | POST                      |
+| **Content-Type:** | application/json          |
 
-Example json data:
+Example JSON data:
 
 ```json
 {
-  "duration": 30,
+  "duration": 10,
   "position": 0,
   "title": "Your awesome title",
-  "titleColor": "#0066cc",
-  "titleSize": 20,
+  "titleColor": "#FFFFFF",
+  "titleSize": 24,
+  "titleAlignment": 0,
   "message": "What ever you want to say... do it here...",
-  "messageColor": "#000000",
-  "messageSize": 14,
-  "backgroundColor": "#ffffff",
-  "borderRadius": 20,
-  "borderWidth": 2,
-  "borderColor": "#000000",
+  "messageColor": "#FFFFFF",
+  "messageSize": 16,
+  "messageAlignment": 0,
+  "backgroundColor": "#CC000000",
+  "borderRadius": 0,
+  "borderWidth": 0,
+  "borderColor": "#00000000",
+  "contentPadding": 16,
   "media": {
     "image": {
       "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png",
@@ -72,9 +75,9 @@ Example json data:
 All fields are optional and for `media` you can specify 3 types:
 
 ```json
-"image": { "uri": "...", "width": 480, "cache": true, "scale": true }
-"video": { "uri": "...", "width": 480, "scale": true }
-"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true }
+"image": { "uri": "...", "width": 480, "cache": true, "scale": true } // cache and scale are optional
+"video": { "uri": "...", "width": 480, "scale": true } // scale is optional
+"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true } // cache and scale are optional
 ```
 
 The `image`, `video`, and `web` objects support additional **optional** flags:
@@ -95,6 +98,8 @@ You can customize the appearance of the notification background using the follow
 | **borderWidth**     | Integer | 0         | Width of the border around the notification in pixels (scaled)   |
 | **borderColor**     | String  | #00000000 | Color of the border in `[AA]RRGGBB` format                       |
 
+You can customize the appearance of the notification background and text using the following optional top-level properties.
+
 #### To send notifications with an image file use multipart/form-data
 
 | _Property_        | _Value_             |
@@ -105,18 +110,20 @@ You can customize the appearance of the notification background using the follow
 
 Form-fields:
 
-| _Field_          | _Type_  | _Default_ | _Description_                                    |
-| ---------------- | ------- | --------- | ------------------------------------------------ |
-| **duration**     | Integer | 30        | Duration in seconds                              |
-| **position**     | Integer | 0         | Position index (0..4)                            |
-| **title**        | String  |           | Title text                                       |
-| **titleSize**    | Float   | 14        | Title font size                                  |
-| **titleColor**   | string  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format   |
-| **message**      | String  |           | Message text                                     |
-| **messageSize**  | Float   | 14        | Message font size                                |
-| **messageColor** | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format |
-| **image**        | File    |           | Local image file (multipart only)                |
-| **imageWidth**   | Integer | 480       | Width in pixels                                  |
+| _Field_              | _Type_  | _Default_ | _Description_                                    |
+| -------------------- | ------- | --------- | ------------------------------------------------ |
+| **duration**         | Integer | 30        | Duration in seconds                              |
+| **position**         | Integer | 0         | Position index (0..4)                            |
+| **title**            | String  |           | Title text                                       |
+| **titleSize**        | Float   | 14        | Title font size                                  |
+| **titleColor**       | string  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format   |
+| **titleAlignment**   | Integer | 0         | Title alignment (0..2)                           |
+| **message**          | String  |           | Message text                                     |
+| **messageSize**      | Float   | 14        | Message font size                                |
+| **messageColor**     | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format |
+| **messageAlignment** | Integer | 0         | Message alignment (0..2)                         |
+| **image**            | File    |           | Local image file (multipart only)                |
+| **imageWidth**       | Integer | 480       | Width in pixels                                  |
 
 `position` is an enum ranging from 0 to 4
 
@@ -129,6 +136,14 @@ Form-fields:
 | **4** | Center      |
 
 Color-properties are in `[AA]RRGGBB` where the alpha channel is optional e.g. #FFFFFF or #CCFFFFFF
+
+`titleAlignment` and `messageAlignment` is an enum ranging from 0 to 2
+
+|       | _Position_ |
+| ----: | ---------- |
+| **0** | left       |
+| **1** | center     |
+| **2** | right      |
 
 ### Cancel notifications
 

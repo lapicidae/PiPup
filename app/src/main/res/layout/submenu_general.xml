@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_section_general"
+        android:textColor="#E8EAED"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_position" android:textColor="#9AA0A6"/>
+    <Spinner android:id="@+id/spinner_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_padding" android:textColor="#9AA0A6"/>
+    <SeekBar android:id="@+id/seekbar_padding" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
+
+    <LinearLayout
+        android:id="@+id/container_advanced"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:layout_marginTop="32dp"
+        android:gravity="center_vertical">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_advanced_mode"
+                android:textColor="#E8EAED"
+                android:textSize="16sp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_advanced_mode_desc"
+                android:textColor="#9AA0A6"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_advanced"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:focusable="false"
+            android:clickable="false"/>
+    </LinearLayout>
+
+</LinearLayout>

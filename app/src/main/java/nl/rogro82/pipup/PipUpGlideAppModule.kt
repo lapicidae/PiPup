@@ -16,6 +16,7 @@ import java.io.InputStream
  * specialized media formats like SVG.
  */
 @GlideModule
+@Suppress("unused")
 class PipUpGlideAppModule : AppGlideModule() {
 
     /**

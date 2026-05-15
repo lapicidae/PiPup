@@ -1,6 +1,7 @@
 package nl.rogro82.pipup
 
 import android.graphics.drawable.PictureDrawable
+import android.util.Log
 import com.bumptech.glide.load.Options
 import com.bumptech.glide.load.engine.Resource
 import com.bumptech.glide.load.resource.SimpleResource
@@ -25,7 +26,8 @@ class SvgDrawableTranscoder : ResourceTranscoder<SVG, PictureDrawable> {
     override fun transcode(
         toTranscode: Resource<SVG>,
         options: Options
-    ): Resource<PictureDrawable>? {
+    ): Resource<PictureDrawable> {
+        Log.d("PiPupSvgTranscoder", "Transcoding SVG to PictureDrawable...")
         val svg = toTranscode.get()
         val picture = svg.renderToPicture()
         val drawable = PictureDrawable(picture)

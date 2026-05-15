@@ -1,5 +1,6 @@
 package nl.rogro82.pipup
 
+import android.util.Log
 import com.bumptech.glide.load.Options
 import com.bumptech.glide.load.ResourceDecoder
 import com.bumptech.glide.load.engine.Resource
@@ -42,10 +43,13 @@ class SvgDecoder : ResourceDecoder<InputStream, SVG> {
         height: Int,
         options: Options
     ): Resource<SVG>? {
+        Log.d("PiPupSvgDecoder", "Decoding SVG from stream...")
         return try {
             val svg = SVG.getFromInputStream(source)
+            Log.d("PiPupSvgDecoder", "Successfully decoded SVG: ${svg.documentWidth}x${svg.documentHeight}")
             SimpleResource(svg)
         } catch (ex: SVGParseException) {
+            Log.e("PiPupSvgDecoder", "Failed to parse SVG", ex)
             throw IOException("Failed to parse SVG from stream", ex)
         }
     }

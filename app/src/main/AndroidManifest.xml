@@ -7,8 +7,10 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_REMOTE_MESSAGING" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"
+                     tools:node="replace" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-feature
@@ -20,7 +22,10 @@
 
     <application
             android:allowBackup="true"
+            android:fullBackupContent="@xml/backup_rules"
+            android:dataExtractionRules="@xml/data_extraction_rules"
             android:icon="@mipmap/ic_launcher"
+            android:roundIcon="@mipmap/ic_launcher_round"
             android:label="@string/app_name"
             android:supportsRtl="true"
             android:usesCleartextTraffic="true"
@@ -40,17 +45,28 @@
         <service
                 android:name=".PipUpService"
                 android:enabled="true"
-                android:exported="true"
-                android:foregroundServiceType="remoteMessaging"
-                android:permission="android.permission.FOREGROUND_SERVICE">
+                android:exported="false"
+                android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                      android:value="Overlay notification service for Home Automation integration via local web server."/>
         </service>
+
+        <activity
+                android:name=".SettingsActivity"
+                android:exported="false"
+                android:label="@string/settings_title"
+                android:theme="@style/SettingsTheme">
+        </activity>
 
         <activity
                 android:name=".MainActivity"
                 android:exported="true"
                 android:banner="@drawable/ic_banner"
-                android:icon="@drawable/ic_banner"
                 android:logo="@drawable/ic_banner">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LEANBACK_LAUNCHER"/>

@@ -26,10 +26,10 @@
 # --- Jackson (JSON Framework) ---
 
 # Ensure Jackson can access annotations and handle reflection for JSON mapping
--keep class com.fasterxml.jackson.** { *; }
--keepnames class com.fasterxml.jackson.** { *; }
--keep @com.fasterxml.jackson.annotation.JsonIgnoreProperties class * { *; }
 -keepattributes *Annotation*,EnclosingMethod,Signature
+-keepnames class com.fasterxml.jackson.** { *; }
+-dontwarn com.fasterxml.jackson.databind.**
+-keep @com.fasterxml.jackson.annotation.JsonIgnoreProperties class * { *; }
 
 
 # --- Application Models ---
@@ -57,11 +57,11 @@
 # Preserve Glide's annotation processor output and integration modules
 -keep public class * extends com.bumptech.glide.module.AppGlideModule
 -keep public class * extends com.bumptech.glide.module.LibraryGlideModule
--keep class com.bumptech.glide.GeneratedAppGlideModuleImpl { *; }
+-keep class com.bumptech.glide.GeneratedAppGlideModule { *; }
 -keep @com.bumptech.glide.annotation.GlideModule class * { *; }
 
-# Specifically keep the OkHttp integration found in your logs
--keep class com.bumptech.glide.integration.okhttp3.OkHttpLibraryGlideModule { *; }
+# Specifically keep our application's Glide modules
+-keep class nl.rogro82.pipup.PipUpGlideAppModule { *; }
 -keep class nl.rogro82.pipup.OkHttpLibraryGlideModule { *; }
 
 

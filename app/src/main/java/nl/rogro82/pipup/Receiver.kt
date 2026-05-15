@@ -4,8 +4,9 @@ import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 
 /**
  * BroadcastReceiver responsible for starting the [PipUpService] on system events.
@@ -13,6 +14,7 @@ import android.util.Log
  * It listens for boot completion and package updates to ensure the background
  * service is running without manual user intervention.
  */
+@OptIn(UnstableApi::class)
 class Receiver : BroadcastReceiver() {
 
     /**
@@ -29,13 +31,8 @@ class Receiver : BroadcastReceiver() {
         with(context) {
             val serviceIntent = Intent(this, PipUpService::class.java)
             try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    Log.i(TAG, "Starting PipUpService as foreground service")
-                    startForegroundService(serviceIntent)
-                } else {
-                    Log.i(TAG, "Starting PipUpService")
-                    startService(serviceIntent)
-                }
+                Log.i(TAG, "Starting PipUpService as foreground service")
+                startForegroundService(serviceIntent)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to start PipUpService from receiver", e)
             }

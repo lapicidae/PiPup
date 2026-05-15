@@ -1,105 +1,104 @@
-/*
- * Copyright (C) 2017 The Android Open Source Project
- *
- * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
- * in compliance with the License. You may obtain a copy of the License at
- *
- * http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software distributed under the License
- * is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express
- * or implied. See the License for the specific language governing permissions and limitations under
- * the License.
- */
-
 package nl.rogro82.pipup
 
-import android.annotation.SuppressLint
-import android.app.Activity
 import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.view.View
+import android.util.Log
+import android.widget.ImageButton
 import android.widget.TextView
-import nl.rogro82.pipup.Utils.getIpAddress
+import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.OptIn
+import androidx.core.net.toUri
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.media3.common.util.UnstableApi
 
-class MainActivity : Activity() {
-    @Suppress("PropertyName", "MemberVisibilityCanBePrivate")
-    var ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE = 5469
-    @SuppressLint("CutPasteId")
+/**
+ * Main Activity displaying server status and version information.
+ * 
+ * Serves as the entry point for both Leanback (TV) and standard launchers.
+ */
+@OptIn(UnstableApi::class)
+class MainActivity : ComponentActivity() {
+
+    private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        if (!Settings.canDrawOverlays(this)) {
+            Log.w("MainActivity", "Overlay permission not granted!")
+        }
+    }
+
+    private val notificationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (!isGranted) {
+            Log.w("MainActivity", "Notification permission denied!")
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        //Ask permission to draw over other apps
-        if (!Settings.canDrawOverlays(this)) {
-            askPermission();
+
+        ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.mainLayout)) { v, insets ->
+            val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            insets
         }
-        // start service in foreground
 
-        val textViewConnection = findViewById<TextView>(R.id.textViewServerAddress)
-        val textViewServerAddress = findViewById<TextView>(R.id.textViewServerAddress)
-        val textViewVersion = findViewById<TextView>(R.id.textViewVersion)
-
-        textViewVersion.apply {
-            visibility = View.VISIBLE
-            if (BuildConfig.DEBUG) {
-                text = resources.getString(
-                    R.string.version_number_debug,
-                    BuildConfig.VERSION_NAME
-                )
-                setTextColor(resources.getColor(R.color.debug_color, null))
+        // Versioning info
+        val versionText = findViewById<TextView>(R.id.textViewVersion)
+        try {
+            val pInfo = packageManager.getPackageInfo(packageName, 0)
+            val version = pInfo.versionName
+            versionText.text = if (BuildConfig.DEBUG) {
+                getString(R.string.version_number_debug, version)
             } else {
-                text = resources.getString(
-                    R.string.version_number,
-                    BuildConfig.VERSION_NAME
-                )
+                getString(R.string.version_number, version)
             }
+        } catch (_: Exception) {
+            versionText.text = "v?.?.?"
         }
 
-        when(val ipAddress = getIpAddress()) {
-            is String -> {
-                textViewConnection.setText(R.string.server_running)
-                textViewServerAddress.apply {
-                    visibility = View.VISIBLE
-                    text = resources.getString(
-                        R.string.server_address,
-                        ipAddress,
-                        PipUpService.PIPUP_SERVER_PORT
-                    )
-                }
-            }
-            else -> {
-                textViewConnection.setText(R.string.no_network_connection)
-                textViewServerAddress.visibility = View.INVISIBLE
-            }
-        }
-
-
-        val serviceIntent = Intent(this, PipUpService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
+        // Server Status
+        val statusLabel = findViewById<TextView>(R.id.textViewConnection)
+        val addressLabel = findViewById<TextView>(R.id.textViewServerAddress)
+        
+        val ip = Utils.getIpAddress()
+        if (ip != null) {
+            statusLabel.text = getString(R.string.server_running)
+            addressLabel.text = getString(R.string.server_address, ip, PipUpService.PIPUP_SERVER_PORT)
         } else {
-            startService(serviceIntent)
+            statusLabel.text = getString(R.string.no_network_connection)
+            addressLabel.text = "---.---.---.---"
+        }
+
+        findViewById<TextView>(R.id.textViewInfo).text = getString(R.string.more_information)
+
+        // Settings Button
+        findViewById<ImageButton>(R.id.btn_open_settings).setOnClickListener {
+            startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
+        // Start Background Service
+        val serviceIntent = Intent(this, PipUpService::class.java)
+        startForegroundService(serviceIntent)
+
+        askPermission()
+        requestNotificationPermission()
+    }
+
+    private fun requestNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
         }
     }
 
     private fun askPermission() {
-
-        val intent =
-            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-        startActivityForResult(intent, ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE)
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (resultCode == ACTION_MANAGE_OVERLAY_PERMISSION_REQUEST_CODE) {
-            if (!Settings.canDrawOverlays(this)) {
-                askPermission()
-            }
+        if (!Settings.canDrawOverlays(this)) {
+            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:$packageName".toUri())
+            overlayPermissionLauncher.launch(intent)
         }
     }
-
-
 }

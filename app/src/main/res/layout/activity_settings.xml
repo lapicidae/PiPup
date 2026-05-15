@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <!-- SEMI-TRANSPARENT BACKGROUND OVERLAY -->
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#E61D232A"/>
+
+    <!-- LEFT SIDE: Main Navigation Rail -->
+    <LinearLayout
+        android:id="@+id/nav_rail"
+        android:layout_width="320dp"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="#0DFFFFFF"
+        app:layout_constraintStart_toStartOf="parent">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_header"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:fontFamily="sans-serif-medium"
+            android:layout_marginBottom="24dp"
+            android:paddingStart="12dp"
+            android:paddingEnd="12dp"/>
+
+        <include layout="@layout/nav_item" android:id="@+id/nav_item_general" android:layout_width="match_parent" android:layout_height="48dp"
+            android:nextFocusDown="@+id/nav_item_background"
+            android:nextFocusUp="@+id/nav_item_general"
+            android:nextFocusRight="@+id/settings_scroll"/>
+        <include layout="@layout/nav_item" android:id="@+id/nav_item_background" android:layout_marginTop="4dp" android:layout_width="match_parent" android:layout_height="48dp"
+            android:nextFocusDown="@+id/nav_item_text_style"
+            android:nextFocusUp="@+id/nav_item_general"
+            android:nextFocusRight="@+id/settings_scroll"/>
+        <include layout="@layout/nav_item" android:id="@+id/nav_item_text_style" android:layout_marginTop="4dp" android:layout_width="match_parent" android:layout_height="48dp"
+            android:nextFocusDown="@+id/nav_item_border"
+            android:nextFocusUp="@+id/nav_item_background"
+            android:nextFocusRight="@+id/settings_scroll"/>
+        <include layout="@layout/nav_item" android:id="@+id/nav_item_border" android:layout_marginTop="4dp" android:layout_width="match_parent" android:layout_height="48dp"
+            android:nextFocusDown="@+id/btn_reset"
+            android:nextFocusUp="@+id/nav_item_text_style"
+            android:nextFocusRight="@+id/settings_scroll"/>
+
+        <View android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"/>
+
+        <Button
+            android:id="@+id/btn_reset"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:text="@string/settings_reset"
+            android:background="@drawable/button_focus_selector"
+            android:textColor="@drawable/button_reset_text_selector"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:focusable="true"
+            android:layout_marginBottom="12dp"
+            android:padding="0dp"
+            android:nextFocusDown="@+id/btn_save"
+            android:nextFocusUp="@+id/nav_item_border"/>
+
+        <Button
+            android:id="@+id/btn_save"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:text="@string/settings_save_exit"
+            android:background="@drawable/save_button_background_selector"
+            android:textColor="@drawable/save_text_color_selector"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:focusable="true"
+            android:padding="0dp"
+            android:nextFocusDown="@+id/btn_save"
+            android:nextFocusUp="@+id/btn_reset"/>
+    </LinearLayout>
+
+    <!-- RIGHT SIDE: Content Area for Submenus -->
+    <ScrollView
+        android:id="@+id/settings_scroll"
+        android:layout_width="0dp"
+        android:layout_height="match_parent"
+        android:padding="24dp"
+        android:scrollbarStyle="outsideOverlay"
+        android:clipToPadding="false"
+        android:clipChildren="false"
+        app:layout_constraintStart_toEndOf="@id/nav_rail"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <LinearLayout
+            android:id="@+id/submenu_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:clipChildren="false"
+            android:clipToPadding="false">
+            <!-- Dynamic content swapped here -->
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- FLOATING PREVIEW OVERLAY -->
+    <FrameLayout
+        android:id="@+id/preview_card"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="20dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <FrameLayout
+            android:id="@+id/preview_area"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:clipChildren="false"
+            android:clipToPadding="false"/>
+    </FrameLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

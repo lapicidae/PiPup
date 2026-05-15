@@ -1,12 +1,15 @@
 import java.text.SimpleDateFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 /**
  * Standard Android Build Configuration for PiPup.
  * This script automates the versioning process using timestamps.
  */
 
-apply plugin: 'com.android.application'
-apply plugin: 'com.google.devtools.ksp'
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.google.devtools.ksp)
+}
 
 /**
  * Generates a unique integer version code based on the current date and hour.
@@ -14,7 +17,7 @@ apply plugin: 'com.google.devtools.ksp'
  *
  * @return A unique integer suitable for versionCode
  */
-def getTimestampVersion() {
+static def getTimestampVersion() {
     def date = new Date()
     return Integer.parseInt(new SimpleDateFormat("yyMMddHH").format(date))
 }
@@ -25,7 +28,7 @@ def getTimestampVersion() {
  *
  * @return A formatted date string
  */
-def getTimestampName() {
+static def getTimestampName() {
     def date = new Date()
     return new SimpleDateFormat("yyyy-MM-dd").format(date)
 }
@@ -46,8 +49,7 @@ android {
         applicationId "nl.rogro82.pipup"
         minSdk 31
 
-        //noinspection ExpiredTargetSdkVersion
-        targetSdkVersion 34
+        targetSdk 35
 
         // Automatic versioning logic
         versionCode getTimestampVersion()
@@ -79,7 +81,7 @@ android {
 
     kotlin {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            jvmTarget.set(JvmTarget.JVM_17)
         }
     }
 
@@ -135,4 +137,9 @@ dependencies {
 
     // Web server functionality
     implementation libs.nanohttpd
+
+    // Media3 (ExoPlayer) for faster video streaming
+    implementation libs.media3.exoplayer
+    implementation libs.media3.ui
+    implementation libs.media3.rtsp
 }

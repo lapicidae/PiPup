@@ -10,6 +10,7 @@ import com.bumptech.glide.integration.okhttp3.OkHttpUrlLoader
 import java.io.InputStream
 
 @GlideModule
+@Suppress("unused")
 class OkHttpLibraryGlideModule : LibraryGlideModule() {
     override fun registerComponents(context: Context, glide: Glide, registry: Registry) {
         super.registerComponents(context, glide, registry)
