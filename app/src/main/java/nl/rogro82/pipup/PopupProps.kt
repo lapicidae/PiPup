@@ -23,6 +23,7 @@ data class PopupProps(
     val backgroundColor: String = "#CC000000",
     
     val media: Media? = null,
+    val mediaPosition: Int? = null, // 0: Top, 1: Bottom, 2: Left, 3: Right
     
     // Advanced Styling (from Settings)
     val borderRadius: Int = 0,

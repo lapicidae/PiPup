@@ -9,32 +9,39 @@
         android:padding="16dp"
         android:minWidth="240dp">
 
-        <TextView
-            android:id="@+id/popup_title"
+        <LinearLayout
+            android:id="@+id/text_container"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textStyle="bold"
-            android:textColor="#FFFFFF"
-            android:textSize="20sp"
-            android:visibility="gone"/>
-
-        <ScrollView
-            android:id="@+id/popup_scroll_view"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:scrollbars="none"
-            android:fillViewport="true"
-            android:overScrollMode="never"
-            android:visibility="gone">
+            android:orientation="vertical">
 
             <TextView
-                android:id="@+id/popup_message"
+                android:id="@+id/popup_title"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:textStyle="bold"
                 android:textColor="#FFFFFF"
-                android:textSize="14sp"/>
-        </ScrollView>
+                android:textSize="20sp"
+                android:visibility="gone"/>
+
+            <ScrollView
+                android:id="@+id/popup_scroll_view"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:scrollbars="none"
+                android:fillViewport="true"
+                android:overScrollMode="never"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/popup_message"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#FFFFFF"
+                    android:textSize="14sp"/>
+            </ScrollView>
+        </LinearLayout>
 
         <FrameLayout
             android:id="@+id/popup_media_frame"

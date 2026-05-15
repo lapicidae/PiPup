@@ -58,6 +58,7 @@ Example JSON data:
   "messageColor": "#FFFFFF",
   "messageSize": 16,
   "messageAlignment": 0,
+  "mediaPosition": 0,
   "backgroundColor": "#CC000000",
   "borderRadius": 0,
   "borderWidth": 0,
@@ -122,6 +123,7 @@ Form-fields:
 | **messageSize**      | Float   | 14        | Message font size                                |
 | **messageColor**     | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format |
 | **messageAlignment** | Integer | 0         | Message alignment (0..2)                         |
+| **mediaPosition**    | Integer | 0         | Position of the media relative to text (0..3)    |
 | **image**            | File    |           | Local image file (multipart only)                |
 | **imageWidth**       | Integer | 480       | Width in pixels                                  |
 
@@ -135,8 +137,6 @@ Form-fields:
 | **3** | BottomLeft  |
 | **4** | Center      |
 
-Color-properties are in `[AA]RRGGBB` where the alpha channel is optional e.g. #FFFFFF or #CCFFFFFF
-
 `titleAlignment` and `messageAlignment` is an enum ranging from 0 to 2
 
 |       | _Position_ |
@@ -144,6 +144,17 @@ Color-properties are in `[AA]RRGGBB` where the alpha channel is optional e.g. #F
 | **0** | left       |
 | **1** | center     |
 | **2** | right      |
+
+`mediaPosition` is an enum ranging from 0 to 3
+
+|       | _Position_ |
+| ----: | ---------- |
+| **0** | top        |
+| **1** | bottom     |
+| **2** | left       |
+| **3** | right      |
+
+Color-properties are in `[AA]RRGGBB` where the alpha channel is optional e.g. #FFFFFF or #CCFFFFFF
 
 ### Cancel notifications
 

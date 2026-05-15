@@ -46,6 +46,7 @@ class SettingsActivity : Activity() {
     private var spinnerBorderColor: Spinner? = null
     private var btnEditBorderHex: Button? = null
     private var spinnerPosition: Spinner? = null
+    private var spinnerMediaPosition: Spinner? = null
     private var spinnerTitleAlignment: Spinner? = null
     private var spinnerMessageAlignment: Spinner? = null
     private var seekPadding: SeekBar? = null
@@ -243,6 +244,7 @@ class SettingsActivity : Activity() {
         spinnerBorderColor = findViewById(R.id.spinner_border_color)
         btnEditBorderHex = findViewById(R.id.btn_edit_border_hex)
         spinnerPosition = findViewById(R.id.spinner_position)
+        spinnerMediaPosition = findViewById(R.id.spinner_media_position)
         spinnerTitleAlignment = findViewById(R.id.spinner_title_alignment)
         spinnerMessageAlignment = findViewById(R.id.spinner_message_alignment)
         seekPadding = findViewById(R.id.seekbar_padding)
@@ -257,6 +259,12 @@ class SettingsActivity : Activity() {
             val items = PopupProps.Position.entries.map { p -> if (p.index == 0) "${p.name} (default)" else p.name }
             it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
             it.setSelection(appSettings.positionIndex)
+        }
+
+        spinnerMediaPosition?.let {
+            val items = listOf("Top (default)", "Bottom", "Left", "Right")
+            it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            it.setSelection(appSettings.mediaPosition)
         }
 
         val alignmentItems = listOf("Left (default)", "Center", "Right")
@@ -392,6 +400,14 @@ class SettingsActivity : Activity() {
             }
             override fun onNothingSelected(p: AdapterView<*>?) {}
         }
+
+        spinnerMediaPosition?.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                saveCurrentToSettings()
+                updatePreview()
+            }
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+        }
         
         val hexClick = View.OnClickListener { showHexInputDialog(it as Button) }
         btnEditBgHex?.setOnClickListener(hexClick)
@@ -447,6 +463,7 @@ class SettingsActivity : Activity() {
         seekRadius?.let { appSettings.borderRadius = it.progress }
         seekBorderWidth?.let { appSettings.borderWidth = it.progress }
         spinnerPosition?.let { appSettings.positionIndex = it.selectedItemPosition }
+        spinnerMediaPosition?.let { appSettings.mediaPosition = it.selectedItemPosition }
         spinnerTitleAlignment?.let { appSettings.titleAlignment = it.selectedItemPosition }
         spinnerMessageAlignment?.let { appSettings.messageAlignment = it.selectedItemPosition }
         seekPadding?.let { appSettings.contentPadding = it.progress }
@@ -470,7 +487,8 @@ class SettingsActivity : Activity() {
                 messageAlignment = appSettings.messageAlignment,
                 title = "Live Preview",
                 message = "The overlay updates in real-time.",
-                position = appSettings.positionIndex
+                position = appSettings.positionIndex,
+                mediaPosition = appSettings.mediaPosition
             )
             val v = PopupView.build(this, tempProps)
             

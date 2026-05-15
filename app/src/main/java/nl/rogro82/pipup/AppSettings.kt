@@ -8,26 +8,38 @@ import androidx.core.content.edit
  * Persists global notification styling and behavior settings.
  * Optimized with in-memory caching to avoid synchronous disk reads during runtime.
  */
-class AppSettings(context: Context) {
+class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChangeListener {
     private val prefs: SharedPreferences = context.getSharedPreferences("pipup_settings", Context.MODE_PRIVATE)
 
     // In-memory cache fields
-    private var _positionIndex: Int
-    private var _backgroundColor: String
-    private var _backgroundAlpha: Int
-    private var _titleColor: String
-    private var _titleSize: Float
-    private var _messageColor: String
-    private var _messageSize: Float
-    private var _borderRadius: Int
-    private var _borderWidth: Int
-    private var _borderColor: String
-    private var _contentPadding: Int
-    private var _titleAlignment: Int
-    private var _messageAlignment: Int
+    private var _positionIndex: Int = 0
+    private var _backgroundColor: String = DEFAULT_BG_COLOR
+    private var _backgroundAlpha: Int = DEFAULT_BG_ALPHA
+    private var _titleColor: String = DEFAULT_TITLE_COLOR
+    private var _titleSize: Float = DEFAULT_TITLE_SIZE
+    private var _messageColor: String = DEFAULT_MSG_COLOR
+    private var _messageSize: Float = DEFAULT_MSG_SIZE
+    private var _borderRadius: Int = DEFAULT_RADIUS
+    private var _borderWidth: Int = DEFAULT_BORDER_WIDTH
+    private var _borderColor: String = DEFAULT_BORDER_COLOR
+    private var _contentPadding: Int = DEFAULT_PADDING
+    private var _titleAlignment: Int = 0
+    private var _messageAlignment: Int = 0
+    private var _mediaPosition: Int = 0
 
     init {
-        // Initialize cache from disk once
+        reload()
+        prefs.registerOnSharedPreferenceChangeListener(this)
+    }
+
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        reload()
+    }
+
+    /**
+     * Refreshes the in-memory cache from the persistent SharedPreferences.
+     */
+    fun reload() {
         _positionIndex = prefs.getInt("position_index", 0)
         _backgroundColor = prefs.getString("background_color", DEFAULT_BG_COLOR) ?: DEFAULT_BG_COLOR
         _backgroundAlpha = prefs.getInt("background_alpha", DEFAULT_BG_ALPHA)
@@ -41,6 +53,7 @@ class AppSettings(context: Context) {
         _contentPadding = prefs.getInt("content_padding", DEFAULT_PADDING)
         _titleAlignment = prefs.getInt("title_alignment", 0)
         _messageAlignment = prefs.getInt("message_alignment", 0)
+        _mediaPosition = prefs.getInt("media_position", 0)
     }
 
     companion object {
@@ -147,6 +160,13 @@ class AppSettings(context: Context) {
             prefs.edit { putInt("message_alignment", value) }
         }
 
+    var mediaPosition: Int
+        get() = _mediaPosition
+        set(value) {
+            _mediaPosition = value
+            prefs.edit { putInt("media_position", value) }
+        }
+
     fun getFullBackgroundColor(): String {
         val alphaHex = String.format("%02X", _backgroundAlpha)
         val cleanColor = _backgroundColor.replace("#", "")
@@ -169,6 +189,7 @@ class AppSettings(context: Context) {
         _contentPadding = DEFAULT_PADDING
         _titleAlignment = 0
         _messageAlignment = 0
+        _mediaPosition = 0
         
         // Re-write defaults to disk
         prefs.edit {
@@ -184,6 +205,7 @@ class AppSettings(context: Context) {
             putInt("content_padding", DEFAULT_PADDING)
             putInt("title_alignment", 0)
             putInt("message_alignment", 0)
+            putInt("media_position", 0)
         }
     }
 }

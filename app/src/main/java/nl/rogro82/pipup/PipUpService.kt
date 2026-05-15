@@ -189,7 +189,8 @@ class PipUpService : Service() {
                             borderWidth = if (popup.borderWidth == 0) mSettings.borderWidth else popup.borderWidth,
                             borderColor = if (popup.borderColor == "#00000000") mSettings.borderColor else popup.borderColor,
                             titleAlignment = if (popup.titleAlignment == 0) mSettings.titleAlignment else popup.titleAlignment,
-                            messageAlignment = if (popup.messageAlignment == 0) mSettings.messageAlignment else popup.messageAlignment
+                            messageAlignment = if (popup.messageAlignment == 0) mSettings.messageAlignment else popup.messageAlignment,
+                            mediaPosition = popup.mediaPosition ?: mSettings.mediaPosition
                         )
                         Log.i(LOG_TAG, "Enqueuing notification: ${finalProps.title}")
                         Log.d(LOG_TAG, "Message length: ${finalProps.message?.length ?: 0}")
@@ -299,6 +300,7 @@ class PipUpService : Service() {
                 val borderColor = getRawPart("borderColor") ?: AppSettings.DEFAULT_BORDER_COLOR
                 val titleAlignment = getRawPart("titleAlignment")?.toIntOrNull() ?: 0
                 val messageAlignment = getRawPart("messageAlignment")?.toIntOrNull() ?: 0
+                val mediaPosition = getRawPart("mediaPosition")?.toIntOrNull() ?: 0
 
                 var media: PopupProps.Media? = null
                 val imageBytes = getPartBytes("image")
@@ -332,6 +334,7 @@ class PipUpService : Service() {
                     borderColor = borderColor,
                     titleAlignment = titleAlignment,
                     messageAlignment = messageAlignment,
+                    mediaPosition = mediaPosition,
                     scale = scale,
                     media = media
                 )

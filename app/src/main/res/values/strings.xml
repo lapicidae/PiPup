@@ -17,6 +17,7 @@
     <string name="settings_nav_text">Text Style</string>
     <string name="settings_nav_border">Border</string>
     <string name="settings_position">Popup Position</string>
+    <string name="settings_media_position">Media Position</string>
     <string name="settings_padding">Content Padding</string>
 
     <!-- Background Settings -->

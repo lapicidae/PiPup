@@ -96,10 +96,10 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         binding.popupTitle.maxWidth = maxTextWidth
         binding.popupMessage.maxWidth = maxTextWidth
         
-        // Limit text area height to ~40% of screen height to ensure media stays visible
-        binding.popupScrollView.layoutParams.height = LayoutParams.WRAP_CONTENT // Start with wrap
-        
-        // 4. Content Population
+        // 4. Position Reordering
+        reorderViews()
+
+        // 5. Content Population
         if (!props.title.isNullOrEmpty()) {
             val titleGravity = props.getTitleGravity()
             binding.popupTitle.text = props.title
@@ -134,6 +134,104 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
     }
 
     /**
+     * Reorders the text and media containers based on the configured position.
+     */
+    private fun reorderViews() {
+        val container = binding.popupContainer
+        val textContainer = binding.textContainer
+        val mediaFrame = binding.popupMediaFrame
+
+        // 1. Remove views to prepare for re-addition in new order
+        container.removeAllViews()
+
+        val pos = props.mediaPosition ?: 0
+        Log.d("PopupView", "Reordering views for position: $pos")
+
+        when (pos) {
+            0 -> { // Top
+                container.orientation = LinearLayout.VERTICAL
+                
+                val mediaParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 0, 0, Utils.dpToPx(context, 8))
+                    gravity = Gravity.CENTER_HORIZONTAL
+                }
+                
+                val textParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+
+                container.addView(mediaFrame, mediaParams)
+                container.addView(textContainer, textParams)
+            }
+            1 -> { // Bottom
+                container.orientation = LinearLayout.VERTICAL
+                
+                val textParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                )
+
+                val mediaParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, Utils.dpToPx(context, 8), 0, 0)
+                    gravity = Gravity.CENTER_HORIZONTAL
+                }
+
+                container.addView(textContainer, textParams)
+                container.addView(mediaFrame, mediaParams)
+            }
+            2 -> { // Left
+                container.orientation = LinearLayout.HORIZONTAL
+                
+                val mediaParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(0, 0, Utils.dpToPx(context, 12), 0)
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+
+                val textParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+
+                container.addView(mediaFrame, mediaParams)
+                container.addView(textContainer, textParams)
+            }
+            3 -> { // Right
+                container.orientation = LinearLayout.HORIZONTAL
+                
+                val textParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+
+                val mediaParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    setMargins(Utils.dpToPx(context, 12), 0, 0, 0)
+                    gravity = Gravity.CENTER_VERTICAL
+                }
+
+                container.addView(textContainer, textParams)
+                container.addView(mediaFrame, mediaParams)
+            }
+        }
+    }
+
+    /**
      * Dynamically adjusts the height of the message scroll area to ensure all components fit on screen.
      */
     private fun adjustHeights() {
@@ -159,12 +257,19 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             val otherViewsHeight = titleHeight + mediaHeight + paddingHeight + margins
             val availableHeightForScroll = maxPopupHeight - otherViewsHeight
             
+            // For horizontal layout, we might have more height available for the text
+            val maxScrollHeight = if (binding.popupContainer.orientation == LinearLayout.HORIZONTAL) {
+                (screenHeight * 0.7).toInt() // Max 70% of screen height in horizontal mode
+            } else {
+                availableHeightForScroll
+            }
+
             // Get actual height of the text inside the scrollview
             val messageContentHeight = binding.popupMessage.measuredHeight
             
-            if (messageContentHeight > availableHeightForScroll) {
-                Log.d("PopupView", "Restricting scroll height: content=$messageContentHeight, max allowed=$availableHeightForScroll")
-                binding.popupScrollView.layoutParams.height = availableHeightForScroll.coerceAtLeast(Utils.dpToPx(context, 100))
+            if (messageContentHeight > maxScrollHeight) {
+                Log.d("PopupView", "Restricting scroll height: content=$messageContentHeight, max allowed=$maxScrollHeight")
+                binding.popupScrollView.layoutParams.height = maxScrollHeight.coerceAtLeast(Utils.dpToPx(context, 100))
                 binding.popupScrollView.requestLayout()
                 if (!isScrolling) startAutoScroll()
             } else {
