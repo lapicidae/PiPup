@@ -6,18 +6,32 @@ import android.app.AlertDialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.graphics.Paint
 import android.os.Bundle
 import android.util.Log
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.*
-import androidx.appcompat.widget.SwitchCompat
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
+import android.widget.Button
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.SeekBar
+import android.widget.Spinner
+import android.widget.TextView
+import android.widget.Toast
 import androidx.annotation.OptIn
+import androidx.appcompat.widget.SwitchCompat
+import androidx.core.graphics.applyCanvas
+import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
+import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 
 /**
  * Activity for configuring global notification defaults with a live preview.
@@ -51,6 +65,7 @@ class SettingsActivity : Activity() {
     private var spinnerMessageAlignment: Spinner? = null
     private var seekPadding: SeekBar? = null
     private var switchAdvanced: SwitchCompat? = null
+    private var btnImportNetwork: Button? = null
 
     private var currentAdvancedMode = false
     private var currentLayoutRes: Int = -1
@@ -58,22 +73,28 @@ class SettingsActivity : Activity() {
     
     // Tracks which SeekBars are currently in "Adjust Mode"
     private val activeSeekBars = mutableSetOf<Int>()
+    
+    private val mapper = jacksonObjectMapper()
+
+    companion object { 
+        private const val TAG = "PiPupSettings"
+    }
 
     /**
      * Material You (Material 3) inspired color palette.
      * Tonal palettes based on key colors.
      */
     private val materialColors = listOf(
-        ColorEntry("Black", "#1C1B1F"),
-        ColorEntry("White", "#FFFBFE"),
-        ColorEntry("Grey", "#F4EFF4"),
-        ColorEntry("Blue", "#6750A4"),
-        ColorEntry("Teal", "#625B71"),
-        ColorEntry("Pink", "#7D5260"),
-        ColorEntry("Red", "#B3261E"),
-        ColorEntry("Light Blue", "#D0BCFF"),
-        ColorEntry("Green", "#388E3C"),
-        ColorEntry("Orange", "#F57C00")
+        ColorEntry(R.string.color_black, "#1C1B1F"),
+        ColorEntry(R.string.color_white, "#FFFBFE"),
+        ColorEntry(R.string.color_grey, "#F4EFF4"),
+        ColorEntry(R.string.color_blue, "#6750A4"),
+        ColorEntry(R.string.color_teal, "#625B71"),
+        ColorEntry(R.string.color_pink, "#7D5260"),
+        ColorEntry(R.string.color_red, "#B3261E"),
+        ColorEntry(R.string.color_light_blue, "#D0BCFF"),
+        ColorEntry(R.string.color_green, "#388E3C"),
+        ColorEntry(R.string.color_orange, "#F57C00")
     )
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,7 +106,7 @@ class SettingsActivity : Activity() {
             previewArea = findViewById(R.id.preview_area)
             submenuContainer = findViewById(R.id.submenu_container)
             
-            // Fix: Explicitly link navigation rail to content area
+            // Explicitly link navigation rail to content area
             val settingsScroll = findViewById<View>(R.id.settings_scroll)
             val railIds = listOf(R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border)
             railIds.forEach { id ->
@@ -249,25 +270,47 @@ class SettingsActivity : Activity() {
         spinnerMessageAlignment = findViewById(R.id.spinner_message_alignment)
         seekPadding = findViewById(R.id.seekbar_padding)
         switchAdvanced = findViewById(R.id.switch_advanced)
+        btnImportNetwork = findViewById(R.id.btn_import_network)
     }
 
     private fun setupInputs() {
         val colorAdapter = ColorSpinnerAdapter(this, materialColors)
-        val textColorAdapter = ColorSpinnerAdapter(this, materialColors.map { it.copy(isDefault = it.name == "White") })
+        val textColorAdapter = ColorSpinnerAdapter(this, materialColors.map { it.copy(isDefault = it.nameRes == R.string.color_white) })
         
         spinnerPosition?.let {
-            val items = PopupProps.Position.entries.map { p -> if (p.index == 0) "${p.name} (default)" else p.name }
+            val suffix = getString(R.string.settings_default_suffix)
+            val items = PopupProps.Position.entries.map { p ->
+                val name = when (p) {
+                    PopupProps.Position.TopRight -> getString(R.string.settings_pos_top_right)
+                    PopupProps.Position.TopLeft -> getString(R.string.settings_pos_top_left)
+                    PopupProps.Position.BottomRight -> getString(R.string.settings_pos_bottom_right)
+                    PopupProps.Position.BottomLeft -> getString(R.string.settings_pos_bottom_left)
+                    PopupProps.Position.Center -> getString(R.string.settings_pos_center)
+                }
+                if (p.index == 0) "$name$suffix" else name
+            }
             it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
             it.setSelection(appSettings.positionIndex)
         }
 
         spinnerMediaPosition?.let {
-            val items = listOf("Top (default)", "Bottom", "Left", "Right")
+            val suffix = getString(R.string.settings_default_suffix)
+            val items = listOf(
+                "${getString(R.string.settings_media_pos_top)}$suffix",
+                getString(R.string.settings_media_pos_bottom),
+                getString(R.string.settings_media_pos_left),
+                getString(R.string.settings_media_pos_right)
+            )
             it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
             it.setSelection(appSettings.mediaPosition)
         }
 
-        val alignmentItems = listOf("Left (default)", "Center", "Right")
+        val suffix = getString(R.string.settings_default_suffix)
+        val alignmentItems = listOf(
+            "${getString(R.string.settings_alignment_left)}$suffix",
+            getString(R.string.settings_alignment_center),
+            getString(R.string.settings_alignment_right)
+        )
         val alignmentAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, alignmentItems).apply { 
             setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) 
         }
@@ -414,6 +457,8 @@ class SettingsActivity : Activity() {
         btnEditTitleHex?.setOnClickListener(hexClick)
         btnEditMessageHex?.setOnClickListener(hexClick)
         btnEditBorderHex?.setOnClickListener(hexClick)
+
+        btnImportNetwork?.setOnClickListener { showImportIpDialog() }
     }
 
     private fun updateSeekBarAppearance(bar: SeekBar, active: Boolean) {
@@ -441,7 +486,7 @@ class SettingsActivity : Activity() {
         AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
             .setTitle(R.string.settings_edit_hex_title)
             .setView(input)
-            .setPositiveButton("OK") { _, _ ->
+            .setPositiveButton(android.R.string.ok) { _, _ ->
                 val h = "#${input.text.toString().uppercase()}"
                 try { 
                     h.toColorInt()
@@ -449,7 +494,7 @@ class SettingsActivity : Activity() {
                     saveCurrentToSettings()
                     updatePreview() 
                 } catch (_: Exception) {}
-            }.setNegativeButton("Cancel", null).show()
+            }.setNegativeButton(android.R.string.cancel, null).show()
     }
 
     private fun saveCurrentToSettings() {
@@ -473,6 +518,18 @@ class SettingsActivity : Activity() {
     private fun updatePreview() {
         try {
             previewArea.removeAllViews()
+            
+            // Create a small placeholder bitmap for the media preview using KTX applyCanvas
+            val placeholder = createBitmap(320, 180).applyCanvas {
+                drawColor(Color.DKGRAY)
+                val paint = Paint().apply {
+                    color = Color.LTGRAY
+                    textSize = 40f
+                    textAlign = Paint.Align.CENTER
+                }
+                drawText(getString(R.string.settings_preview_media), 160f, 100f, paint)
+            }
+
             val tempProps = PopupProps(
                 backgroundColor = appSettings.getFullBackgroundColor(),
                 titleSize = appSettings.titleSize,
@@ -485,10 +542,11 @@ class SettingsActivity : Activity() {
                 contentPadding = appSettings.contentPadding,
                 titleAlignment = appSettings.titleAlignment,
                 messageAlignment = appSettings.messageAlignment,
-                title = "Live Preview",
-                message = "The overlay updates in real-time.",
+                title = getString(R.string.settings_preview_title),
+                message = getString(R.string.settings_preview_message),
                 position = appSettings.positionIndex,
-                mediaPosition = appSettings.mediaPosition
+                mediaPosition = appSettings.mediaPosition,
+                media = PopupProps.Media.Bitmap(placeholder, 180)
             )
             val v = PopupView.build(this, tempProps)
             
@@ -529,7 +587,59 @@ class SettingsActivity : Activity() {
         }
     }
 
-    data class ColorEntry(val name: String, val hex: String, var isDefault: Boolean = false)
+    private fun showImportIpDialog() {
+        val input = EditText(this).apply {
+            hint = getString(R.string.settings_import_ip_hint)
+            isSingleLine = true
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_URI
+        }
+        AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+            .setTitle(R.string.settings_import_ip_title)
+            .setView(input)
+            .setPositiveButton(R.string.settings_import_action) { _, _ ->
+                val ip = input.text.toString().trim()
+                if (ip.isNotEmpty()) {
+                    performNetworkImport(ip)
+                }
+            }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    private fun performNetworkImport(ip: String) {
+        val urlString = if (ip.startsWith("http")) "$ip:7979/settings" else "http://$ip:7979/settings"
+        
+        Thread {
+            try {
+                val url = java.net.URL(urlString)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 5000
+                connection.readTimeout = 5000
+                
+                if (connection.responseCode == 200) {
+                    val json = connection.inputStream.bufferedReader().use { it.readText() }
+                    val data = mapper.readValue(json, AppSettings.SettingsData::class.java)
+                    
+                    runOnUiThread {
+                        appSettings.apply(data)
+                        loadSubmenu(currentLayoutRes, currentNavId)
+                        Toast.makeText(this, R.string.settings_import_success, Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    runOnUiThread {
+                        Toast.makeText(this, getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), Toast.LENGTH_LONG).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Network import failed", e)
+                runOnUiThread {
+                    Toast.makeText(this, getString(R.string.settings_import_error, e.message), Toast.LENGTH_LONG).show()
+                }
+            }
+        }.start()
+    }
+
+    data class ColorEntry(val nameRes: Int, val hex: String, var isDefault: Boolean = false)
     private class ColorSpinnerAdapter(context: Context, val colors: List<ColorEntry>) : ArrayAdapter<ColorEntry>(context, 0, colors) {
         override fun getView(p: Int, v: View?, g: ViewGroup): View = create(p, v, g)
         override fun getDropDownView(p: Int, v: View?, g: ViewGroup): View = create(p, v, g)
@@ -537,11 +647,10 @@ class SettingsActivity : Activity() {
             val res = v ?: LayoutInflater.from(context).inflate(R.layout.item_color_spinner, g, false)
             val entry = colors[p]
             res.findViewById<View>(R.id.color_preview).background.setTint(entry.hex.toColorInt())
-            res.findViewById<TextView>(R.id.color_name).text = if (entry.isDefault) "${entry.name} (default)" else entry.name
+            val name = context.getString(entry.nameRes)
+            val label = if (entry.isDefault) "$name${context.getString(R.string.settings_default_suffix)}" else name
+            res.findViewById<TextView>(R.id.color_name).text = label
             return res
         }
-    }
-    companion object { 
-        private const val TAG = "PiPupSettings" 
     }
 }

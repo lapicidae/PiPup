@@ -22,6 +22,34 @@
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_padding" android:textColor="#9AA0A6"/>
     <SeekBar android:id="@+id/seekbar_padding" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_backup_title"
+        android:textColor="#9AA0A6"
+        android:layout_marginTop="32dp"/>
+
+    <Button
+        android:id="@+id/btn_import_network"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/settings_import_network"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:gravity="start|center_vertical"
+        android:textAllCaps="false"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_import_network_desc"
+        android:textColor="#9AA0A6"
+        android:textSize="12sp"
+        android:layout_marginTop="4dp"
+        android:layout_marginStart="4dp"/>
+
     <LinearLayout
         android:id="@+id/container_advanced"
         android:layout_width="match_parent"

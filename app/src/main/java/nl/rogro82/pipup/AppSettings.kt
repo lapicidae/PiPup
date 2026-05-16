@@ -37,6 +37,85 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
     }
 
     /**
+     * Data class representing all serializable settings.
+     */
+    data class SettingsData(
+        val positionIndex: Int,
+        val backgroundColor: String,
+        val backgroundAlpha: Int,
+        val titleColor: String,
+        val titleSize: Float,
+        val messageColor: String,
+        val messageSize: Float,
+        val borderRadius: Int,
+        val borderWidth: Int,
+        val borderColor: String,
+        val contentPadding: Int,
+        val titleAlignment: Int,
+        val messageAlignment: Int,
+        val mediaPosition: Int
+    )
+
+    /**
+     * Returns a snapshot of all current settings.
+     */
+    fun getAll(): SettingsData {
+        return SettingsData(
+            positionIndex = _positionIndex,
+            backgroundColor = _backgroundColor,
+            backgroundAlpha = _backgroundAlpha,
+            titleColor = _titleColor,
+            titleSize = _titleSize,
+            messageColor = _messageColor,
+            messageSize = _messageSize,
+            borderRadius = _borderRadius,
+            borderWidth = _borderWidth,
+            borderColor = _borderColor,
+            contentPadding = _contentPadding,
+            titleAlignment = _titleAlignment,
+            messageAlignment = _messageAlignment,
+            mediaPosition = _mediaPosition
+        )
+    }
+
+    /**
+     * Atomically applies a full set of settings and persists them.
+     */
+    fun apply(data: SettingsData) {
+        _positionIndex = data.positionIndex
+        _backgroundColor = data.backgroundColor
+        _backgroundAlpha = data.backgroundAlpha
+        _titleColor = data.titleColor
+        _titleSize = data.titleSize
+        _messageColor = data.messageColor
+        _messageSize = data.messageSize
+        _borderRadius = data.borderRadius
+        _borderWidth = data.borderWidth
+        _borderColor = data.borderColor
+        _contentPadding = data.contentPadding
+        _titleAlignment = data.titleAlignment
+        _messageAlignment = data.messageAlignment
+        _mediaPosition = data.mediaPosition
+
+        prefs.edit {
+            putInt("position_index", _positionIndex)
+            putString("background_color", _backgroundColor)
+            putInt("background_alpha", _backgroundAlpha)
+            putString("title_color", _titleColor)
+            putFloat("title_size", _titleSize)
+            putString("message_color", _messageColor)
+            putFloat("message_size", _messageSize)
+            putInt("border_radius", _borderRadius)
+            putInt("border_width", _borderWidth)
+            putString("border_color", _borderColor)
+            putInt("content_padding", _contentPadding)
+            putInt("title_alignment", _titleAlignment)
+            putInt("message_alignment", _messageAlignment)
+            putInt("media_position", _mediaPosition)
+        }
+    }
+
+    /**
      * Refreshes the in-memory cache from the persistent SharedPreferences.
      */
     fun reload() {

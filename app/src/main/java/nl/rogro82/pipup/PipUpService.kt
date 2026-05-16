@@ -204,6 +204,30 @@ class PipUpService : Service() {
                         invalidRequest("Failed to parse payload")
                     }
                 }
+                "/settings" -> {
+                    if (session.method == NanoHTTPD.Method.GET) {
+                        val json = mObjectMapper.writeValueAsString(mSettings.getAll())
+                        NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json)
+                    } else if (session.method == NanoHTTPD.Method.POST) {
+                        val contentLength = session.headers["content-length"]?.toInt() ?: 0
+                        if (contentLength > 0) {
+                            val buffer = ByteArray(contentLength)
+                            var totalRead = 0
+                            while (totalRead < contentLength) {
+                                val read = session.inputStream.read(buffer, totalRead, contentLength - totalRead)
+                                if (read <= 0) break
+                                totalRead += read
+                            }
+                            val data = mObjectMapper.readValue(buffer, AppSettings.SettingsData::class.java)
+                            mHandler.post { mSettings.apply(data) }
+                            ok("Settings updated")
+                        } else {
+                            invalidRequest("Empty payload")
+                        }
+                    } else {
+                        NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
+                    }
+                }
                 else -> NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, "text/plain", "Not Found")
             }
         } catch (e: Exception) {
@@ -300,7 +324,7 @@ class PipUpService : Service() {
                 val borderColor = getRawPart("borderColor") ?: AppSettings.DEFAULT_BORDER_COLOR
                 val titleAlignment = getRawPart("titleAlignment")?.toIntOrNull() ?: 0
                 val messageAlignment = getRawPart("messageAlignment")?.toIntOrNull() ?: 0
-                val mediaPosition = getRawPart("mediaPosition")?.toIntOrNull() ?: 0
+                val mediaPosition = getRawPart("mediaPosition")?.toIntOrNull()
 
                 var media: PopupProps.Media? = null
                 val imageBytes = getPartBytes("image")

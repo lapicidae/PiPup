@@ -8,7 +8,7 @@
     <string name="server_running">The server is running on:</string>
     <string name="server_address">%1$s:%2$d</string>
     <string name="no_network_connection">No network connection found.</string>
-    <string name="more_information">For more information please read the documentation @ https://github.com/rogro82/pipup</string>
+    <string name="more_information">For more information please read the documentation @ https://github.com/lapicidae/PiPup</string>
 
     <!-- General Settings -->
     <string name="settings_section_general">General</string>
@@ -49,4 +49,38 @@
     <string name="settings_reset_confirm_title">Reset Settings?</string>
     <string name="settings_reset_confirm_msg">Do you really want to restore all styling defaults?</string>
     <string name="settings_edit_hex_title">Enter HEX Color</string>
+    <string name="settings_backup_title">Migration &amp; Sync</string>
+    <string name="settings_import_network">Import from another PiPup</string>
+    <string name="settings_import_network_desc">Clone settings from another device by entering its IP address.</string>
+    <string name="settings_import_ip_title">Enter Source IP</string>
+    <string name="settings_import_ip_hint">e.g. 192.168.1.50</string>
+    <string name="settings_import_success">Settings imported successfully</string>
+    <string name="settings_import_error">Import failed: %1$s</string>
+    <string name="settings_preview_media">Media</string>
+    <string name="settings_preview_title">Live Preview</string>
+    <string name="settings_preview_message">The overlay updates in real-time.</string>
+    <string name="settings_default_suffix"> (default)</string>
+    <string name="settings_import_action">Import</string>
+    <string name="settings_alignment_left">Left</string>
+    <string name="settings_alignment_center">Center</string>
+    <string name="settings_alignment_right">Right</string>
+    <string name="settings_media_pos_top">Top</string>
+    <string name="settings_media_pos_bottom">Bottom</string>
+    <string name="settings_media_pos_left">Left</string>
+    <string name="settings_media_pos_right">Right</string>
+    <string name="settings_pos_top_right">Top Right</string>
+    <string name="settings_pos_top_left">Top Left</string>
+    <string name="settings_pos_bottom_right">Bottom Right</string>
+    <string name="settings_pos_bottom_left">Bottom Left</string>
+    <string name="settings_pos_center">Center</string>
+    <string name="color_black">Black</string>
+    <string name="color_white">White</string>
+    <string name="color_grey">Grey</string>
+    <string name="color_blue">Blue</string>
+    <string name="color_teal">Teal</string>
+    <string name="color_pink">Pink</string>
+    <string name="color_red">Red</string>
+    <string name="color_light_blue">Light Blue</string>
+    <string name="color_green">Green</string>
+    <string name="color_orange">Orange</string>
 </resources>
