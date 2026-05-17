@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Semantic Material You Palette - DARK -->
+    <color name="colorPrimary">#8ECFF2</color>
+    <color name="colorOnPrimary">#003548</color>
+    <color name="colorPrimaryContainer">#004D67</color>
+    <color name="colorOnPrimaryContainer">#C2E8FF</color>
+    <color name="colorSecondaryContainer">#364954</color>
+    <color name="colorSurface">#0F1417</color>
+    <color name="colorOnSurface">#DFE3E7</color>
+    <color name="colorSurfaceVariant">#1B2023</color>
+    <color name="colorOnSurfaceVariant">#C0C7CD</color>
+    <color name="colorOutline">#8A9297</color>
+
+    <color name="status_green">#388E3C</color>
+    <color name="status_red">#B3261E</color>
+
+    <!-- Activity Main Theme Overrides -->
+    <color name="main_background">#0F1417</color>
+    <color name="main_logo_tint">#8ECFF2</color>
+    <color name="main_on_background">#DFE3E7</color>
+
+    <!-- Helper Colors -->
+    <color name="preview_placeholder_bg">#40484D</color>
+    <color name="preview_placeholder_text">#C0C7CD</color>
+</resources>

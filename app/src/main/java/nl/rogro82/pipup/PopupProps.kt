@@ -101,6 +101,6 @@ data class PopupProps(
         return try {
             val clean = if (hex.startsWith("#")) hex else "#$hex"
             clean.toColorInt()
-        } catch (e: Exception) { fallback }
+        } catch (_: Exception) { fallback }
     }
 }

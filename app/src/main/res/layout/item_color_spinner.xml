@@ -6,17 +6,25 @@
     android:padding="8dp"
     android:gravity="center_vertical">
 
-    <View
-        android:id="@+id/color_preview"
-        android:layout_width="24dp"
-        android:layout_height="24dp"
+    <FrameLayout
+        android:layout_width="26dp"
+        android:layout_height="26dp"
+        android:layout_marginEnd="12dp"
+        android:padding="1dp"
         android:background="@drawable/color_preset_circle"
-        android:layout_marginEnd="12dp" />
+        android:backgroundTint="@color/colorOutline">
+
+        <View
+            android:id="@+id/color_preview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/color_preset_circle" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/color_name"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:textColor="#FFFFFF"
+        android:textColor="@color/colorOnSurface"
         android:textSize="18sp" />
 </LinearLayout>

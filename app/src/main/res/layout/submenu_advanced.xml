@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_nav_advanced"
+        android:textColor="@color/colorOnSurface"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <!-- Theme -->
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_app_theme" android:textColor="@color/colorOnSurfaceVariant"/>
+    <Spinner android:id="@+id/spinner_app_theme" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+
+    <!-- Stability -->
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_stability" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="20dp"/>
+    <LinearLayout
+        android:id="@+id/container_energy_status"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:focusable="true"
+        android:clickable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/energy_optimization_title"
+                android:textColor="@color/colorOnSurface"
+                android:textSize="16sp"/>
+            <TextView
+                android:id="@+id/text_energy_status"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/energy_status_optimized"
+                android:textColor="@color/colorOnSurfaceVariant"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
+        <View
+            android:id="@+id/view_energy_indicator"
+            android:layout_width="12dp"
+            android:layout_height="12dp"
+            android:background="@drawable/color_preset_circle"
+            android:backgroundTint="@color/status_red"/>
+    </LinearLayout>
+
+    <!-- Migration -->
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_migration" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="32dp"/>
+    <Button
+        android:id="@+id/btn_import_network"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/settings_import_network"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:gravity="start|center_vertical"
+        android:textAllCaps="false"
+        android:textColor="@color/colorOnSurface"/>
+
+    <!-- Tools -->
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_tools" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="32dp"/>
+    <LinearLayout
+        android:id="@+id/container_advanced"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:layout_marginTop="8dp"
+        android:gravity="center_vertical">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_advanced_mode"
+                android:textColor="@color/colorOnSurface"
+                android:textSize="16sp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_advanced_mode_desc"
+                android:textColor="@color/colorOnSurfaceVariant"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_advanced"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:focusable="false"
+            android:clickable="false"/>
+    </LinearLayout>
+
+    <!-- Danger Zone -->
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_danger_zone" android:textColor="@color/status_red" android:layout_marginTop="48dp" android:textStyle="bold"/>
+    <Button
+        android:id="@+id/btn_reset"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/settings_reset_settings"
+        android:textColor="@color/colorOnSurface"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:gravity="start|center_vertical"
+        android:textAllCaps="false"/>
+
+</LinearLayout>

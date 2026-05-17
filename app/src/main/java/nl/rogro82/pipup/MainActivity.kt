@@ -1,13 +1,16 @@
 package nl.rogro82.pipup
 
+import android.annotation.SuppressLint
+import androidx.appcompat.app.AlertDialog
 import android.content.Intent
-import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.ImageButton
 import android.widget.TextView
-import androidx.activity.ComponentActivity
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -22,7 +25,7 @@ import androidx.media3.common.util.UnstableApi
  * Serves as the entry point for both Leanback (TV) and standard launchers.
  */
 @OptIn(UnstableApi::class)
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
 
     private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (!Settings.canDrawOverlays(this)) {
@@ -30,13 +33,8 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private val notificationPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
-        if (!isGranted) {
-            Log.w("MainActivity", "Notification permission denied!")
-        }
-    }
-
     override fun onCreate(savedInstanceState: Bundle?) {
+        setTheme(R.style.MainTheme)
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -86,13 +84,53 @@ class MainActivity : ComponentActivity() {
         startForegroundService(serviceIntent)
 
         askPermission()
-        requestNotificationPermission()
     }
 
-    private fun requestNotificationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
-        }
+    override fun onResume() {
+        super.onResume()
+        requestBatteryOptimizationExemption()
+    }
+
+    @SuppressLint("BatteryLife")
+    private fun requestBatteryOptimizationExemption() {
+        val appSettings = AppSettings(this)
+        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
+        val isIgnoring = powerManager.isIgnoringBatteryOptimizations(packageName)
+        
+        if (isIgnoring || appSettings.dismissBatteryOptimization) return
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.energy_optimization_title)
+            .setMessage(getString(R.string.energy_optimization_message) + "\n\n" + getString(R.string.energy_optimization_instructions))
+            .setPositiveButton(R.string.settings_yes) { _, _ ->
+                appSettings.dismissBatteryOptimization = true
+                
+                // Simplified: Just open the main settings page
+                val intent = Intent(Settings.ACTION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+
+                try {
+                    Log.d("MainActivity", "Opening system settings.")
+                    startActivity(intent)
+                    Toast.makeText(this, R.string.energy_optimization_instructions, Toast.LENGTH_LONG).show()
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "Failed to open settings", e)
+                    showEnergyInstructionsDialog()
+                }
+            }
+            .setNegativeButton(R.string.energy_optimization_later) { _, _ ->
+                appSettings.dismissBatteryOptimization = true
+            }
+            .show()
+    }
+
+    private fun showEnergyInstructionsDialog() {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.energy_optimization_title)
+            .setMessage(R.string.energy_optimization_manual)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun askPermission() {

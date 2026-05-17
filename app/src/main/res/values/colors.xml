@@ -1,2 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Semantic Material You Palette - LIGHT -->
+    <color name="colorPrimary">#196584</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+    <color name="colorPrimaryContainer">#C2E8FF</color>
+    <color name="colorOnPrimaryContainer">#004D67</color>
+    <color name="colorSecondaryContainer">#D1E5F3</color>
+    <color name="colorSurface">#F6FAFE</color>
+    <color name="colorOnSurface">#171C1F</color>
+    <color name="colorSurfaceVariant">#EAEEF2</color>
+    <color name="colorOnSurfaceVariant">#40484D</color>
+    <color name="colorOutline">#71787D</color>
+
+    <color name="status_green">#388E3C</color>
+    <color name="status_red">#B3261E</color>
+
+    <!-- Activity Main Theme Overrides -->
+    <color name="main_background">#5599BB</color>
+    <color name="main_logo_tint">#FFFFFF</color>
+    <color name="main_on_background">#001d34</color>
+
+    <!-- Helper Colors -->
+    <color name="preview_placeholder_bg">#DCE3E9</color>
+    <color name="preview_placeholder_text">#40484D</color>
 </resources>

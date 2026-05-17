@@ -7,10 +7,20 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <queries>
+        <intent>
+            <action android:name="android.settings.IGNORE_BATTERY_OPTIMIZATION_SETTINGS" />
+        </intent>
+        <intent>
+            <action android:name="android.settings.APPLICATION_DETAILS_SETTINGS" />
+            <data android:scheme="package" />
+        </intent>
+    </queries>
 
     <uses-feature
             android:name="android.hardware.touchscreen"
@@ -20,6 +30,7 @@
             android:required="true"/>
 
     <application
+            android:name=".PiPupApp"
             android:allowBackup="true"
             android:fullBackupContent="@xml/backup_rules"
             android:dataExtractionRules="@xml/data_extraction_rules"
@@ -54,6 +65,7 @@
                 android:name=".SettingsActivity"
                 android:exported="false"
                 android:label="@string/settings_title"
+                android:windowSoftInputMode="adjustResize"
                 android:theme="@style/SettingsTheme">
         </activity>
 
@@ -61,7 +73,8 @@
                 android:name=".MainActivity"
                 android:exported="true"
                 android:banner="@drawable/ic_banner"
-                android:logo="@drawable/ic_banner">
+                android:logo="@drawable/ic_banner"
+                android:theme="@style/MainTheme">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
