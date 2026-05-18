@@ -54,14 +54,19 @@ class SettingsActivity : AppCompatActivity() {
     private var spinnerBgColor: Spinner? = null
     private var btnEditBgHex: Button? = null
     private var seekBgAlpha: SeekBar? = null
+    private var textBgAlphaValue: TextView? = null
     private var spinnerTitleColor: Spinner? = null
     private var btnEditTitleHex: Button? = null
     private var seekTitleSize: SeekBar? = null
+    private var textTitleSizeValue: TextView? = null
     private var spinnerMessageColor: Spinner? = null
     private var btnEditMessageHex: Button? = null
     private var seekMessageSize: SeekBar? = null
+    private var textMessageSizeValue: TextView? = null
     private var seekRadius: SeekBar? = null
+    private var textRadiusValue: TextView? = null
     private var seekBorderWidth: SeekBar? = null
+    private var textBorderWidthValue: TextView? = null
     private var spinnerBorderColor: Spinner? = null
     private var btnEditBorderHex: Button? = null
     private var spinnerPosition: Spinner? = null
@@ -69,6 +74,7 @@ class SettingsActivity : AppCompatActivity() {
     private var spinnerTitleAlignment: Spinner? = null
     private var spinnerMessageAlignment: Spinner? = null
     private var seekPadding: SeekBar? = null
+    private var textPaddingValue: TextView? = null
     private var switchAdvanced: SwitchCompat? = null
     private var btnImportNetwork: Button? = null
     private var containerEnergyStatus: View? = null
@@ -258,14 +264,19 @@ class SettingsActivity : AppCompatActivity() {
         spinnerBgColor = findViewById(R.id.spinner_bg_color)
         btnEditBgHex = findViewById(R.id.btn_edit_bg_hex)
         seekBgAlpha = findViewById(R.id.seekbar_bg_alpha)
+        textBgAlphaValue = findViewById(R.id.text_bg_alpha_value)
         spinnerTitleColor = findViewById(R.id.spinner_title_color)
         btnEditTitleHex = findViewById(R.id.btn_edit_title_hex)
         seekTitleSize = findViewById(R.id.seekbar_title_size)
+        textTitleSizeValue = findViewById(R.id.text_title_size_value)
         spinnerMessageColor = findViewById(R.id.spinner_message_color)
         btnEditMessageHex = findViewById(R.id.btn_edit_message_hex)
         seekMessageSize = findViewById(R.id.seekbar_message_size)
+        textMessageSizeValue = findViewById(R.id.text_message_size_value)
         seekRadius = findViewById(R.id.seekbar_radius)
+        textRadiusValue = findViewById(R.id.text_radius_value)
         seekBorderWidth = findViewById(R.id.seekbar_border_width)
+        textBorderWidthValue = findViewById(R.id.text_border_width_value)
         spinnerBorderColor = findViewById(R.id.spinner_border_color)
         btnEditBorderHex = findViewById(R.id.btn_edit_border_hex)
         spinnerPosition = findViewById(R.id.spinner_position)
@@ -273,6 +284,7 @@ class SettingsActivity : AppCompatActivity() {
         spinnerTitleAlignment = findViewById(R.id.spinner_title_alignment)
         spinnerMessageAlignment = findViewById(R.id.spinner_message_alignment)
         seekPadding = findViewById(R.id.seekbar_padding)
+        textPaddingValue = findViewById(R.id.text_padding_value)
         switchAdvanced = findViewById(R.id.switch_advanced)
         btnImportNetwork = findViewById(R.id.btn_import_network)
         containerEnergyStatus = findViewById(R.id.container_energy_status)
@@ -345,6 +357,9 @@ class SettingsActivity : AppCompatActivity() {
         btnEditBorderHex?.text = appSettings.borderColor
 
         updateEnergyStatusDisplay()
+        
+        // Initial values for sliders - MUST be called after all .progress = ...
+        updateSliderValues()
     }
 
     private fun updateEnergyStatusDisplay() {
@@ -368,6 +383,11 @@ class SettingsActivity : AppCompatActivity() {
                 val isAdjusting = s?.let { activeSeekBars.contains(it.id) } ?: false
                 if (!fromUser && !isAdjusting) return
                 
+                // Update numeric value display in real-time if advanced mode is on
+                if (currentAdvancedMode) {
+                    s?.let { updateSliderValueDisplay(it) }
+                }
+
                 // Sync to memory and update preview instantly
                 saveCurrentToSettings() 
                 updatePreview() 
@@ -408,6 +428,7 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.container_advanced)?.setOnClickListener { switchAdvanced?.toggle() }
         switchAdvanced?.setOnCheckedChangeListener { _, isChecked -> 
             appSettings.advancedMode = isChecked
+            currentAdvancedMode = isChecked
             toggleAdvancedVisibility(isChecked) 
         }
 
@@ -519,6 +540,27 @@ class SettingsActivity : AppCompatActivity() {
     private fun toggleAdvancedVisibility(show: Boolean) {
         val v = if (show) View.VISIBLE else View.GONE
         listOfNotNull(btnEditBgHex, btnEditTitleHex, btnEditMessageHex, btnEditBorderHex).forEach { it.visibility = v }
+        listOfNotNull(textBgAlphaValue, textTitleSizeValue, textMessageSizeValue, textRadiusValue, textBorderWidthValue, textPaddingValue).forEach { it.visibility = v }
+        if (show) updateSliderValues()
+    }
+
+    private fun updateSliderValues() {
+        listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding).forEach { 
+            updateSliderValueDisplay(it) 
+        }
+    }
+
+    private fun updateSliderValueDisplay(bar: SeekBar) {
+        val targetText = when (bar.id) {
+            R.id.seekbar_bg_alpha -> textBgAlphaValue
+            R.id.seekbar_title_size -> textTitleSizeValue
+            R.id.seekbar_message_size -> textMessageSizeValue
+            R.id.seekbar_radius -> textRadiusValue
+            R.id.seekbar_border_width -> textBorderWidthValue
+            R.id.seekbar_padding -> textPaddingValue
+            else -> null
+        }
+        targetText?.text = getString(R.string.settings_slider_value_format, bar.progress, bar.max)
     }
 
     private fun showHexInputDialog(btn: Button) {

@@ -48,7 +48,7 @@
     <string name="settings_tools">Expert Tools</string>
     <string name="settings_danger_zone">Danger Zone</string>
     <string name="settings_advanced_mode">Advanced Mode</string>
-    <string name="settings_advanced_mode_desc">Enables manual HEX code input for precise color control.</string>
+    <string name="settings_advanced_mode_desc">Enables manual HEX code input and displays precise numeric slider values.</string>
     <string name="settings_import_network">Import from another PiPup</string>
     <string name="settings_reset_settings">Reset Settings</string>
 
@@ -66,6 +66,7 @@
     <string name="settings_preview_media">Media</string>
     <string name="settings_preview_title">Live Preview</string>
     <string name="settings_preview_message">The overlay updates in real-time.</string>
+    <string name="settings_slider_value_format">%1$d / %2$d</string>
     <string name="settings_default_suffix"> (default)</string>
     <string name="settings_alignment_left">Left</string>
     <string name="settings_alignment_center">Center</string>

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical">
@@ -19,7 +20,24 @@
     <TextView android:id="@+id/text_media_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_media_position" android:textColor="@color/colorOnSurfaceVariant"/>
     <Spinner android:id="@+id/spinner_media_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
 
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_padding" android:textColor="@color/colorOnSurfaceVariant"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_padding"
+            android:textColor="@color/colorOnSurfaceVariant" />
+        <TextView
+            android:id="@+id/text_padding_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:visibility="gone"
+            tools:text="10 / 100" />
+    </LinearLayout>
     <SeekBar android:id="@+id/seekbar_padding" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
 
 </LinearLayout>

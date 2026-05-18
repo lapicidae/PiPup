@@ -18,7 +18,25 @@
     <Spinner android:id="@+id/spinner_bg_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
     <Button android:id="@+id/btn_edit_bg_hex" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_bg_color" tools:text="#000000" android:visibility="gone" style="@android:style/Widget.DeviceDefault.Button.Toggle" android:focusable="true" android:gravity="start|center_vertical" android:paddingStart="12dp" android:paddingEnd="12dp" android:textColor="@color/colorOnSurface"/>
 
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_opacity" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="24dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_opacity"
+            android:textColor="@color/colorOnSurfaceVariant" />
+        <TextView
+            android:id="@+id/text_bg_alpha_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:visibility="gone"
+            tools:text="128 / 255" />
+    </LinearLayout>
     <SeekBar android:id="@+id/seekbar_bg_alpha" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="255" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
 
 </LinearLayout>
