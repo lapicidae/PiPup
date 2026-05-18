@@ -24,13 +24,13 @@ static def getTimestampVersion() {
 
 /**
  * Generates a human-readable version name string.
- * Format: yyyy-MM-dd (e.g., 2026-04-30)
+ * Format: yyyyMMdd.HHmm (e.g., 20260430.2215)
  *
- * @return A formatted date string
+ * @return A formatted date and time string
  */
 static def getTimestampName() {
     def date = new Date()
-    return new SimpleDateFormat("yyyy-MM-dd").format(date)
+    return new SimpleDateFormat("yyyyMMdd.HHmm").format(date)
 }
 
 android {
@@ -53,7 +53,7 @@ android {
 
         // Automatic versioning logic
         versionCode getTimestampVersion()
-        versionName "0.1.5-" + getTimestampName()
+        versionName "0.2.0-" + getTimestampName()
     }
 
     buildTypes {
