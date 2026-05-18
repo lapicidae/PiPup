@@ -1,0 +1,15 @@
+type: short description in present tense (max 72 chars)
+
+- Bullet point explaining what changed
+- Another bullet point (use present tense, e.g., "Add", "Fix", "Refactor")
+
+# --- COMMIT GUIDELINES ---
+# Allowed types: 
+#   feat (new feature), fix (bug fix), refactor (code cleanup), 
+#   docs (documentation), style (formatting), chore (build tools/deps)
+#
+# Remember for this project:
+#   - Use present tense ("Add" instead of "Added", "Fix" instead of "Fixed")
+#   - Reference Leanback/UI components or API endpoints explicitly if applicable
+#   - Keep lines wrapped at 72 characters
+# ------------------------------------
