@@ -252,6 +252,7 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
 
     fun resetToDefaults() {
         prefs.edit { clear() }
+        _dismissBatteryOptimization = false
         reload()
     }
 }

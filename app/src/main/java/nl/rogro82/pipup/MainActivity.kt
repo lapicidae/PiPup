@@ -97,6 +97,10 @@ class MainActivity : AppCompatActivity() {
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val isIgnoring = powerManager.isIgnoringBatteryOptimizations(packageName)
         
+        if (BuildConfig.DEBUG) {
+            Log.d("MainActivity", "Battery optimization status - isIgnoring: $isIgnoring, dismissed: ${appSettings.dismissBatteryOptimization}")
+        }
+
         if (isIgnoring || appSettings.dismissBatteryOptimization) return
 
         AlertDialog.Builder(this)
@@ -105,13 +109,15 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.settings_yes) { _, _ ->
                 appSettings.dismissBatteryOptimization = true
                 
-                // Simplified: Just open the main settings page
+                // Open the main settings page, trying to avoid the last active sub-page
                 val intent = Intent(Settings.ACTION_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 }
 
                 try {
-                    Log.d("MainActivity", "Opening system settings.")
+                    if (BuildConfig.DEBUG) {
+                        Log.d("MainActivity", "Opening system settings main page.")
+                    }
                     startActivity(intent)
                     Toast.makeText(this, R.string.energy_optimization_instructions, Toast.LENGTH_LONG).show()
                 } catch (e: Exception) {

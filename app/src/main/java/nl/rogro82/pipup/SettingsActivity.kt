@@ -365,6 +365,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateEnergyStatusDisplay() {
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val isIgnoring = powerManager.isIgnoringBatteryOptimizations(packageName)
+        
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "Energy status check - isIgnoring: $isIgnoring")
+        }
+        
         textEnergyStatus?.setText(if (isIgnoring) R.string.energy_status_unrestricted else R.string.energy_status_optimized)
         viewEnergyIndicator?.backgroundTintList = ColorStateList.valueOf(
             ContextCompat.getColor(this, if (isIgnoring) R.color.status_green else R.color.status_red)
@@ -517,7 +522,7 @@ class SettingsActivity : AppCompatActivity() {
             .setMessage(getString(R.string.energy_optimization_message) + "\n\n" + getString(R.string.energy_optimization_instructions))
             .setPositiveButton(R.string.settings_yes) { _, _ ->
                 val intent = Intent(Settings.ACTION_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                 }
                 try {
                     startActivity(intent)
