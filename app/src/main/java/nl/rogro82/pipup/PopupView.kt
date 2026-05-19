@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.animation.OvershootInterpolator
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -39,7 +40,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
     private val binding: PopupBinding = PopupBinding.inflate(LayoutInflater.from(context), this)
     var readyListener: ReadyListener? = null
     private var mPlayer: ExoPlayer? = null
-    private var mPlayerView: PlayerView? = null
+    private var mVideoView: android.view.View? = null
     private var isScrolling = false
     private var targetMediaHeight = 0
 
@@ -421,14 +422,13 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         
         mPlayer = player
 
-        val pv = PlayerView(context).apply {
-            useController = false
+        val tv = android.view.TextureView(context).apply {
             alpha = 1.0f
             isVisible = false // Keep hidden until startMedia is called
         }
-        mPlayerView = pv
+        mVideoView = tv
+        player.setVideoTextureView(tv)
         
-        pv.player = player
         player.repeatMode = Player.REPEAT_MODE_ONE
         player.setMediaItem(MediaItem.fromUri(uri))
         player.prepare()
@@ -464,7 +464,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             }
         })
         
-        frame.addView(pv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
+        frame.addView(tv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
             gravity = Gravity.CENTER
         })
     }
@@ -473,7 +473,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
      * Starts any media playback (e.g. Video) when the popup is actually shown.
      */
     fun startMedia() {
-        mPlayerView?.let { it.isVisible = true }
+        mVideoView?.let { it.isVisible = true }
         mPlayer?.play()
     }
 
@@ -544,6 +544,110 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         })
         // Bitmap is already in memory, signal ready immediately
         readyListener?.onReady()
+    }
+
+    /**
+     * Executes the configured animation to show the popup.
+     */
+    fun animateIn() {
+        val duration = props.animationDuration.toLong()
+        
+        // Reset properties to ensure a clean start
+        this.alpha = 1f
+        this.scaleX = 1f
+        this.scaleY = 1f
+        this.translationX = 0f
+        this.translationY = 0f
+        this.rotationY = 0f
+        this.rotation = 0f
+
+        if (props.animationType == 0 || duration <= 0) return
+
+        this.alpha = 0f
+        val metrics = resources.displayMetrics
+        val baseMargin = Utils.dpToPx(context, 20)
+        val pos = props.getPositionEnum()
+
+        fun applySlide() {
+            when (pos) {
+                PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> this.translationX = this.width.toFloat() + baseMargin.toFloat() + 100f
+                PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> this.translationX = -(this.width.toFloat() + baseMargin.toFloat() + 100f)
+                PopupProps.Position.Center -> this.translationY = metrics.heightPixels.toFloat() / 2f
+            }
+        }
+
+        when (props.animationType) {
+            1 -> { // Fade
+                this.animate().alpha(1f).setDuration(duration).start()
+            }
+            2 -> { // Slide
+                this.alpha = 1f
+                applySlide()
+                this.animate().translationX(0f).translationY(0f).setDuration(duration).start()
+            }
+            3 -> { // Slide & Bounce
+                this.alpha = 1f
+                applySlide()
+                this.animate().translationX(0f).translationY(0f)
+                    .setInterpolator(OvershootInterpolator(1.2f))
+                    .setDuration(duration).start()
+            }
+            4 -> { // Scale In
+                this.scaleX = 0f; this.scaleY = 0f
+                this.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(duration).start()
+            }
+            5 -> { // Scale & Bounce
+                this.scaleX = 0f; this.scaleY = 0f
+                this.animate().alpha(1f).scaleX(1f).scaleY(1f)
+                    .setInterpolator(OvershootInterpolator(1.4f))
+                    .setDuration(duration).start()
+            }
+            6 -> { // Scale Ta-da
+                this.scaleX = 0f; this.scaleY = 0f
+                this.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(duration)
+                    .withEndAction { executeTaDa() }.start()
+            }
+            7 -> { // Slide & Zoom
+                this.alpha = 1f; this.scaleX = 0.5f; this.scaleY = 0.5f
+                applySlide()
+                this.animate().translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(duration).start()
+            }
+            8 -> { // Slide & Flip
+                this.alpha = 1f; this.rotationY = -90f
+                applySlide()
+                this.animate().translationX(0f).translationY(0f).rotationY(0f).setDuration(duration).start()
+            }
+            9 -> { // Slide & Ta-da
+                this.alpha = 1f
+                applySlide()
+                this.animate().translationX(0f).translationY(0f).setDuration(duration)
+                    .withEndAction { executeTaDa() }.start()
+            }
+            10 -> { // Diagonal Zoom
+                this.alpha = 0f; this.scaleX = 0f; this.scaleY = 0f
+                when (pos) {
+                    PopupProps.Position.TopRight -> { this.translationX = metrics.widthPixels.toFloat(); this.translationY = -500f }
+                    PopupProps.Position.TopLeft -> { this.translationX = -metrics.widthPixels.toFloat(); this.translationY = -500f }
+                    PopupProps.Position.BottomRight -> { this.translationX = metrics.widthPixels.toFloat(); this.translationY = metrics.heightPixels.toFloat() }
+                    PopupProps.Position.BottomLeft -> { this.translationX = -metrics.widthPixels.toFloat(); this.translationY = metrics.heightPixels.toFloat() }
+                    PopupProps.Position.Center -> { this.translationY = metrics.heightPixels.toFloat() }
+                }
+                this.animate().alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(duration).start()
+            }
+        }
+    }
+
+    /**
+     * Executes a "Ta-da" attention sequence (small pulse and wobble).
+     */
+    private fun executeTaDa() {
+        this.animate().scaleX(1.1f).scaleY(1.1f).rotation(3f).setDuration(150)
+            .withEndAction {
+                this.animate().rotation(-3f).setDuration(150)
+                    .withEndAction {
+                        this.animate().scaleX(1f).scaleY(1f).rotation(0f).setDuration(150).start()
+                    }.start()
+            }.start()
     }
 
     companion object {

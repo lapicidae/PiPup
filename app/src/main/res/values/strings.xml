@@ -24,6 +24,19 @@
     <string name="settings_position">Popup Position</string>
     <string name="settings_padding">Content Padding</string>
     <string name="settings_media_position">Media Position</string>
+    <string name="settings_animation_type">Animation Type</string>
+    <string name="settings_animation_duration">Animation Duration</string>
+    <string name="settings_animation_none">None</string>
+    <string name="settings_animation_fade">Fade</string>
+    <string name="settings_animation_slide">Slide</string>
+    <string name="settings_animation_slide_bounce">Slide &amp; Bounce</string>
+    <string name="settings_animation_scale">Scale In</string>
+    <string name="settings_animation_scale_bounce">Scale &amp; Bounce</string>
+    <string name="settings_animation_scale_tada">Scale Ta-da</string>
+    <string name="settings_animation_slide_zoom">Slide &amp; Zoom</string>
+    <string name="settings_animation_slide_flip">Slide &amp; Flip</string>
+    <string name="settings_animation_slide_tada">Slide &amp; Ta-da</string>
+    <string name="settings_animation_diagonal_zoom">Diagonal Zoom</string>
 
     <!-- Background Settings -->
     <string name="settings_bg_color">Background Color</string>

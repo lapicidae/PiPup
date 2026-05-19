@@ -190,7 +190,9 @@ class PipUpService : Service() {
                             borderColor = if (popup.borderColor == "#00000000") mSettings.borderColor else popup.borderColor,
                             titleAlignment = if (popup.titleAlignment == 0) mSettings.titleAlignment else popup.titleAlignment,
                             messageAlignment = if (popup.messageAlignment == 0) mSettings.messageAlignment else popup.messageAlignment,
-                            mediaPosition = popup.mediaPosition ?: mSettings.mediaPosition
+                            mediaPosition = popup.mediaPosition ?: mSettings.mediaPosition,
+                            animationType = if (popup.animationType == 0) mSettings.animationType else popup.animationType,
+                            animationDuration = if (popup.animationDuration == 500) mSettings.animationDuration else popup.animationDuration
                         )
                         Log.i(LOG_TAG, "Enqueuing notification: ${finalProps.title}")
                         Log.d(LOG_TAG, "Message length: ${finalProps.message?.length ?: 0}")
@@ -325,6 +327,8 @@ class PipUpService : Service() {
                 val titleAlignment = getRawPart("titleAlignment")?.toIntOrNull() ?: 0
                 val messageAlignment = getRawPart("messageAlignment")?.toIntOrNull() ?: 0
                 val mediaPosition = getRawPart("mediaPosition")?.toIntOrNull()
+                val animationType = getRawPart("animationType")?.toIntOrNull() ?: 0
+                val animationDuration = getRawPart("animationDuration")?.toIntOrNull() ?: 500
 
                 var media: PopupProps.Media? = null
                 val imageBytes = getPartBytes("image")
@@ -359,6 +363,8 @@ class PipUpService : Service() {
                     titleAlignment = titleAlignment,
                     messageAlignment = messageAlignment,
                     mediaPosition = mediaPosition,
+                    animationType = animationType,
+                    animationDuration = animationDuration,
                     scale = scale,
                     media = media
                 )
@@ -478,9 +484,10 @@ class PipUpService : Service() {
 
         Log.i(LOG_TAG, "Displaying popup: ${props.title} (duration: ${props.duration}s)")
         mCurrentPopup = popupView
-        popupView.alpha = 1f
         popupView.isVisible = true
         popupView.startMedia()
+
+        popupView.animateIn()
         
         // Schedule removal
         mHandler.postAtTime({ 

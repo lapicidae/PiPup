@@ -25,6 +25,8 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
     private var _titleAlignment = 0
     private var _messageAlignment = 0
     private var _mediaPosition = 0
+    private var _animationType = 0 // 0 = None, 1 = Fade, 2 = Slide
+    private var _animationDuration = 500
     private var _dismissBatteryOptimization = false
     private var _advancedMode = false
     private var _appTheme = 0 // 0 = Dark, 1 = Light
@@ -55,6 +57,8 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
         val titleAlignment: Int,
         val messageAlignment: Int,
         val mediaPosition: Int,
+        val animationType: Int,
+        val animationDuration: Int,
         val appTheme: Int,
         val advancedMode: Boolean
     )
@@ -63,8 +67,8 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
         return SettingsData(
             _positionIndex, _backgroundColor, _backgroundAlpha, _titleColor, _titleSize,
             _messageColor, _messageSize, _borderRadius, _borderWidth, _borderColor,
-            _contentPadding, _titleAlignment, _messageAlignment, _mediaPosition, _appTheme,
-            _advancedMode
+            _contentPadding, _titleAlignment, _messageAlignment, _mediaPosition,
+            _animationType, _animationDuration, _appTheme, _advancedMode
         )
     }
 
@@ -90,6 +94,8 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
             _titleAlignment = data.titleAlignment
             _messageAlignment = data.messageAlignment
             _mediaPosition = data.mediaPosition
+            _animationType = data.animationType
+            _animationDuration = data.animationDuration
             _appTheme = data.appTheme
             _advancedMode = data.advancedMode
             
@@ -125,6 +131,8 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
                 putInt("title_alignment", _titleAlignment)
                 putInt("message_alignment", _messageAlignment)
                 putInt("media_position", _mediaPosition)
+                putInt("animation_type", _animationType)
+                putInt("animation_duration", _animationDuration)
                 putInt("app_theme", _appTheme)
                 putBoolean("advanced_mode", _advancedMode)
                 putBoolean("dismiss_battery_optimization", _dismissBatteryOptimization)
@@ -152,6 +160,8 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
         _titleAlignment = prefs.getInt("title_alignment", 0)
         _messageAlignment = prefs.getInt("message_alignment", 0)
         _mediaPosition = prefs.getInt("media_position", 0)
+        _animationType = prefs.getInt("animation_type", 0)
+        _animationDuration = prefs.getInt("animation_duration", 500)
         _dismissBatteryOptimization = prefs.getBoolean("dismiss_battery_optimization", false)
         _appTheme = prefs.getInt("app_theme", 0)
         _advancedMode = prefs.getBoolean("advanced_mode", false)
@@ -227,6 +237,14 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
     var mediaPosition: Int
         get() = _mediaPosition
         set(value) { _mediaPosition = value }
+
+    var animationType: Int
+        get() = _animationType
+        set(value) { _animationType = value }
+
+    var animationDuration: Int
+        get() = _animationDuration
+        set(value) { _animationDuration = value }
 
     var dismissBatteryOptimization: Boolean
         get() = _dismissBatteryOptimization

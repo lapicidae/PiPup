@@ -71,6 +71,9 @@ class SettingsActivity : AppCompatActivity() {
     private var btnEditBorderHex: Button? = null
     private var spinnerPosition: Spinner? = null
     private var spinnerMediaPosition: Spinner? = null
+    private var spinnerAnimationType: Spinner? = null
+    private var seekAnimationDuration: SeekBar? = null
+    private var textAnimationDurationValue: TextView? = null
     private var spinnerTitleAlignment: Spinner? = null
     private var spinnerMessageAlignment: Spinner? = null
     private var seekPadding: SeekBar? = null
@@ -281,6 +284,9 @@ class SettingsActivity : AppCompatActivity() {
         btnEditBorderHex = findViewById(R.id.btn_edit_border_hex)
         spinnerPosition = findViewById(R.id.spinner_position)
         spinnerMediaPosition = findViewById(R.id.spinner_media_position)
+        spinnerAnimationType = findViewById(R.id.spinner_animation_type)
+        seekAnimationDuration = findViewById(R.id.seekbar_animation_duration)
+        textAnimationDurationValue = findViewById(R.id.text_animation_duration_value)
         spinnerTitleAlignment = findViewById(R.id.spinner_title_alignment)
         spinnerMessageAlignment = findViewById(R.id.spinner_message_alignment)
         seekPadding = findViewById(R.id.seekbar_padding)
@@ -321,6 +327,27 @@ class SettingsActivity : AppCompatActivity() {
             it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
             it.setSelection(appSettings.mediaPosition)
         }
+
+        spinnerAnimationType?.let {
+            val suffix = getString(R.string.settings_default_suffix)
+            val items = listOf(
+                "${getString(R.string.settings_animation_none)}$suffix",
+                getString(R.string.settings_animation_fade),
+                getString(R.string.settings_animation_slide),
+                getString(R.string.settings_animation_slide_bounce),
+                getString(R.string.settings_animation_scale),
+                getString(R.string.settings_animation_scale_bounce),
+                getString(R.string.settings_animation_scale_tada),
+                getString(R.string.settings_animation_slide_zoom),
+                getString(R.string.settings_animation_slide_flip),
+                getString(R.string.settings_animation_slide_tada),
+                getString(R.string.settings_animation_diagonal_zoom)
+            )
+            it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            it.setSelection(appSettings.animationType)
+        }
+
+        seekAnimationDuration?.progress = appSettings.animationDuration
         
         spinnerAppTheme?.let {
             val items = listOf(getString(R.string.settings_theme_dark), getString(R.string.settings_theme_light))
@@ -393,9 +420,13 @@ class SettingsActivity : AppCompatActivity() {
                     s?.let { updateSliderValueDisplay(it) }
                 }
 
+                val oldDuration = appSettings.animationDuration
+
                 // Sync to memory and update preview instantly
                 saveCurrentToSettings() 
-                updatePreview() 
+                
+                val durationChanged = s?.id == R.id.seekbar_animation_duration && oldDuration != appSettings.animationDuration
+                updatePreview(animate = durationChanged) 
                 
                 // Schedule asynchronous disk persistence
                 scheduleSave()
@@ -404,7 +435,7 @@ class SettingsActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(s: SeekBar?) {}
         }
 
-        listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding).forEach { sb ->
+        listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding, seekAnimationDuration).forEach { sb ->
             sb.setOnSeekBarChangeListener(seekListener)
             updateSeekBarAppearance(sb, false)
             sb.setOnFocusChangeListener { _, hasFocus -> 
@@ -447,21 +478,24 @@ class SettingsActivity : AppCompatActivity() {
                     return
                 }
                 
-                val hex = materialColors[pos].hex
+                val oldType = appSettings.animationType
+                
                 when (p?.id) {
-                    R.id.spinner_bg_color -> btnEditBgHex?.text = hex
-                    R.id.spinner_title_color -> btnEditTitleHex?.text = hex
-                    R.id.spinner_message_color -> btnEditMessageHex?.text = hex
-                    R.id.spinner_border_color -> btnEditBorderHex?.text = hex
+                    R.id.spinner_bg_color -> btnEditBgHex?.text = materialColors[pos].hex
+                    R.id.spinner_title_color -> btnEditTitleHex?.text = materialColors[pos].hex
+                    R.id.spinner_message_color -> btnEditMessageHex?.text = materialColors[pos].hex
+                    R.id.spinner_border_color -> btnEditBorderHex?.text = materialColors[pos].hex
                 }
                 saveCurrentToSettings()
-                updatePreview()
+                
+                val typeChanged = p?.id == R.id.spinner_animation_type && oldType != appSettings.animationType
+                updatePreview(animate = typeChanged)
                 scheduleSave()
             }
             override fun onNothingSelected(p: AdapterView<*>?) {}
         }
 
-        listOfNotNull(spinnerBgColor, spinnerTitleColor, spinnerMessageColor, spinnerBorderColor, spinnerPosition, spinnerMediaPosition, spinnerTitleAlignment, spinnerMessageAlignment, spinnerAppTheme).forEach {
+        listOfNotNull(spinnerBgColor, spinnerTitleColor, spinnerMessageColor, spinnerBorderColor, spinnerPosition, spinnerMediaPosition, spinnerAnimationType, spinnerTitleAlignment, spinnerMessageAlignment, spinnerAppTheme).forEach {
             it.onItemSelectedListener = spinnerListener
             val oldListener = it.onFocusChangeListener
             it.setOnFocusChangeListener { v, hasFocus -> 
@@ -545,12 +579,12 @@ class SettingsActivity : AppCompatActivity() {
     private fun toggleAdvancedVisibility(show: Boolean) {
         val v = if (show) View.VISIBLE else View.GONE
         listOfNotNull(btnEditBgHex, btnEditTitleHex, btnEditMessageHex, btnEditBorderHex).forEach { it.visibility = v }
-        listOfNotNull(textBgAlphaValue, textTitleSizeValue, textMessageSizeValue, textRadiusValue, textBorderWidthValue, textPaddingValue).forEach { it.visibility = v }
+        listOfNotNull(textBgAlphaValue, textTitleSizeValue, textMessageSizeValue, textRadiusValue, textBorderWidthValue, textPaddingValue, textAnimationDurationValue).forEach { it.visibility = v }
         if (show) updateSliderValues()
     }
 
     private fun updateSliderValues() {
-        listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding).forEach { 
+        listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding, seekAnimationDuration).forEach { 
             updateSliderValueDisplay(it) 
         }
     }
@@ -563,9 +597,11 @@ class SettingsActivity : AppCompatActivity() {
             R.id.seekbar_radius -> textRadiusValue
             R.id.seekbar_border_width -> textBorderWidthValue
             R.id.seekbar_padding -> textPaddingValue
+            R.id.seekbar_animation_duration -> textAnimationDurationValue
             else -> null
         }
-        targetText?.text = getString(R.string.settings_slider_value_format, bar.progress, bar.max)
+        val format = if (bar.id == R.id.seekbar_animation_duration) "%d ms" else getString(R.string.settings_slider_value_format, bar.progress, bar.max)
+        targetText?.text = if (bar.id == R.id.seekbar_animation_duration) String.format(format, bar.progress) else format
     }
 
     private fun showHexInputDialog(btn: Button) {
@@ -612,13 +648,15 @@ class SettingsActivity : AppCompatActivity() {
         seekBorderWidth?.let { appSettings.borderWidth = it.progress }
         spinnerPosition?.let { appSettings.positionIndex = it.selectedItemPosition }
         spinnerMediaPosition?.let { appSettings.mediaPosition = it.selectedItemPosition }
+        spinnerAnimationType?.let { appSettings.animationType = it.selectedItemPosition }
+        seekAnimationDuration?.let { appSettings.animationDuration = it.progress }
         spinnerTitleAlignment?.let { appSettings.titleAlignment = it.selectedItemPosition }
         spinnerMessageAlignment?.let { appSettings.messageAlignment = it.selectedItemPosition }
         seekPadding?.let { appSettings.contentPadding = it.progress }
     }
 
     @OptIn(UnstableApi::class)
-    private fun updatePreview() {
+    private fun updatePreview(animate: Boolean = false) {
         try {
             binding.previewArea.removeAllViews()
             val placeholder = createBitmap(320, 180).applyCanvas {
@@ -638,12 +676,20 @@ class SettingsActivity : AppCompatActivity() {
                 contentPadding = appSettings.contentPadding, titleAlignment = appSettings.titleAlignment,
                 messageAlignment = appSettings.messageAlignment, title = getString(R.string.settings_preview_title),
                 message = getString(R.string.settings_preview_message), position = appSettings.positionIndex,
-                mediaPosition = appSettings.mediaPosition, media = PopupProps.Media.Bitmap(placeholder, 180)
+                mediaPosition = appSettings.mediaPosition, media = PopupProps.Media.Bitmap(placeholder, 180),
+                animationType = appSettings.animationType, animationDuration = appSettings.animationDuration
             )
-            binding.previewArea.addView(PopupView.build(this, tempProps), FrameLayout.LayoutParams(-2, -2).apply {
+            val popup = PopupView.build(this, tempProps)
+            binding.previewArea.addView(popup, FrameLayout.LayoutParams(-2, -2).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
                 setMargins(0, 0, Utils.dpToPx(this@SettingsActivity, 10), Utils.dpToPx(this@SettingsActivity, 10))
             })
+            
+            if (animate && tempProps.animationType != 0) {
+                popup.post {
+                    popup.animateIn()
+                }
+            }
         } catch (_: Exception) {}
     }
 

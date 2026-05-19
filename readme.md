@@ -25,6 +25,7 @@ The most common use-case for this application is for sending notifications, from
 - **Settings Backup & Sync:** Easily export or clone your customized styling configurations from one PiPup device to another over the network.
 - **Smart Queueing & Sync:** Built-in notification service synchronization ensuring alerts are handled smoothly.
 - **Media3 ExoPlayer Integration:** Seamless local and external video/audio streaming support.
+- **Customizable Entrance Animations:** Choose from 10 different entrance animations (like Slide, Scale, or Bounce) and customize the duration to make alerts dynamic.
 
 ---
 
@@ -58,28 +59,30 @@ You can send notifications either as an **application/json** payload (for extern
 
 ```json
 {
-  "duration": 10,
-  "position": 0,
-  "title": "Your awesome title",
-  "titleColor": "#FFFFFF",
-  "titleSize": 24,
-  "titleAlignment": 0,
-  "message": "What ever you want to say... do it here...",
-  "messageColor": "#FFFFFF",
-  "messageSize": 16,
-  "messageAlignment": 0,
-  "mediaPosition": 0,
-  "backgroundColor": "#CC000000",
-  "borderRadius": 0,
-  "borderWidth": 0,
-  "borderColor": "#00000000",
-  "contentPadding": 16,
-  "media": {
-    "image": {
-      "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png",
-      "width": 480
+    "duration": 10,
+    "position": 0,
+    "title": "Your awesome title",
+    "titleColor": "#FFFFFF",
+    "titleSize": 24,
+    "titleAlignment": 0,
+    "message": "What ever you want to say... do it here...",
+    "messageColor": "#FFFFFF",
+    "messageSize": 16,
+    "messageAlignment": 0,
+    "mediaPosition": 0,
+    "backgroundColor": "#CC000000",
+    "borderRadius": 0,
+    "borderWidth": 0,
+    "borderColor": "#00000000",
+    "contentPadding": 16,
+    "animationType": 0,
+    "animationDuration": 500,
+    "media": {
+        "image": {
+            "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png",
+            "width": 480
+        }
     }
-  }
 }
 ```
 
@@ -99,19 +102,21 @@ All fields below are optional for both JSON properties (top-level keys) and Mult
 
 #### General & Text Settings
 
-| _Field_              | _Type_  | _Default_ | _Description_                                          |
-| -------------------- | ------- | --------- | ------------------------------------------------------ |
-| **duration**         | Integer | 30        | Duration in seconds                                    |
-| **position**         | Integer | 0         | Position index on the screen (0..4)                    |
-| **contentPadding**   | Integer | 16        | Inner padding in pixels between the border and content |
-| **title**            | String  |           | Title text                                             |
-| **titleSize**        | Float   | 14        | Title font size                                        |
-| **titleColor**       | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format         |
-| **titleAlignment**   | Integer | 0         | Title alignment (0..2)                                 |
-| **message**          | String  |           | Message text                                           |
-| **messageSize**      | Float   | 14        | Message font size                                      |
-| **messageColor**     | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format       |
-| **messageAlignment** | Integer | 0         | Message alignment (0..2)                               |
+| _Field_               | _Type_  | _Default_ | _Description_                                          |
+| --------------------- | ------- | --------- | ------------------------------------------------------ |
+| **duration**          | Integer | 30        | Duration in seconds                                    |
+| **position**          | Integer | 0         | Position index on the screen (0..4)                    |
+| **contentPadding**    | Integer | 16        | Inner padding in pixels between the border and content |
+| **title**             | String  |           | Title text                                             |
+| **titleSize**         | Float   | 14        | Title font size                                        |
+| **titleColor**        | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format         |
+| **titleAlignment**    | Integer | 0         | Title alignment (0..2)                                 |
+| **message**           | String  |           | Message text                                           |
+| **messageSize**       | Float   | 14        | Message font size                                      |
+| **messageColor**      | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format       |
+| **messageAlignment**  | Integer | 0         | Message alignment (0..2)                               |
+| **animationType**     | Integer | 0         | Animation type index for popup entrance (0..10)        |
+| **animationDuration** | Integer | 500       | Duration of the entrance animation in milliseconds     |
 
 #### Background & Border Styling
 
@@ -139,30 +144,46 @@ All fields below are optional for both JSON properties (top-level keys) and Mult
 - **Color-properties** are defined in `[AA]RRGGBB` hex format where the alpha channel is optional (e.g., `#FFFFFF` or `#CCFFFFFF`).
 - **`position`** defines where the notification overlay appears on your TV screen:
 
-| Value | Position           |
-| ----- | ------------------ |
-| **0** | TopRight (Default) |
-| **1** | TopLeft            |
-| **2** | BottomRight        |
-| **3** | BottomLeft         |
-| **4** | Center             |
+| _Value_ | _Position_         |
+| ------- | ------------------ |
+| **0**   | TopRight (Default) |
+| **1**   | TopLeft            |
+| **2**   | BottomRight        |
+| **3**   | BottomLeft         |
+| **4**   | Center             |
 
 - **`titleAlignment`** and **`messageAlignment`** control text alignment inside the layout:
 
-| Value | Alignment      |
-| ----- | -------------- |
-| **0** | Left (Default) |
-| **1** | Center         |
-| **2** | Right          |
+| _Value_ | _Alignment_    |
+| ------- | -------------- |
+| **0**   | Left (Default) |
+| **1**   | Center         |
+| **2**   | Right          |
 
 - **`mediaPosition`** determines where the media asset is rendered relative to the notification text:
 
-| Value | Position      | Description                              |
-| ----- | ------------- | ---------------------------------------- |
-| **0** | Top (Default) | Media is placed above the text           |
-| **1** | Bottom        | Media is placed below the text           |
-| **2** | Left          | Media is placed to the left of the text  |
-| **3** | Right         | Media is placed to the right of the text |
+| _Value_ | _Position_    | _Description_                            |
+| ------- | ------------- | ---------------------------------------- |
+| **0**   | Top (Default) | Media is placed above the text           |
+| **1**   | Bottom        | Media is placed below the text           |
+| **2**   | Left          | Media is placed to the left of the text  |
+| **3**   | Right         | Media is placed to the right of the text |
+
+- **`animationType`** defines the entrance animation of the popup:
+
+| _Value_ | _Animation_    |
+| ------- | -------------- |
+| **0**   | None (Default) |
+| **1**   | Fade           |
+| **2**   | Slide          |
+| **3**   | Slide & Bounce |
+| **4**   | Scale In       |
+| **5**   | Scale & Bounce |
+| **6**   | Scale Ta-da    |
+| **7**   | Slide & Zoom   |
+| **8**   | Slide & Flip   |
+| **9**   | Slide & Ta-da  |
+| **10**  | Diagonal Zoom  |
 
 ---
 
@@ -194,20 +215,22 @@ Retrieves a JSON object containing all current styling and layout configurations
 
 ```json
 {
-  "positionIndex": 0,
-  "backgroundColor": "#CC000000",
-  "backgroundAlpha": 204,
-  "titleColor": "#FFFFFF",
-  "titleSize": 14.0,
-  "messageColor": "#FFFFFF",
-  "messageSize": 14.0,
-  "borderRadius": 0,
-  "borderWidth": 0,
-  "borderColor": "#00000000",
-  "contentPadding": 16,
-  "titleAlignment": 0,
-  "messageAlignment": 0,
-  "mediaPosition": 0
+    "positionIndex": 0,
+    "backgroundColor": "#CC000000",
+    "backgroundAlpha": 204,
+    "titleColor": "#FFFFFF",
+    "titleSize": 14.0,
+    "messageColor": "#FFFFFF",
+    "messageSize": 14.0,
+    "borderRadius": 0,
+    "borderWidth": 0,
+    "borderColor": "#00000000",
+    "contentPadding": 16,
+    "titleAlignment": 0,
+    "messageAlignment": 0,
+    "mediaPosition": 0,
+    "animationType": 0,
+    "animationDuration": 500
 }
 ```
 
