@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.TextureView
 import android.view.animation.OvershootInterpolator
 import android.webkit.WebSettings
 import android.webkit.WebView
@@ -21,7 +22,6 @@ import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import nl.rogro82.pipup.databinding.PopupBinding
@@ -56,6 +56,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
     /**
      * Initializes the styled notification view and its components.
+     * Sets padding, background styling, and populates content.
      *
      * @return The initialized PopupView instance.
      */
@@ -64,7 +65,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             LayoutParams.WRAP_CONTENT,
             LayoutParams.WRAP_CONTENT
         )
-        
+
         // Reset root background and alpha to ensure only container draws the background
         this.alpha = 1.0f
         this.background = null
@@ -78,7 +79,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
         // 2. Background Styling (Applied to the shared container)
         val radiusPx = if (props.scale) Utils.getScaledPixels(context, props.borderRadius).toFloat() else Utils.dpToPx(context, props.borderRadius).toFloat()
-        
+
         val bgColor = props.getBackgroundColorInt()
         val bgDrawable = GradientDrawable().apply {
             setColor(bgColor)
@@ -93,10 +94,10 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
         // 3. Dynamic Constraints & Auto-Scroll
         val maxTextWidth = if (props.scale) Utils.getScaledPixels(context, 500) else Utils.dpToPx(context, 500)
-        
+
         binding.popupTitle.maxWidth = maxTextWidth
         binding.popupMessage.maxWidth = maxTextWidth
-        
+
         // 4. Position Reordering
         reorderViews()
 
@@ -108,10 +109,10 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             binding.popupTitle.textSize = props.titleSize
             binding.popupTitle.gravity = titleGravity
             binding.popupTitle.isVisible = true
-            
+
             (binding.popupTitle.layoutParams as? LinearLayout.LayoutParams)?.gravity = titleGravity
         }
-        
+
         if (!props.message.isNullOrEmpty()) {
             val messageGravity = props.getMessageGravity()
             binding.popupMessage.text = props.message
@@ -120,9 +121,9 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             binding.popupMessage.gravity = messageGravity
             binding.popupMessage.isVisible = true
             binding.popupScrollView.isVisible = true
-            
+
             (binding.popupScrollView.layoutParams as? LinearLayout.LayoutParams)?.gravity = messageGravity
-            
+
             // Post-layout logic for auto-scrolling and height adjustment
             binding.popupContainer.post {
                 adjustHeights()
@@ -151,7 +152,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         when (pos) {
             0 -> { // Top
                 container.orientation = LinearLayout.VERTICAL
-                
+
                 val mediaParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -159,7 +160,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
                     setMargins(0, 0, 0, Utils.dpToPx(context, 8))
                     gravity = Gravity.CENTER_HORIZONTAL
                 }
-                
+
                 val textParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -170,7 +171,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             }
             1 -> { // Bottom
                 container.orientation = LinearLayout.VERTICAL
-                
+
                 val textParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -189,7 +190,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             }
             2 -> { // Left
                 container.orientation = LinearLayout.HORIZONTAL
-                
+
                 val mediaParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -210,7 +211,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             }
             3 -> { // Right
                 container.orientation = LinearLayout.HORIZONTAL
-                
+
                 val textParams = LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.WRAP_CONTENT,
                     LinearLayout.LayoutParams.WRAP_CONTENT
@@ -239,7 +240,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         val displayMetrics = context.resources.displayMetrics
         val screenHeight = displayMetrics.heightPixels
         val maxPopupHeight = (screenHeight * 0.85).toInt() // Max 85% of screen height
-        
+
         binding.popupContainer.post {
             // Force media frame to its target height immediately if known
             if (binding.popupMediaFrame.isVisible && targetMediaHeight > 0) {
@@ -251,13 +252,13 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             val mediaHeight = if (binding.popupMediaFrame.isVisible) {
                 if (targetMediaHeight > 0) targetMediaHeight else binding.popupMediaFrame.measuredHeight
             } else 0
-            
+
             val paddingHeight = binding.popupContainer.paddingTop + binding.popupContainer.paddingBottom
             val margins = Utils.dpToPx(context, 12) // Buffer for vertical margins
-            
+
             val otherViewsHeight = titleHeight + mediaHeight + paddingHeight + margins
             val availableHeightForScroll = maxPopupHeight - otherViewsHeight
-            
+
             // For horizontal layout, we might have more height available for the text
             val maxScrollHeight = if (binding.popupContainer.orientation == LinearLayout.HORIZONTAL) {
                 (screenHeight * 0.7).toInt() // Max 70% of screen height in horizontal mode
@@ -267,7 +268,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
             // Get actual height of the text inside the scrollview
             val messageContentHeight = binding.popupMessage.measuredHeight
-            
+
             if (messageContentHeight > maxScrollHeight) {
                 Log.d("PopupView", "Restricting scroll height: content=$messageContentHeight, max allowed=$maxScrollHeight")
                 binding.popupScrollView.layoutParams.height = maxScrollHeight.coerceAtLeast(Utils.dpToPx(context, 100))
@@ -290,26 +291,26 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
         val scrollView = binding.popupScrollView
         val scrollContent = binding.popupMessage
-        
+
         scrollView.postDelayed(object : Runnable {
             var scrollPos = 0
             val step = 1 // pixels per tick
-            
+
             override fun run() {
                 val maxScroll = scrollContent.height - scrollView.height
                 if (maxScroll <= 0) return
-                
+
                 scrollPos += step
                 if (scrollPos > maxScroll) {
                     // Wait a bit at the bottom and reset
-                    scrollView.postDelayed({ 
+                    scrollView.postDelayed({
                         scrollPos = 0
                         scrollView.scrollTo(0, 0)
                         scrollView.postDelayed(this, 2000) // Pause at top
                     }, 3000)
                     return
                 }
-                
+
                 scrollView.scrollTo(0, scrollPos)
                 scrollView.postDelayed(this, 30) // ~33 FPS
             }
@@ -330,7 +331,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         frame.isVisible = true
         // Container for media stays logically opaque; background shows through from popupContainer
         frame.alpha = 1.0f
-        frame.background = null 
+        frame.background = null
 
         when (media) {
             is PopupProps.Media.Image -> renderImage(frame, media.uri, media.width, media.cache, media.scale)
@@ -353,7 +354,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
      */
     private fun renderImage(frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean) {
         val tw = if (scale) Utils.getScaledPixels(context, width) else Utils.dpToPx(context, width)
-        
+
         frame.layoutParams.width = tw
         frame.layoutParams.height = LayoutParams.WRAP_CONTENT
 
@@ -363,7 +364,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             alpha = 1.0f
         }
         frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER 
+            gravity = Gravity.CENTER
         })
 
         Glide.with(context)
@@ -397,12 +398,13 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
     /**
      * Renders a video stream using ExoPlayer for low latency.
+     * Uses [TextureView] for hardware-accelerated animations and transparency.
      */
     private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean) {
         val tw = if (scale) Utils.getScaledPixels(context, width) else Utils.dpToPx(context, width)
         // Default to 16:9 aspect ratio to prevent layout jumps during initialization
         val th = (tw * 9) / 16
-        
+
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
 
@@ -419,20 +421,20 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         val player = ExoPlayer.Builder(context)
             .setLoadControl(loadControl)
             .build()
-        
+
         mPlayer = player
 
-        val tv = android.view.TextureView(context).apply {
+        val tv = TextureView(context).apply {
             alpha = 1.0f
             isVisible = false // Keep hidden until startMedia is called
         }
         mVideoView = tv
         player.setVideoTextureView(tv)
-        
+
         player.repeatMode = Player.REPEAT_MODE_ONE
         player.setMediaItem(MediaItem.fromUri(uri))
         player.prepare()
-        
+
         val signaledReady = false
         player.addListener(object : Player.Listener {
             override fun onPlaybackStateChanged(state: Int) {
@@ -463,7 +465,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
                 }
             }
         })
-        
+
         frame.addView(tv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
             gravity = Gravity.CENTER
         })
@@ -471,6 +473,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
     /**
      * Starts any media playback (e.g. Video) when the popup is actually shown.
+     * Also handles visibility of the video surface.
      */
     fun startMedia() {
         mVideoView?.let { it.isVisible = true }
@@ -489,7 +492,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
     private fun renderWeb(frame: FrameLayout, uri: String, width: Int, height: Int, cache: Boolean, scale: Boolean) {
         val tw = if (scale) Utils.getScaledPixels(context, width) else Utils.dpToPx(context, width)
         val th = if (scale) Utils.getScaledPixels(context, height) else Utils.dpToPx(context, height)
-        
+
         targetMediaHeight = th
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
@@ -497,12 +500,12 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         val wv = WebView(context).apply {
             alpha = 1.0f
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(v: WebView?, u: String?) { 
+                override fun onPageFinished(v: WebView?, u: String?) {
                     readyListener?.onReady()
                     adjustHeights()
                 }
                 @Deprecated("Deprecated in Java")
-                override fun onReceivedError(v: WebView?, r: Int, d: String?, u: String?) { 
+                override fun onReceivedError(v: WebView?, r: Int, d: String?, u: String?) {
                     readyListener?.onReady()
                     adjustHeights()
                 }
@@ -516,9 +519,9 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
                 cacheMode = if (cache) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_NO_CACHE
             }
         }
-        
+
         frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply {
-            gravity = Gravity.CENTER 
+            gravity = Gravity.CENTER
         })
         wv.loadUrl(uri)
     }
@@ -528,7 +531,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
      */
     private fun renderBitmap(frame: FrameLayout, bitmap: android.graphics.Bitmap, width: Int, scale: Boolean) {
         val tw = if (scale) Utils.getScaledPixels(context, width) else Utils.dpToPx(context, width)
-        
+
         targetMediaHeight = (tw * bitmap.height) / bitmap.width
         frame.layoutParams.width = tw
         frame.layoutParams.height = targetMediaHeight
@@ -551,7 +554,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
      */
     fun animateIn() {
         val duration = props.animationDuration.toLong()
-        
+
         // Reset properties to ensure a clean start
         this.alpha = 1f
         this.scaleX = 1f
