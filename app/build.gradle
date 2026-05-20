@@ -107,24 +107,25 @@ android {
 }
 
 /**
- * Customizes the output APK filenames using the version name and build status.
- * Logic:
- * 1. If it's a release build and 'appStatus' is provided, use that (e.g., prerelease).
- * 2. Otherwise, use the build type name (debug/release).
- * 3. As a safety measure, ensure the status is never empty.
+ * Customizes the output APK filenames based on the build variant and application status.
+ *
+ * For release builds, this logic uses the custom 'appStatus' project property (e.g., 'prerelease')
+ * if provided via the command line. Debug builds always retain their 'debug' suffix to prevent
+ * naming collisions during automated deployments (such as GitHub Actions).
  */
 androidComponents {
     onVariants(selector().all()) { variant ->
         variant.outputs.each { output ->
             def baseVersion = output.versionName.get()
-            def buildType = variant.name
+            def buildType = variant.name // 'debug' or 'release'
 
-            // Determine status:
-            // 1. Use 'appStatus' property if provided (e.g., for custom release labels)
-            // 2. Otherwise use the build type (debug/release)
-            def status = project.hasProperty("appStatus")
-                         ? project.getProperty("appStatus")
-                         : buildType
+            // Determine the lifecycle status tag:
+            // Use 'appStatus' strictly for release variants when specified;
+            // otherwise, fall back to the default build type name.
+            def status = buildType
+            if (buildType == "release" && project.hasProperty("appStatus")) {
+                status = project.getProperty("appStatus")
+            }
 
             def newName = "PiPup-${baseVersion}-${status}.apk"
             output.outputFileName.set(newName)
