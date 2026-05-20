@@ -162,3 +162,65 @@ dependencies {
     implementation libs.media3.ui
     implementation libs.media3.rtsp
 }
+
+import org.apache.tools.ant.taskdefs.condition.Os
+
+/**
+ * File reference to the shell script responsible for sending PiPup test notifications.
+ */
+def scriptFile = rootProject.file("scripts/send_notify.sh")
+
+/**
+ * Utility closure to ensure the shell script has executable permissions on Unix-based systems.
+ * This prevents 'Permission denied' errors during automated Gradle task execution.
+ */
+def ensureScriptExecutable = {
+    if (scriptFile.exists()) {
+        scriptFile.setExecutable(true)
+    }
+}
+
+/**
+ * Executes the full suite of PiPup functionality tests sequentially.
+ * This utilizes the script's internal loop to iterate through all payload types.
+ */
+tasks.register('testAllNotifies', Exec) {
+    group = "verification"
+    description = "Runs the entire PiPup notification test suite sequentially."
+
+    doFirst {
+        ensureScriptExecutable()
+    }
+
+    commandLine scriptFile.absolutePath, "-h", "127.0.0.1", "-a"
+}
+
+/**
+ * Sends a cancellation payload to the PiPup server.
+ * This clears the active notification queue and dismisses any currently visible popups on the TV.
+ */
+tasks.register('testCancelNotify', Exec) {
+    group = "verification"
+    description = "Clears the active notification queue and dismisses visible popups."
+
+    doFirst {
+        ensureScriptExecutable()
+    }
+
+    commandLine scriptFile.absolutePath, "-h", "127.0.0.1", "-c"
+}
+
+/**
+ * Sends a single standard text-only test notification to the PiPup server.
+ * Ideal for a quick verification that the endpoint and port forwarding are functional.
+ */
+tasks.register('testSingleNotify', Exec) {
+    group = "verification"
+    description = "Sends a single standard text-only test notification to PiPup."
+
+    doFirst {
+        ensureScriptExecutable()
+    }
+
+    commandLine scriptFile.absolutePath, "-h", "127.0.0.1", "-t", "message"
+}
