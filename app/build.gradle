@@ -1,5 +1,6 @@
 import java.text.SimpleDateFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import io.gitlab.arturbosch.detekt.Detekt
 
 /**
  * Standard Android Build Configuration for PiPup.
@@ -9,6 +10,24 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.google.devtools.ksp)
+    alias(libs.plugins.detekt)
+}
+
+detekt {
+    toolVersion = libs.versions.detekt.get()
+    config.setFrom(rootProject.layout.projectDirectory.file("config/detekt/detekt.yml"))
+    buildUponDefaultConfig = true
+    allRules = false
+    ignoreFailures = true // "Warning only" mode as requested
+}
+
+tasks.withType(Detekt).configureEach {
+    reports {
+        html.required.set(true)
+        xml.required.set(false)
+        txt.required.set(false)
+        sarif.required.set(false)
+    }
 }
 
 /**

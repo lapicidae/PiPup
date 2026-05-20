@@ -30,21 +30,25 @@ import java.util.Queue
 
 /**
  * Background service hosting the PiPup API server.
- * Manages notification queue and display synchronization.
+ * Manages notification queue, display synchronization, and animations.
+ *
+ * This service runs as a foreground service to ensure it isn't killed by the system
+ * while waiting for notifications. It manages a [WindowManager] overlay to display
+ * popups above all other content.
  */
 @UnstableApi
 class PipUpService : Service() {
 
     private val mHandler = Handler(Looper.getMainLooper())
-    
-    private val mWindowManager: WindowManager by lazy { 
+
+    private val mWindowManager: WindowManager by lazy {
         getSystemService(WINDOW_SERVICE) as WindowManager
     }
-    
+
     private val mObjectMapper: ObjectMapper = jacksonObjectMapper().apply {
         configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
     }
-    
+
     private var mOverlay: FrameLayout? = null
     private var mCurrentPopup: PopupView? = null
     private var mNextPopup: PopupView? = null
@@ -56,15 +60,18 @@ class PipUpService : Service() {
 
     // Pre-calculated UI metrics
     private val baseMarginPx by lazy { Utils.dpToPx(this, 20) }
-    
+
     private val mNotificationQueue: Queue<PopupProps> = LinkedList()
     private var mIsPreparing = false
     private val mDurationToken = Any()
 
+    /**
+     * Initializes the service, sets up the foreground notification, and starts the web server.
+     */
     override fun onCreate() {
         super.onCreate()
         initNotificationChannel()
-        
+
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("PiPup")
             .setContentText("Listening for notifications...")
@@ -82,7 +89,7 @@ class PipUpService : Service() {
                 return this@PipUpService.handleHttpRequest(session)
             }
         })
-        
+
         try {
             mWebServer?.start()
             Log.i(LOG_TAG, "Server started on port $PIPUP_SERVER_PORT")
@@ -91,6 +98,9 @@ class PipUpService : Service() {
         }
     }
 
+    /**
+     * Stops the web server and removes any existing overlay before the service is destroyed.
+     */
     override fun onDestroy() {
         mWebServer?.stop()
         removeOverlayFromWindowManager()
@@ -105,15 +115,19 @@ class PipUpService : Service() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
     }
 
+    /**
+     * Removes the current popup from the screen and processes the next one in the queue.
+     * If a next popup is already prepared, it is shown immediately.
+     */
     private fun removePopup() {
         Log.d(LOG_TAG, "Removing current popup and checking for next...")
         mHandler.removeCallbacksAndMessages(mDurationToken)
-        
+
         mCurrentPopup?.let {
             mOverlay?.removeView(it)
             mCurrentPopup = null
         }
-        
+
         // If we have a next popup already prepared, show it immediately
         if (mNextPopup != null && mNextProps != null) {
             Log.d(LOG_TAG, "Next popup already prepared, showing: ${mNextProps?.title}")
@@ -130,15 +144,20 @@ class PipUpService : Service() {
 
     private fun removeOverlayFromWindowManager() {
         mOverlay?.let {
-            try { 
-                mWindowManager.removeView(it) 
-            } catch (e: Exception) { 
-                Log.e(LOG_TAG, "Error removing overlay", e) 
+            try {
+                mWindowManager.removeView(it)
+            } catch (e: Exception) {
+                Log.e(LOG_TAG, "Error removing overlay", e)
             }
             mOverlay = null
         }
     }
 
+    /**
+     * Ensures that the [FrameLayout] overlay exists in the [WindowManager].
+     *
+     * @return The overlay container.
+     */
     private fun ensureOverlay(): FrameLayout {
         mOverlay?.let { return it }
         val overlay = FrameLayout(this)
@@ -153,6 +172,16 @@ class PipUpService : Service() {
         return overlay
     }
 
+    /**
+     * Handles incoming HTTP requests and routes them to appropriate logic.
+     * Supported endpoints:
+     * - `/notify`: Enqueues a new notification.
+     * - `/cancel`: Clears the notification queue.
+     * - `/settings`: GET or POST application settings.
+     *
+     * @param session The NanoHTTPD session.
+     * @return A response to the HTTP client.
+     */
     private fun handleHttpRequest(session: NanoHTTPD.IHTTPSession?): NanoHTTPD.Response {
         if (session == null) return invalidRequest("Null session")
         val uri = session.uri.lowercase()
@@ -161,7 +190,7 @@ class PipUpService : Service() {
         return try {
             when (uri) {
                 "/cancel" -> {
-                    mHandler.post { 
+                    mHandler.post {
                         mNotificationQueue.clear()
                         // Cancel current preparation
                         mHandler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
@@ -169,7 +198,7 @@ class PipUpService : Service() {
                         mPreparingProps = null
                         mPreparingView?.let { mOverlay?.removeView(it) }
                         mPreparingView = null
-                        
+
                         // Clear buffered next popup
                         mNextPopup?.let { mOverlay?.removeView(it) }
                         mNextPopup = null
@@ -238,9 +267,15 @@ class PipUpService : Service() {
         }
     }
 
+    /**
+     * Parses the incoming request payload (JSON or Multipart) into a [PopupProps] object.
+     *
+     * @param session The NanoHTTPD session.
+     * @return The parsed properties, or null if parsing fails.
+     */
     private fun parsePayload(session: NanoHTTPD.IHTTPSession): PopupProps? {
         val contentType = (session.headers["content-type"] ?: "").lowercase()
-        
+
         return try {
             if (contentType.contains("application/json")) {
                 Log.d(LOG_TAG, "Parsing JSON payload using direct byte stream")
@@ -258,7 +293,7 @@ class PipUpService : Service() {
                 } else null
             } else if (contentType.contains("multipart/form-data")) {
                 Log.d(LOG_TAG, "Parsing Multipart payload using raw byte extraction")
-                
+
                 // 1. Read the entire body as raw bytes to bypass NanoHTTPD's destructive string parsing
                 val contentLength = session.headers["content-length"]?.toInt() ?: 0
                 val rawBody = if (contentLength > 0 && contentLength < 20 * 1024 * 1024) { // Max 20MB
@@ -284,17 +319,17 @@ class PipUpService : Service() {
                         if (match) { start = i; break }
                     }
                     if (start == -1) return null
-                    
+
                     var contentStart = -1
                     for (i in start until rawBody.size - 4) {
-                        if (rawBody[i] == 13.toByte() && rawBody[i+1] == 10.toByte() && 
+                        if (rawBody[i] == 13.toByte() && rawBody[i+1] == 10.toByte() &&
                             rawBody[i+2] == 13.toByte() && rawBody[i+3] == 10.toByte()) {
                             contentStart = i + 4
                             break
                         }
                     }
                     if (contentStart == -1) return null
-                    
+
                     var contentEnd = rawBody.size
                     for (i in contentStart until rawBody.size - 4) {
                         if (rawBody[i] == 13.toByte() && rawBody[i+1] == 10.toByte() && rawBody[i+2] == '-'.code.toByte()) {
@@ -316,7 +351,7 @@ class PipUpService : Service() {
                 val position = getRawPart("position")?.toIntOrNull() ?: 0
                 val bgColor = getRawPart("backgroundColor") ?: "#CC000000"
                 val scale = getRawPart("scale")?.toBoolean() ?: true
-                
+
                 val titleSize = getRawPart("titleSize")?.toFloatOrNull() ?: AppSettings.DEFAULT_TITLE_SIZE
                 val titleColor = getRawPart("titleColor") ?: AppSettings.DEFAULT_TITLE_COLOR
                 val messageSize = getRawPart("messageSize")?.toFloatOrNull() ?: AppSettings.DEFAULT_MSG_SIZE
@@ -377,6 +412,11 @@ class PipUpService : Service() {
         }
     }
 
+    /**
+     * Adds a notification properties object to the queue.
+     *
+     * @param props The properties defining the notification.
+     */
     private fun enqueueNotification(props: PopupProps) {
         mNotificationQueue.add(props)
         Log.d(LOG_TAG, "Queue size: ${mNotificationQueue.size}, Preparing: $mIsPreparing")
@@ -385,13 +425,16 @@ class PipUpService : Service() {
         }
     }
 
+    /**
+     * Checks if a notification can be processed and initiates preparation.
+     */
     private fun processNextNotification() {
         // Stricter flow: only prepare if not already preparing AND the next slot is empty
         if (mIsPreparing || mNextPopup != null || mNotificationQueue.isEmpty()) {
             Log.v(LOG_TAG, "Skipping processNextNotification: preparing=$mIsPreparing, next=${mNextPopup != null}, queue=${mNotificationQueue.size}")
             return
         }
-        
+
         val props = mNotificationQueue.poll() ?: return
         mIsPreparing = true
         mPreparingProps = props
@@ -399,21 +442,26 @@ class PipUpService : Service() {
         mHandler.post { preparePopup(props) }
     }
 
+    /**
+     * Prepares the [PopupView] for display. This includes loading media (images/video).
+     *
+     * @param props The properties defining the notification.
+     */
     private fun preparePopup(props: PopupProps) {
         val popupView = PopupView(this, props)
         mPreparingView = popupView
-        
+
         popupView.readyListener = object : PopupView.ReadyListener {
             override fun onReady() {
                 Log.d(LOG_TAG, "Popup signaled READY: ${props.title}")
                 mHandler.post { handlePopupReady(popupView, props) }
             }
         }
-        
+
         // Safety timeout - ensure we always clean up mIsPreparing
         val isVideo = props.media is PopupProps.Media.Video
         val timeoutTime = SystemClock.uptimeMillis() + (if (isVideo) 20000 else 10000)
-        mHandler.postAtTime({ 
+        mHandler.postAtTime({
             Log.w(LOG_TAG, "Media load timeout reached for ${props.title}")
             handlePopupReady(popupView, props)
         }, SAFETY_TIMEOUT_TOKEN, timeoutTime)
@@ -425,6 +473,12 @@ class PipUpService : Service() {
         addPopupToOverlay(popupView, props)
     }
 
+    /**
+     * Callback triggered when a popup signals that all its media is loaded and it's ready for display.
+     *
+     * @param popupView The view that is ready.
+     * @param props The properties of the ready notification.
+     */
     private fun handlePopupReady(popupView: PopupView, props: PopupProps) {
         // If this is the current popup already (e.g. timeout fired first), don't remove it
         if (mCurrentPopup === popupView) {
@@ -457,6 +511,12 @@ class PipUpService : Service() {
         }
     }
 
+    /**
+     * Adds the popup view to the root overlay container with proper gravity and margins.
+     *
+     * @param popupView The view to add.
+     * @param props The properties defining the position.
+     */
     private fun addPopupToOverlay(popupView: PopupView, props: PopupProps) {
         val overlay = ensureOverlay()
         if (popupView.parent != null) {
@@ -476,6 +536,12 @@ class PipUpService : Service() {
         overlay.addView(popupView, params)
     }
 
+    /**
+     * Displays a prepared popup on the screen and schedules its removal.
+     *
+     * @param popupView The view to display.
+     * @param props The properties associated with the view.
+     */
     private fun showPopup(popupView: PopupView, props: PopupProps) {
         if (popupView.alpha == 1f && popupView.isVisible) {
             Log.v(LOG_TAG, "showPopup ignored: already fully visible")
@@ -488,13 +554,13 @@ class PipUpService : Service() {
         popupView.startMedia()
 
         popupView.animateIn()
-        
+
         // Schedule removal
-        mHandler.postAtTime({ 
+        mHandler.postAtTime({
             Log.d(LOG_TAG, "Duration expired for: ${props.title}")
-            removePopup() 
+            removePopup()
         }, mDurationToken, SystemClock.uptimeMillis() + (props.duration * 1000))
-        
+
         // While this one is showing, start preparing the next one from the queue
         processNextNotification()
     }

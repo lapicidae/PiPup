@@ -4,6 +4,10 @@ import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
 
+/**
+ * Manages application-wide settings using [SharedPreferences].
+ * Provides a memory-cached access layer for high-performance UI updates.
+ */
 class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChangeListener {
 
     private val prefs = context.getSharedPreferences("pipup_settings", Context.MODE_PRIVATE)
@@ -42,6 +46,9 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
         }
     }
 
+    /**
+     * Plain data class for bulk settings transfer (e.g., for JSON API or Import/Export).
+     */
     data class SettingsData(
         val positionIndex: Int,
         val backgroundColor: String,
@@ -98,7 +105,7 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
             _animationDuration = data.animationDuration
             _appTheme = data.appTheme
             _advancedMode = data.advancedMode
-            
+
             // Note: _dismissBatteryOptimization is preserved as it is not part of SettingsData
             save(sync = true)
         } finally {
@@ -108,13 +115,13 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
 
     /**
      * Persists current in-memory settings to disk.
-     * @param sync If true, uses commit() to write synchronously. Otherwise uses apply().
+     * @param sync If true, `commit()` is used for synchronous writing. Otherwise, `apply()` is used.
      */
     fun save(sync: Boolean = false) {
         // Prevent re-entry from listeners if we are already in an update block
         val alreadyUpdating = isUpdating
         if (!alreadyUpdating) isUpdating = true
-        
+
         try {
             prefs.edit(commit = sync) {
                 putInt("position_index", _positionIndex)
@@ -181,7 +188,7 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
     }
 
     // High-performance getters and setters (Memory Only)
-    
+
     var positionIndex: Int
         get() = _positionIndex
         set(value) { _positionIndex = value }
@@ -248,12 +255,12 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
 
     var dismissBatteryOptimization: Boolean
         get() = _dismissBatteryOptimization
-        set(value) { 
+        set(value) {
             _dismissBatteryOptimization = value
             // Battery optimization dismissal is usually a one-time thing, save immediately
             prefs.edit { putBoolean("dismiss_battery_optimization", value) }
         }
-        
+
     var advancedMode: Boolean
         get() = _advancedMode
         set(value) { _advancedMode = value }
@@ -268,6 +275,9 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
         return "#$alphaHex$clean"
     }
 
+    /**
+     * Resets all styling settings to their factory defaults.
+     */
     fun resetToDefaults() {
         prefs.edit { clear() }
         _dismissBatteryOptimization = false

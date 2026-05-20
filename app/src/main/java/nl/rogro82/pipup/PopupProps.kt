@@ -9,6 +9,12 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 /**
  * Data class representing all properties of a notification popup.
  * Matches the polymorphic structure used in the official PiPup API.
+ *
+ * @property duration How long (in seconds) the notification should be displayed.
+ * @property position The screen position (0-4). See [Position].
+ * @property title The primary heading of the notification.
+ * @property animationType The entry animation style (0-10).
+ * @property animationDuration The duration of the entry animation in ms.
  */
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PopupProps(
@@ -21,17 +27,17 @@ data class PopupProps(
     val messageSize: Float = 16f,
     val messageColor: String = "#FFFFFF",
     val backgroundColor: String = "#CC000000",
-    
+
     val media: Media? = null,
     val mediaPosition: Int? = null, // 0: Top, 1: Bottom, 2: Left, 3: Right
     val animationType: Int = 0, // 0: None, 1: Fade, 2: Slide
     val animationDuration: Int = 500,
-    
+
     // Advanced Styling (from Settings)
     val borderRadius: Int = 0,
     val borderWidth: Int = 0,
     val borderColor: String = "#00000000",
-    
+
     // Internal/Extra
     val contentPadding: Int? = null,
     val titleAlignment: Int = 0, // 0: Left, 1: Center, 2: Right
@@ -75,6 +81,9 @@ data class PopupProps(
         ) : Media()
     }
 
+    /**
+     * Enum defining supported screen positions.
+     */
     enum class Position(val index: Int) {
         TopRight(0), TopLeft(1), BottomRight(2), BottomLeft(3), Center(4)
     }
