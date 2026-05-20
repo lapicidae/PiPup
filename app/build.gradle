@@ -1,7 +1,5 @@
-import java.text.SimpleDateFormat
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import io.gitlab.arturbosch.detekt.Detekt
-
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 /**
  * Standard Android Build Configuration for PiPup.
  * This script automates the versioning process using timestamps.
@@ -12,6 +10,8 @@ plugins {
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.detekt)
 }
+
+apply from: "../gradle/versioning.gradle"
 
 detekt {
     toolVersion = libs.versions.detekt.get()
@@ -28,28 +28,6 @@ tasks.withType(Detekt).configureEach {
         txt.required.set(false)
         sarif.required.set(false)
     }
-}
-
-/**
- * Generates a unique integer version code based on the current date and hour.
- * Format: yyMMddHH (e.g., 26043022 for April 30, 2026, 10 PM)
- *
- * @return A unique integer suitable for versionCode
- */
-static def getTimestampVersion() {
-    def date = new Date()
-    return Integer.parseInt(new SimpleDateFormat("yyMMddHH").format(date))
-}
-
-/**
- * Generates a human-readable version name string.
- * Format: yyyyMMdd.HHmm (e.g., 20260430.2215)
- *
- * @return A formatted date and time string
- */
-static def getTimestampName() {
-    def date = new Date()
-    return new SimpleDateFormat("yyyyMMdd.HHmm").format(date)
 }
 
 android {
@@ -72,7 +50,7 @@ android {
 
         // Automatic versioning logic
         versionCode getTimestampVersion()
-        versionName "0.2.2-" + getTimestampName()
+        versionName "${libs.versions.pipup.get()}-" + getTimestampName()
     }
 
     buildTypes {
@@ -163,9 +141,6 @@ dependencies {
     implementation libs.media3.ui
     implementation libs.media3.rtsp
 }
-
-import org.apache.tools.ant.taskdefs.condition.Os
-
 /**
  * File reference to the shell script responsible for sending PiPup test notifications.
  */

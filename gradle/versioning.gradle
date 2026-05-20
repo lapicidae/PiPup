@@ -1,0 +1,17 @@
+import java.text.SimpleDateFormat
+
+/**
+ * Generates a unique integer version code based on the current date and hour.
+ */
+ext.getTimestampVersion = {
+    def date = new Date()
+    return Integer.parseInt(new SimpleDateFormat("yyMMddHH").format(date))
+}
+
+/**
+ * Generates a human-readable version name suffix.
+ */
+ext.getTimestampName = {
+    def date = new Date()
+    return new SimpleDateFormat("yyyyMMdd.HHmm").format(date)
+}
