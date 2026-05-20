@@ -72,7 +72,7 @@ android {
 
         // Automatic versioning logic
         versionCode getTimestampVersion()
-        versionName "0.2.1-" + getTimestampName()
+        versionName "0.2.2-" + getTimestampName()
     }
 
     buildTypes {
