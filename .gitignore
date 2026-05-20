@@ -46,8 +46,26 @@ gradle-app.setting
 !gradle-wrapper.properties
 
 ### IDE Specific - Android Studio / IntelliJ / VS Code ###
-# Project-specific IDE settings (individual preferences should not be tracked)
+# Ignore the entire .idea folder by default
 .idea/
+
+# Whitelist shared project settings for team collaboration
+!.idea/codeStyles/
+!.idea/dictionaries/
+!.idea/compiler.xml
+!.idea/vcs.xml
+!.idea/runConfigurations/
+!.idea/modules.xml
+!.idea/deploymentTargetSelector.xml
+
+# Blacklist user-specific and temporary IDE files inside .idea
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/assetWizardSettings.xml
+.idea/caches/
+.idea/libraries/
+
+# Project-specific IDE settings (individual preferences should not be tracked)
 *.iml
 *.ipr
 *.iws

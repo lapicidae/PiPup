@@ -1,0 +1,21 @@
+# Android EditorConfig
+# Ensures consistent formatting across IDEs and environments
+
+root = true
+
+[*]
+charset = utf-8
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{kt,kts}]
+# Kotlin specific rules
+# ij_kotlin_imports_layout is the IntelliJ/Android Studio specific version
+ij_kotlin_imports_layout = android
+max_line_length = 120
+
+[*.md]
+# Markdown rules
+trim_trailing_whitespace = false
