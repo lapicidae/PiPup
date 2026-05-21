@@ -458,52 +458,60 @@ main() {
   }
 
   #######################################
-  # Executes a rapid concurrent background stress test against the endpoint.
-  # Globals:
-  #   STRESS_ITERATIONS: Integer, total parallel payloads to dispatch.
-  #   TEST_TYPES: Array, available test configurations.
-  # Arguments:
-  #   target_ip: String, IP address of the target server.
-  #   suffix: String, payload text modifiers.
-  # Outputs:
-  #   Writes stress initialization metrics to stdout.
-  #######################################
-  run_stress_test() {
-    local target_ip="${1}"
-    local suffix="${2}"
+# Executes a rapid concurrent background stress test against the endpoint.
+# Globals:
+#   STRESS_ITERATIONS: Integer, total parallel payloads to dispatch.
+#   TEST_TYPES: Array, available test configurations.
+#   MIN_PADDING: Integer, minimum inner layout padding.
+# Arguments:
+#   target_ip: String, IP address of the target server.
+#   suffix: String, payload text modifiers.
+# Outputs:
+#   Writes stress initialization metrics and test results to stdout.
+#######################################
+run_stress_test() {
+  local target_ip="${1}"
+  local suffix="${2}"
 
-    printf "[STRESS] Initiating parallel bombardment of %d requests...\n" "${STRESS_ITERATIONS}"
-    printf "[STRESS] Spawning background jobs... "
+  printf "[STRESS] Initiating parallel bombardment of %d requests...\n" "${STRESS_ITERATIONS}"
+  printf "[STRESS] Spawning background jobs... "
 
-    printf "DONE\n"
-    printf "[STRESS] Awaiting incoming responses from server...\n\n"
-    print_table_header
+  printf "DONE\n"
+  printf "[STRESS] Awaiting incoming responses from server...\n\n"
+  print_table_header
 
-    local i
-    for ((i = 0; i < STRESS_ITERATIONS; i++)); do
-      local rand_idx=$((RANDOM % ${#TEST_TYPES[@]}))
-      local type="${TEST_TYPES[rand_idx]}"
+  local num_types=${#TEST_TYPES[@]}
+  local i
+  for ((i = 0; i < STRESS_ITERATIONS; i++)); do
+    # Reseed the random generator using system nanoseconds to prevent subshell
+    # token collisions when background jobs are spawned simultaneously.
+    local seed
+    seed=$(date +%N | sed 's/^0*//')
+    local rand_idx=$(((seed + i) % num_types))
+    local type="${TEST_TYPES[rand_idx]}"
 
-      if [[ "${type}" == "cancel" ]]; then
-        continue 
-      fi
+    if [[ "${type}" == "cancel" ]]; then
+      continue 
+    fi
 
-      if [[ "${type}" == "multipart" ]]; then
-        local mp_padding=$((MIN_PADDING + (RANDOM % 25)))
-        local mp_anim_type=$((RANDOM % 11))
-        local mp_anim_duration=$((300 + RANDOM % 1201))
-        send_multipart_test "${target_ip}" "$((RANDOM % 5))" "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}" &
-        continue
-      fi
+    if [[ "${type}" == "multipart" ]]; then
+      local mp_padding=$((MIN_PADDING + (RANDOM % 25)))
+      local mp_anim_type=$((RANDOM % 11))
+      local mp_anim_duration=$((300 + RANDOM % 1201))
+      send_multipart_test "${target_ip}" "$((RANDOM % 5))" "${suffix}" \
+        "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" \
+        "${mp_anim_duration}" &
+      continue
+    fi
 
-      local media
-      media=$(get_media_payload "${type}")
-      dispatch_test "${type}" "Stress #${i}" "$((RANDOM % 5))" "${media}" &
-    done
+    local media
+    media=$(get_media_payload "${type}")
+    dispatch_test "${type}" "Stress #${i}" "$((RANDOM % 5))" "${media}" &
+  done
 
-    wait
-    printf "\n[STRESS] Execution wave completed successfully.\n"
-  }
+  wait
+  printf "\n[STRESS] Execution wave completed successfully.\n"
+}
 
   # --- Execution Flows ---
 

@@ -16,6 +16,12 @@ trim_trailing_whitespace = true
 ij_kotlin_imports_layout = android
 max_line_length = 120
 
+[*.sh]
+# Google Shell Style Guide Rules
+indent_style = space
+indent_size = 2
+max_line_length = 80
+
 [*.md]
 # Markdown rules
 trim_trailing_whitespace = false
