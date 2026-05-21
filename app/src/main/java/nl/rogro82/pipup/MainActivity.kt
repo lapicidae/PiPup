@@ -21,7 +21,7 @@ import androidx.media3.common.util.UnstableApi
 
 /**
  * Main Activity displaying server status and version information.
- * 
+ *
  * Serves as the entry point for both Leanback (TV) and standard launchers.
  */
 @OptIn(UnstableApi::class)
@@ -62,15 +62,20 @@ class MainActivity : AppCompatActivity() {
         // Server Status
         val statusLabel = findViewById<TextView>(R.id.textViewConnection)
         val addressLabel = findViewById<TextView>(R.id.textViewServerAddress)
-        
-        val ip = Utils.getIpAddress()
-        if (ip != null) {
-            statusLabel.text = getString(R.string.server_running)
-            addressLabel.text = getString(R.string.server_address, ip, PipUpService.PIPUP_SERVER_PORT)
-        } else {
-            statusLabel.text = getString(R.string.no_network_connection)
-            addressLabel.text = "---.---.---.---"
-        }
+
+        // IP Address retrieval is moved to a background thread to prevent UI stutter
+        Thread {
+            val ip = Utils.getIpAddress()
+            runOnUiThread {
+                if (ip != null) {
+                    statusLabel.text = getString(R.string.server_running)
+                    addressLabel.text = getString(R.string.server_address, ip, PipUpService.PIPUP_SERVER_PORT)
+                } else {
+                    statusLabel.text = getString(R.string.no_network_connection)
+                    addressLabel.text = "---.---.---.---"
+                }
+            }
+        }.start()
 
         findViewById<TextView>(R.id.textViewInfo).text = getString(R.string.more_information)
 
@@ -96,7 +101,7 @@ class MainActivity : AppCompatActivity() {
         val appSettings = AppSettings(this)
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val isIgnoring = powerManager.isIgnoringBatteryOptimizations(packageName)
-        
+
         if (BuildConfig.DEBUG) {
             Log.d("MainActivity", "Battery optimization status - isIgnoring: $isIgnoring, dismissed: ${appSettings.dismissBatteryOptimization}")
         }
@@ -108,7 +113,7 @@ class MainActivity : AppCompatActivity() {
             .setMessage(getString(R.string.energy_optimization_message) + "\n\n" + getString(R.string.energy_optimization_instructions))
             .setPositiveButton(R.string.settings_yes) { _, _ ->
                 appSettings.dismissBatteryOptimization = true
-                
+
                 // Open the main settings page, trying to avoid the last active sub-page
                 val intent = Intent(Settings.ACTION_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
