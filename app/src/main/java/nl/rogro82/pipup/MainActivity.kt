@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import androidx.appcompat.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
@@ -26,6 +28,14 @@ import androidx.media3.common.util.UnstableApi
  */
 @OptIn(UnstableApi::class)
 class MainActivity : AppCompatActivity() {
+
+    private val mHandler = Handler(Looper.getMainLooper())
+    private val mAutoFinishRunnable = Runnable {
+        if (!isFinishing && !isDestroyed) {
+            Log.d("MainActivity", "Auto-finishing MainActivity to save resources")
+            finish()
+        }
+    }
 
     private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (!Settings.canDrawOverlays(this)) {
@@ -81,6 +91,7 @@ class MainActivity : AppCompatActivity() {
 
         // Settings Button
         findViewById<ImageButton>(R.id.btn_open_settings).setOnClickListener {
+            mHandler.removeCallbacks(mAutoFinishRunnable)
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
@@ -94,6 +105,15 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         requestBatteryOptimizationExemption()
+
+        // Schedule auto-finish after 60 seconds of inactivity to free graphics memory
+        mHandler.removeCallbacks(mAutoFinishRunnable)
+        mHandler.postDelayed(mAutoFinishRunnable, 60000)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        mHandler.removeCallbacks(mAutoFinishRunnable)
     }
 
     @SuppressLint("BatteryLife")

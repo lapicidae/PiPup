@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import fi.iki.elonen.NanoHTTPD
+import com.bumptech.glide.Glide
 import java.util.LinkedList
 import java.util.Queue
 
@@ -66,6 +67,32 @@ class PipUpService : Service() {
     private val mDurationToken = Any()
 
     /**
+     * Aggressively releases memory when requested by the system.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        Log.d(LOG_TAG, "onTrimMemory level: $level")
+        if (level >= TRIM_MEMORY_UI_HIDDEN) {
+            // App is in background or UI is hidden - purge RAM caches
+            Glide.get(this).clearMemory()
+        }
+    }
+
+    /**
+     * Triggers a manual cleanup of caches and suggests GC.
+     * Use this after a popup is dismissed to keep the RAM footprint low.
+     */
+    private fun performMaintenance() {
+        if (mCurrentPopup == null && mNextPopup == null && !mIsPreparing && mNotificationQueue.isEmpty()) {
+            Log.d(LOG_TAG, "Performing post-notification maintenance (clearing RAM caches and removing overlay)")
+            Glide.get(this).clearMemory()
+            removeOverlayFromWindowManager()
+            // Suggest GC to the system as we are now in an idle state
+            System.gc()
+        }
+    }
+
+    /**
      * Initializes the service, sets up the foreground notification, and starts the web server.
      */
     override fun onCreate() {
@@ -93,9 +120,28 @@ class PipUpService : Service() {
         try {
             mWebServer?.start()
             Log.i(LOG_TAG, "Server started on port $PIPUP_SERVER_PORT")
+            warmUp()
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Failed to start server", e)
         }
+    }
+
+    /**
+     * Initializes the JSON parser in the background to avoid the “cold start” delay
+     * during the first incoming notification.
+     */
+    private fun warmUp() {
+        Thread {
+            try {
+                val dummyJson = "{}"
+                mObjectMapper.readValue(dummyJson, PopupProps::class.java)
+                Log.d(LOG_TAG, "Jackson parser warmed up and ready.")
+            } catch (e: Exception) {
+                if (BuildConfig.DEBUG) {
+                    Log.v(LOG_TAG, "Warm-up parsing finished (expected exceptions ignored)")
+                }
+            }
+        }.start()
     }
 
     /**
@@ -125,6 +171,7 @@ class PipUpService : Service() {
 
         mCurrentPopup?.let {
             mOverlay?.removeView(it)
+            it.cleanup()
             mCurrentPopup = null
         }
 
@@ -139,6 +186,8 @@ class PipUpService : Service() {
         } else {
             // Otherwise try to process the queue
             processNextNotification()
+            // If nothing else is happening, clean up memory
+            performMaintenance()
         }
     }
 
@@ -196,15 +245,22 @@ class PipUpService : Service() {
                         mHandler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
                         mIsPreparing = false
                         mPreparingProps = null
-                        mPreparingView?.let { mOverlay?.removeView(it) }
+                        mPreparingView?.let {
+                            mOverlay?.removeView(it)
+                            it.cleanup()
+                        }
                         mPreparingView = null
 
                         // Clear buffered next popup
-                        mNextPopup?.let { mOverlay?.removeView(it) }
+                        mNextPopup?.let {
+                            mOverlay?.removeView(it)
+                            it.cleanup()
+                        }
                         mNextPopup = null
                         mNextProps = null
 
                         removePopup()
+                        performMaintenance()
                     }
                     ok("Notification queue cleared")
                 }
@@ -370,7 +426,19 @@ class PipUpService : Service() {
                 if (imageBytes != null && imageBytes.isNotEmpty()) {
                     try {
                         Log.d(LOG_TAG, "Image bytes extracted: ${imageBytes.size} bytes")
-                        val bitmap: Bitmap? = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+
+                        // Use inSampleSize to decode at a reasonable resolution to save RAM
+                        val options = BitmapFactory.Options().apply {
+                            inJustDecodeBounds = true
+                        }
+                        BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, options)
+
+                        // Aim for max 1920 on longest side
+                        options.inSampleSize = Utils.calculateInSampleSize(options, 1920, 1080)
+                        options.inJustDecodeBounds = false
+                        options.inPreferredConfig = Bitmap.Config.RGB_565 // More RAM efficient
+
+                        val bitmap: Bitmap? = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size, options)
                         if (bitmap != null) {
                             val imageWidth = getRawPart("imageWidth")?.toIntOrNull() ?: 480
                             media = PopupProps.Media.Bitmap(bitmap, imageWidth)
@@ -491,6 +559,7 @@ class PipUpService : Service() {
             Log.w(LOG_TAG, "Ignoring orphan READY signal for: ${props.title}")
             if (mCurrentPopup !== popupView && mNextPopup !== popupView) {
                 mOverlay?.removeView(popupView)
+                popupView.cleanup()
             }
             return
         }

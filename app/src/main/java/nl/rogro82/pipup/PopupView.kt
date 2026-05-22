@@ -41,6 +41,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
     var readyListener: ReadyListener? = null
     private var mPlayer: ExoPlayer? = null
     private var mVideoView: android.view.View? = null
+    private var mWebView: WebView? = null
     private var isScrolling = false
     private var targetMediaHeight = 0
 
@@ -367,7 +368,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             gravity = Gravity.CENTER
         })
 
-        Glide.with(context)
+        Glide.with(context.applicationContext)
             .`as`(Drawable::class.java)
             .load(uri)
             .diskCacheStrategy(if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE)
@@ -480,10 +481,64 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         mPlayer?.play()
     }
 
+    /**
+     * Cleans up all heavy resources (Video, WebView, Animations) to prevent memory leaks.
+     */
+    fun cleanup() {
+        Log.d("PopupView", "Performing explicit cleanup of popup resources")
+        handler?.removeCallbacksAndMessages(null)
+
+        // Clear Glide resources explicitly
+        try {
+            Glide.with(context.applicationContext).clear(this)
+            // Loop through ImageViews and clear them to release Bitmaps
+            val mediaFrame = binding.popupMediaFrame
+            for (i in 0 until mediaFrame.childCount) {
+                val child = mediaFrame.getChildAt(i)
+                if (child is android.widget.ImageView) {
+                    Glide.with(context.applicationContext).clear(child)
+                    child.setImageDrawable(null)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("PopupView", "Error clearing Glide", e)
+        }
+
+        // Explicitly recycle manual Bitmap if present
+        if (props.media is PopupProps.Media.Bitmap) {
+            try {
+                Log.v("PopupView", "Recycling manual bitmap")
+                props.media.bitmap.recycle()
+            } catch (_: Exception) {}
+        }
+
+        mPlayer?.let {
+            it.stop()
+            it.release()
+        }
+        mPlayer = null
+
+        mWebView?.let {
+            try {
+                it.stopLoading()
+                it.loadUrl("about:blank")
+                it.onPause()
+                it.removeAllViews()
+                it.destroy()
+                Log.v("PopupView", "WebView destroyed")
+            } catch (e: Exception) {
+                Log.e("PopupView", "Error destroying WebView", e)
+            }
+        }
+        mWebView = null
+
+        // Help GC
+        binding.popupMediaFrame.removeAllViews()
+    }
+
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        mPlayer?.release()
-        mPlayer = null
+        cleanup()
     }
 
     /**
@@ -499,6 +554,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
         val wv = WebView(context).apply {
             alpha = 1.0f
+            mWebView = this
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(v: WebView?, u: String?) {
                     readyListener?.onReady()

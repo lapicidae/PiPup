@@ -1,6 +1,7 @@
 package nl.rogro82.pipup
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.util.TypedValue
 import java.net.Inet4Address
 import java.net.NetworkInterface.getNetworkInterfaces
@@ -70,5 +71,22 @@ object Utils {
         // Use 1920 (Full HD) as the base reference for all scaling
         val scaleFactor = screenWidth.toFloat() / 1920f
         return (pixels * scaleFactor).toInt()
+    }
+
+    /**
+     * Calculates the sample size for bitmap decoding based on target dimensions.
+     */
+    fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+        val (height: Int, width: Int) = options.outHeight to options.outWidth
+        var inSampleSize = 1
+
+        if (height > reqHeight || width > reqWidth) {
+            val halfHeight: Int = height / 2
+            val halfWidth: Int = width / 2
+            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+                inSampleSize *= 2
+            }
+        }
+        return inSampleSize
     }
 }
