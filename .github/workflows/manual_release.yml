@@ -46,7 +46,7 @@ jobs:
 
       # Step 3: Provision Android SDK build tools
       - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
 
       # Step 4: Prepare the wrapper for execution
       - name: Make Gradle executable
