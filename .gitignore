@@ -56,7 +56,6 @@ gradle-app.setting
 !.idea/vcs.xml
 !.idea/runConfigurations/
 !.idea/modules.xml
-!.idea/deploymentTargetSelector.xml
 
 # Blacklist user-specific and temporary IDE files inside .idea
 .idea/workspace.xml
