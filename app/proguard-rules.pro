@@ -38,11 +38,13 @@
 -keep class nl.rogro82.pipup.PopupProps { *; }
 -keep class nl.rogro82.pipup.PopupProps$** { *; }
 -keep class nl.rogro82.pipup.models.** { *; }
+-keep class nl.rogro82.pipup.AppSettings$SettingsData { *; }
 
 # CRITICAL: Keep all members (fields and methods) within these classes.
 # Without this, R8 might rename 'title' to 'a', causing Jackson to fail.
 -keepclassmembers class nl.rogro82.pipup.PopupProps { *; }
 -keepclassmembers class nl.rogro82.pipup.models.** { *; }
+-keepclassmembers class nl.rogro82.pipup.AppSettings$SettingsData { *; }
 
 # Preserve specific Jackson annotations to ensure mapping works at runtime
 -keepclassmembers class * {
