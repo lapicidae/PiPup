@@ -30,6 +30,7 @@
         <include android:id="@+id/nav_item_background" layout="@layout/nav_item" />
         <include android:id="@+id/nav_item_text_style" layout="@layout/nav_item" />
         <include android:id="@+id/nav_item_border" layout="@layout/nav_item" />
+        <include android:id="@+id/nav_item_animation" layout="@layout/nav_item" />
         <include android:id="@+id/nav_item_advanced" layout="@layout/nav_item" />
 
     </LinearLayout>

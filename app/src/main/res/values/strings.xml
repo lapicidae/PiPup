@@ -15,6 +15,7 @@
     <string name="settings_nav_background">Background</string>
     <string name="settings_nav_text">Text Style</string>
     <string name="settings_nav_border">Border</string>
+    <string name="settings_nav_animation">Animation</string>
     <string name="settings_nav_advanced">Advanced</string>
     <string name="settings_app_theme">App Theme</string>
     <string name="settings_theme_dark">Dark</string>
@@ -37,6 +38,8 @@
     <string name="settings_animation_slide_flip">Slide &amp; Flip</string>
     <string name="settings_animation_slide_tada">Slide &amp; Ta-da</string>
     <string name="settings_animation_diagonal_zoom">Diagonal Zoom</string>
+    <string name="settings_exit_animation">Exit Animation</string>
+    <string name="settings_exit_animation_desc">Inverts the entrance animation when the popup is dismissed.</string>
 
     <!-- Background Settings -->
     <string name="settings_bg_color">Background Color</string>

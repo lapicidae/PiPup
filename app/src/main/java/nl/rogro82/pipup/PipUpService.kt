@@ -164,17 +164,34 @@ class PipUpService : Service() {
     /**
      * Removes the current popup from the screen and processes the next one in the queue.
      * If a next popup is already prepared, it is shown immediately.
+     * @param immediate If true, bypasses the exit animation.
      */
-    private fun removePopup() {
-        Log.d(LOG_TAG, "Removing current popup and checking for next...")
+    private fun removePopup(immediate: Boolean = false) {
+        Log.d(LOG_TAG, "Removing current popup and checking for next (immediate=$immediate)...")
         mHandler.removeCallbacksAndMessages(mDurationToken)
 
-        mCurrentPopup?.let {
-            mOverlay?.removeView(it)
-            it.cleanup()
-            mCurrentPopup = null
-        }
+        val popup = mCurrentPopup
+        if (popup != null) {
+            val cleanupAndNext = {
+                mOverlay?.removeView(popup)
+                popup.cleanup()
+                if (mCurrentPopup === popup) {
+                    mCurrentPopup = null
+                }
+                processNextOrMaintenance()
+            }
 
+            if (immediate) {
+                cleanupAndNext()
+            } else {
+                popup.animateOut { cleanupAndNext() }
+            }
+        } else {
+            processNextOrMaintenance()
+        }
+    }
+
+    private fun processNextOrMaintenance() {
         // If we have a next popup already prepared, show it immediately
         if (mNextPopup != null && mNextProps != null) {
             Log.d(LOG_TAG, "Next popup already prepared, showing: ${mNextProps?.title}")
@@ -259,7 +276,7 @@ class PipUpService : Service() {
                         mNextPopup = null
                         mNextProps = null
 
-                        removePopup()
+                        removePopup(immediate = true)
                         performMaintenance()
                     }
                     ok("Notification queue cleared")
@@ -277,7 +294,8 @@ class PipUpService : Service() {
                             messageAlignment = if (popup.messageAlignment == 0) mSettings.messageAlignment else popup.messageAlignment,
                             mediaPosition = popup.mediaPosition ?: mSettings.mediaPosition,
                             animationType = if (popup.animationType == 0) mSettings.animationType else popup.animationType,
-                            animationDuration = if (popup.animationDuration == 500) mSettings.animationDuration else popup.animationDuration
+                            animationDuration = if (popup.animationDuration == 500) mSettings.animationDuration else popup.animationDuration,
+                            animationExit = mSettings.animationExit
                         )
                         Log.i(LOG_TAG, "Enqueuing notification: ${finalProps.title}")
                         Log.d(LOG_TAG, "Message length: ${finalProps.message?.length ?: 0}")
@@ -420,6 +438,7 @@ class PipUpService : Service() {
                 val mediaPosition = getRawPart("mediaPosition")?.toIntOrNull()
                 val animationType = getRawPart("animationType")?.toIntOrNull() ?: 0
                 val animationDuration = getRawPart("animationDuration")?.toIntOrNull() ?: 500
+                val animationExit = getRawPart("animationExit")?.toBoolean() ?: false
 
                 var media: PopupProps.Media? = null
                 val imageBytes = getPartBytes("image")
@@ -468,6 +487,7 @@ class PipUpService : Service() {
                     mediaPosition = mediaPosition,
                     animationType = animationType,
                     animationDuration = animationDuration,
+                    animationExit = animationExit,
                     scale = scale,
                     media = media
                 )

@@ -32,6 +32,7 @@ data class PopupProps(
     val mediaPosition: Int? = null, // 0: Top, 1: Bottom, 2: Left, 3: Right
     val animationType: Int = 0, // 0: None, 1: Fade, 2: Slide
     val animationDuration: Int = 500,
+    val animationExit: Boolean = false,
 
     // Advanced Styling (from Settings)
     val borderRadius: Int = 0,

@@ -74,6 +74,7 @@ class SettingsActivity : AppCompatActivity() {
     private var spinnerAnimationType: Spinner? = null
     private var seekAnimationDuration: SeekBar? = null
     private var textAnimationDurationValue: TextView? = null
+    private var switchAnimationExit: SwitchCompat? = null
     private var spinnerTitleAlignment: Spinner? = null
     private var spinnerMessageAlignment: Spinner? = null
     private var seekPadding: SeekBar? = null
@@ -88,16 +89,16 @@ class SettingsActivity : AppCompatActivity() {
     private var currentAdvancedMode = false
     private var currentLayoutRes: Int = -1
     private var currentNavId: Int = -1
-    
+
     // Tracks which SeekBars are currently in "Adjust Mode"
     private val activeSeekBars = mutableSetOf<Int>()
-    
+
     private val mapper = jacksonObjectMapper()
 
     private val saveHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val saveRunnable = Runnable { appSettings.save() }
 
-    companion object { 
+    companion object {
         private const val TAG = "PiPupSettings"
     }
 
@@ -121,9 +122,9 @@ class SettingsActivity : AppCompatActivity() {
             appSettings = AppSettings(this)
             binding = ActivitySettingsBinding.inflate(layoutInflater)
             setContentView(binding.root)
-            
+
             setupNavRail()
-            
+
             // Default to General
             loadSubmenu(R.layout.submenu_general, R.id.nav_item_general)
             findViewById<View>(R.id.nav_item_general).requestFocus()
@@ -145,15 +146,16 @@ class SettingsActivity : AppCompatActivity() {
         configureNavItem(R.id.nav_item_background, R.string.settings_nav_background, R.drawable.ic_bg, R.layout.submenu_background)
         configureNavItem(R.id.nav_item_text_style, R.string.settings_nav_text, R.drawable.ic_text_style, R.layout.submenu_text)
         configureNavItem(R.id.nav_item_border, R.string.settings_nav_border, R.drawable.ic_border_style, R.layout.submenu_border)
+        configureNavItem(R.id.nav_item_animation, R.string.settings_nav_animation, R.drawable.ic_animation, R.layout.submenu_animation)
         configureNavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, R.layout.submenu_advanced)
 
         // Vertical focus chain in rail
-        val railIds = listOf(R.id.nav_item_back, R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border, R.id.nav_item_advanced)
+        val railIds = listOf(R.id.nav_item_back, R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_advanced)
         for (i in railIds.indices) {
             findViewById<View>(railIds[i])?.apply {
                 nextFocusUpId = if (i > 0) railIds[i - 1] else id
                 nextFocusDownId = if (i < railIds.size - 1) railIds[i + 1] else id
-                nextFocusLeftId = id 
+                nextFocusLeftId = id
                 nextFocusRightId = R.id.settings_scroll
             }
         }
@@ -163,20 +165,20 @@ class SettingsActivity : AppCompatActivity() {
         val root = findViewById<View>(navId) ?: return
         val label = root.findViewById<TextView>(R.id.nav_text)
         val icon = root.findViewById<ImageView>(R.id.nav_icon)
-        
+
         label?.setText(textRes)
         icon?.setImageResource(iconRes)
-        
+
         fun updateItemAppearance() {
             val hasFocus = root.isFocused
             val isSelected = currentLayoutRes == layoutRes && navId != R.id.nav_item_back
-            
+
             val color = when {
                 hasFocus -> ContextCompat.getColor(this, R.color.colorOnPrimary)
                 isSelected -> ContextCompat.getColor(this, R.color.colorOnPrimaryContainer)
                 else -> ContextCompat.getColor(this, R.color.colorOnSurfaceVariant)
             }
-            
+
             label?.setTextColor(color)
             icon?.imageTintList = ColorStateList.valueOf(color)
             root.isSelected = isSelected
@@ -184,7 +186,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // Initialize appearance
         updateItemAppearance()
-        
+
         if (navId == R.id.nav_item_back) {
             root.setOnClickListener { finish() }
             root.setOnFocusChangeListener { _, _ -> updateItemAppearance() }
@@ -207,18 +209,18 @@ class SettingsActivity : AppCompatActivity() {
         activeSeekBars.clear()
         binding.submenuContainer.removeAllViews()
         LayoutInflater.from(this).inflate(layoutRes, binding.submenuContainer, true)
-        
+
         // Refresh all nav items to update isSelected state
-        val railIds = listOf(R.id.nav_item_back, R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border, R.id.nav_item_advanced)
+        val railIds = listOf(R.id.nav_item_back, R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_advanced)
         railIds.forEach { id ->
             val v: View? = findViewById(id)
             v?.onFocusChangeListener?.onFocusChange(v, v.isFocused)
         }
-        
+
         initSubmenuViews()
         setupInputs()
         setupListeners()
-        
+
         // Setup focus constraints for Submenu
         val container = binding.submenuContainer.getChildAt(0) as? ViewGroup
         container?.let {
@@ -227,7 +229,7 @@ class SettingsActivity : AppCompatActivity() {
                 val child = it.getChildAt(i)
                 if (child.isFocusable && child.isVisible) focusableChildren.add(child)
             }
-            
+
             if (focusableChildren.isNotEmpty()) {
                 val navItem: View? = findViewById(navId)
                 navItem?.nextFocusRightId = focusableChildren[0].id
@@ -238,7 +240,7 @@ class SettingsActivity : AppCompatActivity() {
                     // Prevent wrapping to rail on Up/Down
                     child.nextFocusUpId = if (i > 0) focusableChildren[i - 1].id else child.id
                     child.nextFocusDownId = if (i < focusableChildren.size - 1) focusableChildren[i + 1].id else child.id
-                    
+
                     // Special case: if we are at the first element, ensure header is visible on focus
                     if (i == 0) {
                         val oldListener = child.onFocusChangeListener
@@ -253,12 +255,12 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
         }
-        
+
         // Ensure we scroll to the very top to see the header
         findViewById<View>(R.id.settings_scroll)?.post {
             findViewById<View>(R.id.settings_scroll)?.scrollTo(0, 0)
         }
-        
+
         updatePreview()
     }
 
@@ -287,6 +289,7 @@ class SettingsActivity : AppCompatActivity() {
         spinnerAnimationType = findViewById(R.id.spinner_animation_type)
         seekAnimationDuration = findViewById(R.id.seekbar_animation_duration)
         textAnimationDurationValue = findViewById(R.id.text_animation_duration_value)
+        switchAnimationExit = findViewById(R.id.switch_animation_exit)
         spinnerTitleAlignment = findViewById(R.id.spinner_title_alignment)
         spinnerMessageAlignment = findViewById(R.id.spinner_message_alignment)
         seekPadding = findViewById(R.id.seekbar_padding)
@@ -348,7 +351,8 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         seekAnimationDuration?.progress = appSettings.animationDuration
-        
+        switchAnimationExit?.isChecked = appSettings.animationExit
+
         spinnerAppTheme?.let {
             val items = listOf(getString(R.string.settings_theme_dark), getString(R.string.settings_theme_light))
             it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
@@ -384,7 +388,7 @@ class SettingsActivity : AppCompatActivity() {
         btnEditBorderHex?.text = appSettings.borderColor
 
         updateEnergyStatusDisplay()
-        
+
         // Initial values for sliders - MUST be called after all .progress = ...
         updateSliderValues()
     }
@@ -392,11 +396,11 @@ class SettingsActivity : AppCompatActivity() {
     private fun updateEnergyStatusDisplay() {
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val isIgnoring = powerManager.isIgnoringBatteryOptimizations(packageName)
-        
+
         if (BuildConfig.DEBUG) {
             Log.d(TAG, "Energy status check - isIgnoring: $isIgnoring")
         }
-        
+
         textEnergyStatus?.setText(if (isIgnoring) R.string.energy_status_unrestricted else R.string.energy_status_optimized)
         viewEnergyIndicator?.backgroundTintList = ColorStateList.valueOf(
             ContextCompat.getColor(this, if (isIgnoring) R.color.status_green else R.color.status_red)
@@ -410,11 +414,11 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         val seekListener = object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) { 
+            override fun onProgressChanged(s: SeekBar?, p: Int, fromUser: Boolean) {
                 // Allow updates if it's a real user touch OR our custom D-Pad adjust mode
                 val isAdjusting = s?.let { activeSeekBars.contains(it.id) } ?: false
                 if (!fromUser && !isAdjusting) return
-                
+
                 // Update numeric value display in real-time if advanced mode is on
                 if (currentAdvancedMode) {
                     s?.let { updateSliderValueDisplay(it) }
@@ -423,11 +427,11 @@ class SettingsActivity : AppCompatActivity() {
                 val oldDuration = appSettings.animationDuration
 
                 // Sync to memory and update preview instantly
-                saveCurrentToSettings() 
-                
+                saveCurrentToSettings()
+
                 val durationChanged = s?.id == R.id.seekbar_animation_duration && oldDuration != appSettings.animationDuration
-                updatePreview(animate = durationChanged) 
-                
+                updatePreview(animate = durationChanged)
+
                 // Schedule asynchronous disk persistence
                 scheduleSave()
             }
@@ -438,7 +442,7 @@ class SettingsActivity : AppCompatActivity() {
         listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding, seekAnimationDuration).forEach { sb ->
             sb.setOnSeekBarChangeListener(seekListener)
             updateSeekBarAppearance(sb, false)
-            sb.setOnFocusChangeListener { _, hasFocus -> 
+            sb.setOnFocusChangeListener { _, hasFocus ->
                 if (!hasFocus) { activeSeekBars.remove(sb.id); updateSeekBarAppearance(sb, false) }
                 updatePreviewPosition(hasFocus, sb)
             }
@@ -461,11 +465,18 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
+        findViewById<View>(R.id.container_exit_animation)?.setOnClickListener { switchAnimationExit?.toggle() }
+        switchAnimationExit?.setOnCheckedChangeListener { _, isChecked ->
+            appSettings.animationExit = isChecked
+            saveCurrentToSettings()
+            scheduleSave()
+        }
+
         findViewById<View>(R.id.container_advanced)?.setOnClickListener { switchAdvanced?.toggle() }
-        switchAdvanced?.setOnCheckedChangeListener { _, isChecked -> 
+        switchAdvanced?.setOnCheckedChangeListener { _, isChecked ->
             appSettings.advancedMode = isChecked
             currentAdvancedMode = isChecked
-            toggleAdvancedVisibility(isChecked) 
+            toggleAdvancedVisibility(isChecked)
         }
 
         val spinnerListener = object : AdapterView.OnItemSelectedListener {
@@ -477,9 +488,9 @@ class SettingsActivity : AppCompatActivity() {
                     }
                     return
                 }
-                
+
                 val oldType = appSettings.animationType
-                
+
                 when (p?.id) {
                     R.id.spinner_bg_color -> btnEditBgHex?.text = materialColors[pos].hex
                     R.id.spinner_title_color -> btnEditTitleHex?.text = materialColors[pos].hex
@@ -487,7 +498,7 @@ class SettingsActivity : AppCompatActivity() {
                     R.id.spinner_border_color -> btnEditBorderHex?.text = materialColors[pos].hex
                 }
                 saveCurrentToSettings()
-                
+
                 val typeChanged = p?.id == R.id.spinner_animation_type && oldType != appSettings.animationType
                 updatePreview(animate = typeChanged)
                 scheduleSave()
@@ -498,23 +509,23 @@ class SettingsActivity : AppCompatActivity() {
         listOfNotNull(spinnerBgColor, spinnerTitleColor, spinnerMessageColor, spinnerBorderColor, spinnerPosition, spinnerMediaPosition, spinnerAnimationType, spinnerTitleAlignment, spinnerMessageAlignment, spinnerAppTheme).forEach {
             it.onItemSelectedListener = spinnerListener
             val oldListener = it.onFocusChangeListener
-            it.setOnFocusChangeListener { v, hasFocus -> 
+            it.setOnFocusChangeListener { v, hasFocus ->
                 oldListener?.onFocusChange(v, hasFocus)
-                updatePreviewPosition(hasFocus, it) 
+                updatePreviewPosition(hasFocus, it)
             }
         }
-        
+
         val hexClick = View.OnClickListener { showHexInputDialog(it as Button) }
         listOfNotNull(btnEditBgHex, btnEditTitleHex, btnEditMessageHex, btnEditBorderHex).forEach { it.setOnClickListener(hexClick) }
 
         btnImportNetwork?.setOnClickListener { showImportIpDialog() }
         btnImportNetwork?.setOnFocusChangeListener { v, hasFocus -> updatePreviewPosition(hasFocus, v) }
-        
+
         containerEnergyStatus?.setOnClickListener { openEnergySettings() }
         containerEnergyStatus?.setOnFocusChangeListener { v, hasFocus -> updatePreviewPosition(hasFocus, v) }
-        
+
         findViewById<View>(R.id.container_advanced)?.setOnFocusChangeListener { v, hasFocus -> updatePreviewPosition(hasFocus, v) }
-        
+
         btnReset?.setOnClickListener { showResetConfirmation() }
         btnReset?.setOnFocusChangeListener { v, hasFocus -> updatePreviewPosition(hasFocus, v) }
     }
@@ -535,7 +546,7 @@ class SettingsActivity : AppCompatActivity() {
         view.getLocationOnScreen(location)
         val screenHeight = resources.displayMetrics.heightPixels
         val shouldBeAtTop = location[1] > screenHeight * 0.4
-        
+
         val params = binding.previewArea.layoutParams as ConstraintLayout.LayoutParams
         params.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
         params.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
@@ -584,8 +595,8 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateSliderValues() {
-        listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding, seekAnimationDuration).forEach { 
-            updateSliderValueDisplay(it) 
+        listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding, seekAnimationDuration).forEach {
+            updateSliderValueDisplay(it)
         }
     }
 
@@ -610,11 +621,11 @@ class SettingsActivity : AppCompatActivity() {
             .setTitle(R.string.settings_edit_hex_title).setView(input)
             .setPositiveButton(android.R.string.ok) { _, _ ->
                 val h = "#${input.text.toString().uppercase()}"
-                try { 
+                try {
                     h.toColorInt()
                     btn.text = h
                     saveCurrentToSettings()
-                    updatePreview() 
+                    updatePreview()
                     scheduleSave()
                 } catch (_: Exception) {}
             }.setNegativeButton(android.R.string.cancel, null)
@@ -650,6 +661,7 @@ class SettingsActivity : AppCompatActivity() {
         spinnerMediaPosition?.let { appSettings.mediaPosition = it.selectedItemPosition }
         spinnerAnimationType?.let { appSettings.animationType = it.selectedItemPosition }
         seekAnimationDuration?.let { appSettings.animationDuration = it.progress }
+        switchAnimationExit?.let { appSettings.animationExit = it.isChecked }
         spinnerTitleAlignment?.let { appSettings.titleAlignment = it.selectedItemPosition }
         spinnerMessageAlignment?.let { appSettings.messageAlignment = it.selectedItemPosition }
         seekPadding?.let { appSettings.contentPadding = it.progress }
@@ -661,10 +673,10 @@ class SettingsActivity : AppCompatActivity() {
             binding.previewArea.removeAllViews()
             val placeholder = createBitmap(320, 180).applyCanvas {
                 drawColor(ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_bg))
-                val paint = Paint().apply { 
+                val paint = Paint().apply {
                     color = ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_text)
                     textSize = 40f
-                    textAlign = Paint.Align.CENTER 
+                    textAlign = Paint.Align.CENTER
                 }
                 drawText(getString(R.string.settings_preview_media), 160f, 100f, paint)
             }
@@ -677,14 +689,15 @@ class SettingsActivity : AppCompatActivity() {
                 messageAlignment = appSettings.messageAlignment, title = getString(R.string.settings_preview_title),
                 message = getString(R.string.settings_preview_message), position = appSettings.positionIndex,
                 mediaPosition = appSettings.mediaPosition, media = PopupProps.Media.Bitmap(placeholder, 180),
-                animationType = appSettings.animationType, animationDuration = appSettings.animationDuration
+                animationType = appSettings.animationType, animationDuration = appSettings.animationDuration,
+                animationExit = appSettings.animationExit
             )
             val popup = PopupView.build(this, tempProps)
             binding.previewArea.addView(popup, FrameLayout.LayoutParams(-2, -2).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
                 setMargins(0, 0, Utils.dpToPx(this@SettingsActivity, 10), Utils.dpToPx(this@SettingsActivity, 10))
             })
-            
+
             if (animate && tempProps.animationType != 0) {
                 popup.post {
                     popup.animateIn()
@@ -702,7 +715,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun showResetConfirmation() {
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.settings_reset_confirm_title).setMessage(R.string.settings_reset_confirm_msg)
-            .setPositiveButton(R.string.settings_yes) { _, _ -> 
+            .setPositiveButton(R.string.settings_yes) { _, _ ->
                 appSettings.resetToDefaults()
                 val mode = if (appSettings.appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
                 AppCompatDelegate.setDefaultNightMode(mode)
@@ -754,11 +767,11 @@ class SettingsActivity : AppCompatActivity() {
                 if (connection.responseCode == 200) {
                     val json = connection.inputStream.bufferedReader().use { it.readText() }
                     val data = mapper.readValue(json, AppSettings.SettingsData::class.java)
-                    runOnUiThread { 
+                    runOnUiThread {
                         appSettings.apply(data)
-                        
+
                         loadSubmenu(currentLayoutRes, currentNavId)
-                        Toast.makeText(this, R.string.settings_import_success, Toast.LENGTH_SHORT).show() 
+                        Toast.makeText(this, R.string.settings_import_success, Toast.LENGTH_SHORT).show()
                     }
                 } else {
                     runOnUiThread { Toast.makeText(this, getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), Toast.LENGTH_LONG).show() }
@@ -779,10 +792,10 @@ class SettingsActivity : AppCompatActivity() {
             val entry = colors[p]
             val preview = res.findViewById<View>(R.id.color_preview)
             preview.background.setTint(entry.hex.toColorInt())
-            
+
             val label = res.findViewById<TextView>(R.id.color_name)
             val name = context.getString(entry.nameRes)
-            
+
             val isActuallyDefault = entry.hex.equals(defaultHex, true)
 
             label.text = if (isActuallyDefault) "$name${context.getString(R.string.settings_default_suffix)}" else name

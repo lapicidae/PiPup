@@ -538,7 +538,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
-        cleanup()
+        // cleanup() // Removed to allow animateOut to finish before resources are cleared
     }
 
     /**
@@ -692,6 +692,72 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
                     PopupProps.Position.Center -> { this.translationY = metrics.heightPixels.toFloat() }
                 }
                 this.animate().alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(duration).start()
+            }
+        }
+    }
+
+    /**
+     * Executes the configured animation to hide the popup.
+     */
+    fun animateOut(completion: () -> Unit) {
+        val duration = props.animationDuration.toLong()
+        Log.d("PopupView", "animateOut: type=${props.animationType}, duration=$duration, exitEnabled=${props.animationExit}")
+
+        if (props.animationType == 0 || duration <= 0 || !props.animationExit) {
+            Log.d("PopupView", "animateOut: Simple fade out")
+            this.animate().alpha(0f).setDuration(if (duration > 0) duration else 300).withEndAction(completion).start()
+            return
+        }
+
+        val metrics = resources.displayMetrics
+        val baseMargin = Utils.dpToPx(context, 20)
+        val pos = props.getPositionEnum()
+
+        fun getSlideX(): Float {
+            return when (pos) {
+                PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> this.width.toFloat() + baseMargin.toFloat() + 100f
+                PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> -(this.width.toFloat() + baseMargin.toFloat() + 100f)
+                else -> 0f
+            }
+        }
+
+        fun getSlideY(): Float {
+            return if (pos == PopupProps.Position.Center) metrics.heightPixels.toFloat() / 2f else 0f
+        }
+
+        when (props.animationType) {
+            1 -> { // Fade
+                this.animate().alpha(0f).setDuration(duration).withEndAction(completion).start()
+            }
+            2, 3 -> { // Slide (Bounce exit uses normal slide)
+                this.animate().translationX(getSlideX()).translationY(getSlideY()).setDuration(duration).withEndAction(completion).start()
+            }
+            4, 5, 6 -> { // Scale (Bounce and Ta-da exit use normal scale)
+                this.animate().alpha(0f).scaleX(0f).scaleY(0f).setDuration(duration).withEndAction(completion).start()
+            }
+            7 -> { // Slide & Zoom
+                this.animate().translationX(getSlideX()).translationY(getSlideY()).scaleX(0.5f).scaleY(0.5f).setDuration(duration).withEndAction(completion).start()
+            }
+            8 -> { // Slide & Flip
+                this.animate().translationX(getSlideX()).translationY(getSlideY()).rotationY(-90f).setDuration(duration).withEndAction(completion).start()
+            }
+            9 -> { // Slide & Ta-da
+                this.animate().translationX(getSlideX()).translationY(getSlideY()).setDuration(duration).withEndAction(completion).start()
+            }
+            10 -> { // Diagonal Zoom
+                var targetX = 0f
+                var targetY = 0f
+                when (pos) {
+                    PopupProps.Position.TopRight -> { targetX = metrics.widthPixels.toFloat(); targetY = -500f }
+                    PopupProps.Position.TopLeft -> { targetX = -metrics.widthPixels.toFloat(); targetY = -500f }
+                    PopupProps.Position.BottomRight -> { targetX = metrics.widthPixels.toFloat(); targetY = metrics.heightPixels.toFloat() }
+                    PopupProps.Position.BottomLeft -> { targetX = -metrics.widthPixels.toFloat(); targetY = metrics.heightPixels.toFloat() }
+                    PopupProps.Position.Center -> { targetY = metrics.heightPixels.toFloat() }
+                }
+                this.animate().alpha(0f).translationX(targetX).translationY(targetY).scaleX(0f).scaleY(0f).setDuration(duration).withEndAction(completion).start()
+            }
+            else -> {
+                this.animate().alpha(0f).setDuration(duration).withEndAction(completion).start()
             }
         }
     }
