@@ -105,10 +105,6 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         requestBatteryOptimizationExemption()
-
-        // Schedule auto-finish after 60 seconds of inactivity to free graphics memory
-        mHandler.removeCallbacks(mAutoFinishRunnable)
-        mHandler.postDelayed(mAutoFinishRunnable, 60000)
     }
 
     override fun onPause() {

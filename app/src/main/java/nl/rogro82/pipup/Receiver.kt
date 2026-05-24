@@ -10,7 +10,7 @@ import androidx.media3.common.util.UnstableApi
 
 /**
  * BroadcastReceiver responsible for starting the [PipUpService] on system events.
- * 
+ *
  * It listens for boot completion and package updates to ensure the background
  * service is running without manual user intervention.
  */
@@ -19,7 +19,7 @@ class Receiver : BroadcastReceiver() {
 
     /**
      * Called when the BroadcastReceiver is receiving an Intent broadcast.
-     * 
+     *
      * @param context The Context in which the receiver is running.
      * @param intent The Intent being received.
      */
