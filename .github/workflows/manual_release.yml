@@ -52,38 +52,37 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
-      # Step 5: Execute Parallel Compilation
-      # Builds both Debug and Release variants. Passes the 'appStatus'
-      # parameter to Gradle for internal version/filename handling.
-      - name: Build APKs
-        run: ./gradlew clean assembleDebug assembleRelease -PappStatus=${{ github.event.inputs.release_type }}
-
-      # Step 6: Dynamic Tag Generation
-      # Generates a unique version tag based on the current timestamp (e.g., v2026.05.06-1830)
-      # and prepares a human-readable date for the Release title.
-      - name: Generate Tag Name
-        id: tag
+      # Step 5: Extract the exact version string first via your Gradle task
+      - name: Get Version from Gradle Task
+        id: gradle_version
         run: |
-          echo "tag_name=v$(date +'%Y.%m.%d-%H%M')" >> $GITHUB_OUTPUT
-          echo "display_date=$(date +'%Y-%m-%d %H:%M')" >> $GITHUB_OUTPUT
+          VERSION=$(./gradlew -q :app:printAppVersion)
+          printf "version=%s\n" "$VERSION" >> "$GITHUB_OUTPUT"
+          printf "display_date=%s\n" "$(date +'%Y-%m-%d %H:%M')" >> "$GITHUB_OUTPUT"
+
+      # Step 6: Execute Parallel Compilation
+      # Passes the extracted version string back into Gradle to freeze it
+      - name: Build APKs
+        run: |
+          ./gradlew clean assembleDebug assembleRelease \
+            -PappStatus=${{ github.event.inputs.release_type }} \
+            -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
 
       # Step 7: Create GitHub Release and Upload Artifacts
-      # Configures the release visibility and metadata based on user inputs.
+      # Uses the frozen version string for both the tag name and the release title
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: ${{ steps.tag.outputs.tag_name }}
-          # Dynamically sets the title based on the selected release type
-          name: "${{ github.event.inputs.release_type == 'release' && 'Final Release' || 'Pre-Release' }} ${{ steps.tag.outputs.display_date }}"
+          tag_name: "v${{ steps.gradle_version.outputs.version }}"
+          name: "${{ github.event.inputs.release_type == 'release' && 'Final Release' || 'Pre-Release' }} v${{ steps.gradle_version.outputs.version }}"
           body: |
             ### Build Information
+            - **App Version:** `${{ steps.gradle_version.outputs.version }}`
             - **Type:** ${{ github.event.inputs.release_type }}
             - **Note:** ${{ github.event.inputs.version_note }}
-            - **Build Date:** ${{ steps.tag.outputs.display_date }}
+            - **Build Date:** ${{ steps.gradle_version.outputs.display_date }}
           draft: false
-          # Sets the 'Pre-release' flag on GitHub if 'prerelease' was selected
           prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
-          # Uploads both Debug and Release APKs to the asset section
           files: |
             app/build/outputs/apk/debug/*.apk
             app/build/outputs/apk/release/*.apk

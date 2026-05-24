@@ -50,7 +50,13 @@ android {
 
         // Automatic versioning logic
         versionCode getTimestampVersion()
-        versionName "${libs.versions.pipup.get()}-" + getTimestampName()
+
+        // Use custom version name if provided via project property, otherwise fallback to timestamp
+        if (project.hasProperty('projectVersion')) {
+            versionName project.getProperty('projectVersion')
+        } else {
+            versionName "${libs.versions.pipup.get()}-" + getTimestampName()
+        }
     }
 
     buildTypes {
@@ -199,4 +205,14 @@ tasks.register('testSingleNotify', Exec) {
     }
 
     commandLine scriptFile.absolutePath, "-h", "127.0.0.1", "-t", "message"
+}
+
+/**
+ * Utility task to print the final application version name to the console.
+ * Useful for CI/CD pipelines to automate GitHub release tagging.
+ */
+tasks.register("printAppVersion") {
+    doLast {
+        println android.defaultConfig.versionName
+    }
 }

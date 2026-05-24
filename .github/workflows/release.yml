@@ -46,15 +46,21 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      # Step 4: Compile Production Binary
-      # Generates the release-ready APK (typically unsigned in this configuration).
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
+      # Step 4: Extract the exact version string first via your Gradle task
+      - name: Get Version from Gradle Task
+        id: gradle_version
+        run: |
+          VERSION=$(./gradlew -q :app:printAppVersion)
+          printf "version=%s\n" "$VERSION" >> "$GITHUB_OUTPUT"
 
-      # Step 5: Publish Asset to GitHub Release
-      # Attaches the build artifact to the current tag/release.
-      # Path assumes a standard Android project structure.
+      # Step 5: Compile Production Binary
+      # Passes the extracted version string back into Gradle to freeze it
+      - name: Build Release APK
+        run: ./gradlew assembleRelease -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
+
+      # Step 6: Publish Asset to GitHub Release
+      # Uses a wildcard (*) to capture the dynamically named APK file
       - name: Attach APK to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          files: ${{ github.workspace }}/app/build/outputs/apk/release/app-release-unsigned.apk
+          files: app/build/outputs/apk/release/*.apk

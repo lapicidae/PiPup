@@ -44,12 +44,22 @@ jobs:
       - name: Make Gradle executable
         run: chmod +x ./gradlew
 
-      # Step 5: Execute a clean build and assemble the Debug APK
-      # Includes '--warning-mode all' to identify deprecated API usage or configuration issues.
-      - name: Build Debug APK
-        run: ./gradlew clean assembleDebug --warning-mode all
+      # Step 5: Extract the exact version string first via your Gradle task
+      - name: Get Version from Gradle Task
+        id: gradle_version
+        run: |
+          VERSION=$(./gradlew -q :app:printAppVersion)
+          printf "version=%s\n" "$VERSION" >> "$GITHUB_OUTPUT"
 
-      # Step 6: Persist the generated APK as a workflow artifact
+      # Step 6: Execute a clean build and assemble the Debug APK
+      # Passes the extracted version string into Gradle to freeze it
+      - name: Build Debug APK
+        run: |
+          ./gradlew clean assembleDebug \
+            --warning-mode all \
+            -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
+
+      # Step 7: Persist the generated APK as a workflow artifact
       # Artifacts are stored for 7 days to conserve storage while allowing review.
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
@@ -58,7 +68,7 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
-      # Step 7: Export Gradle Problem Reports
+      # Step 8: Export Gradle Problem Reports
       # This step runs even if the build fails ('always()') to aid in debugging.
       - name: Upload Problems Report
         if: always()
