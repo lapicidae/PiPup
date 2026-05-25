@@ -35,6 +35,9 @@ jobs:
       # Step 1: Initialize environment and fetch source
       - name: Checkout code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # Fetch all history for accurate tag comparison
+          fetch-tags: true
 
       # Step 2: Configure Java environment with integrated caching
       - name: Setup Java
@@ -60,7 +63,32 @@ jobs:
           printf "version=%s\n" "$VERSION" >> "$GITHUB_OUTPUT"
           printf "display_date=%s\n" "$(date +'%Y-%m-%d %H:%M')" >> "$GITHUB_OUTPUT"
 
-      # Step 6: Execute Parallel Compilation
+      # Step 6: Get the latest existing tag from git history depending on release type
+      - name: Get Last Git Tag
+        id: get_last_tag
+        run: |
+          if [ "${{ github.event.inputs.release_type }}" = "prerelease" ]; then
+            # For a prerelease, look back to ANY last tag (including previous prereleases)
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          else
+            # For a final release, match all 'v*' tags but explicitly EXCLUDE those with a hyphen (your prereleases)
+            # This cleanly skips 'v0.3.0-2026...' and stops exactly at the last stable 'v0.2.5'
+            LAST_TAG=$(git describe --tags --abbrev=0 --match="v*" --exclude="*-*" HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          fi
+          echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
+
+      # Step 7: Automatically build the changelog from commits since the last tag
+      - name: Build Changelog
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v6
+        with:
+          mode: "COMMIT"
+          fromTag: ${{ steps.get_last_tag.outputs.last_tag }}
+          toTag: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 8: Execute Parallel Compilation
       # Passes the extracted version string back into Gradle to freeze it
       - name: Build APKs
         run: |
@@ -68,8 +96,7 @@ jobs:
             -PappStatus=${{ github.event.inputs.release_type }} \
             -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
 
-      # Step 7: Create GitHub Release and Upload Artifacts
-      # Uses the frozen version string for both the tag name and the release title
+      # Step 9: Create GitHub Release and Upload Artifacts
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
@@ -81,6 +108,9 @@ jobs:
             - **Type:** ${{ github.event.inputs.release_type }}
             - **Note:** ${{ github.event.inputs.version_note }}
             - **Build Date:** ${{ steps.gradle_version.outputs.display_date }}
+
+            ### Changelog
+            ${{ steps.build_changelog.outputs.changelog }}
           draft: false
           prerelease: ${{ github.event.inputs.release_type == 'prerelease' }}
           files: |

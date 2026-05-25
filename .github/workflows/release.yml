@@ -28,6 +28,9 @@ jobs:
       # Step 1: Clone the repository onto the virtual runner
       - name: Checkout Source Code
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # Fetch all history for accurate tag comparison
+          fetch-tags: true
 
       # Step 2: Configure Java Environment
       # Sets up JDK 21 with Temurin and configures server-id for
@@ -53,14 +56,41 @@ jobs:
           VERSION=$(./gradlew -q :app:printAppVersion)
           printf "version=%s\n" "$VERSION" >> "$GITHUB_OUTPUT"
 
-      # Step 5: Compile Production Binary
+      # Step 5: Get the latest existing tag from git history depending on release type
+      - name: Get Last Git Tag
+        id: get_last_tag
+        run: |
+          if [ "${{ github.event.inputs.release_type }}" = "prerelease" ]; then
+            # For a prerelease, look back to ANY last tag (including previous prereleases)
+            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          else
+            # For a final release, match all 'v*' tags but explicitly EXCLUDE those with a hyphen (your prereleases)
+            # This cleanly skips 'v0.3.0-2026...' and stops exactly at the last stable 'v0.2.5'
+            LAST_TAG=$(git describe --tags --abbrev=0 --match="v*" --exclude="*-*" HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          fi
+          echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
+
+      # Step 6: Automatically build the changelog from commits since the last tag
+      - name: Build Changelog
+        id: build_changelog
+        uses: mikepenz/release-changelog-builder-action@v6
+        with:
+          mode: "COMMIT"
+          fromTag: ${{ steps.get_last_tag.outputs.last_tag }}
+          toTag: ${{ github.sha }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 7: Compile Production Binary
       # Passes the extracted version string back into Gradle to freeze it
       - name: Build Release APK
         run: ./gradlew assembleRelease -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
 
-      # Step 6: Publish Asset to GitHub Release
-      # Uses a wildcard (*) to capture the dynamically named APK file
+      # Step 8: Publish Asset to GitHub Release
       - name: Attach APK to GitHub Release
         uses: softprops/action-gh-release@v3
         with:
+          body: |
+            ### Changelog
+            ${{ steps.build_changelog.outputs.changelog }}
           files: app/build/outputs/apk/release/*.apk

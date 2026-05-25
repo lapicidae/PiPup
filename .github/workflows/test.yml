@@ -10,9 +10,19 @@ on:
   # Trigger on pushes to production and development branches
   push:
     branches: [ master, main ]
+    paths-ignore:
+      - '.github/**' # Ignore all changes inside the .github folder (workflows, templates)
+      - '*.md'       # Ignore root-level markdown documentation
+      - '.*'         # Ignore ALL top-level hidden configuration files (.gitignore, .editorconfig, etc.)
+
   # Trigger on pull requests targeting production and development branches
   pull_request:
     branches: [ master, main ]
+    paths-ignore:
+      - '.github/**' # Ignore all changes inside the .github folder (workflows, templates)
+      - '*.md'       # Ignore root-level markdown documentation
+      - '.*'         # Ignore ALL top-level hidden configuration files (.gitignore, .editorconfig, etc.)
+
   # Allow manual execution via the GitHub Actions UI
   workflow_dispatch:
 

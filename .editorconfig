@@ -25,3 +25,10 @@ max_line_length = 80
 [*.md]
 # Markdown rules
 trim_trailing_whitespace = false
+
+[*.{yml,yaml}]
+# YAML configuration rules
+indent_style = space
+indent_size = 2
+insert_final_newline = true
+trim_trailing_whitespace = true
