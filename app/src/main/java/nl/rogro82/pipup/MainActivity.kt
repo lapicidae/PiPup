@@ -9,6 +9,7 @@ import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
+import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
@@ -55,20 +56,6 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
-        // Versioning info
-        val versionText = findViewById<TextView>(R.id.textViewVersion)
-        try {
-            val pInfo = packageManager.getPackageInfo(packageName, 0)
-            val version = pInfo.versionName
-            versionText.text = if (BuildConfig.DEBUG) {
-                getString(R.string.version_number_debug, version)
-            } else {
-                getString(R.string.version_number, version)
-            }
-        } catch (_: Exception) {
-            versionText.text = "v?.?.?"
-        }
-
         // Server Status
         val statusLabel = findViewById<TextView>(R.id.textViewConnection)
         val addressLabel = findViewById<TextView>(R.id.textViewServerAddress)
@@ -104,7 +91,79 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        refreshVersionAndUpdates()
         requestBatteryOptimizationExemption()
+    }
+
+    private fun refreshVersionAndUpdates() {
+        val versionText = findViewById<TextView>(R.id.textViewVersion)
+        val updateIndicator = findViewById<TextView>(R.id.textViewUpdateAvailable)
+        val appSettings = AppSettings(this)
+        val updateManager = UpdateManager(this)
+
+        try {
+            val pInfo = packageManager.getPackageInfo(packageName, 0)
+            val version = pInfo.versionName
+            versionText.text = if (BuildConfig.DEBUG) {
+                getString(R.string.version_number_debug, version)
+            } else {
+                getString(R.string.version_number, version)
+            }
+
+            // Show update indicator if a newer version was found by background worker
+            val updateAvailable = appSettings.updateAvailableTag.isNotEmpty() && updateManager.isNewer(appSettings.updateAvailableTag)
+            Log.d("MainActivity", "Update check: tag=${appSettings.updateAvailableTag}, available=$updateAvailable")
+
+            if (updateAvailable) {
+                updateIndicator.visibility = View.VISIBLE
+                updateIndicator.text = getString(R.string.settings_update_found_indicator)
+            } else {
+                updateIndicator.visibility = View.GONE
+            }
+
+            // If interval is set to "On App Open" (1), trigger a check now with cooldown
+            if (appSettings.updateInterval == 1) {
+                val cooldownMs = 300000L // 5 minutes cooldown for app open check
+                val timeSinceLastCheck = System.currentTimeMillis() - appSettings.lastUpdateCheck
+
+                if (timeSinceLastCheck > cooldownMs || appSettings.updateRepeat) {
+                    updateManager.checkForUpdates(appSettings.updateChannel == 1, object : UpdateManager.UpdateCallback {
+                        override fun onUpdateAvailable(release: GitHubRelease) {
+                            appSettings.updateAvailableTag = release.tagName
+                            appSettings.lastUpdateCheck = System.currentTimeMillis()
+                            appSettings.save(sync = true)
+
+                            if (appSettings.updateRepeat || appSettings.lastNotifiedTag != release.tagName) {
+                                updateManager.showUpdateNotification(release)
+                                appSettings.lastNotifiedTag = release.tagName
+                                appSettings.save(sync = true)
+                            }
+
+                            runOnUiThread {
+                                updateIndicator.visibility = View.VISIBLE
+                            }
+                        }
+                        override fun onNoUpdate() {
+                            runOnUiThread {
+                                appSettings.updateAvailableTag = ""
+                                appSettings.lastUpdateCheck = System.currentTimeMillis()
+                                appSettings.save(sync = false)
+                                updateIndicator.visibility = View.GONE
+                            }
+                        }
+                        override fun onError(message: String) {
+                            Log.e("MainActivity", "Auto update check failed: $message")
+                        }
+                    })
+                } else {
+                    Log.d("MainActivity", "Skipping auto update check (cooldown active). Last check: ${timeSinceLastCheck / 1000 / 60} min ago")
+                }
+            }
+
+        } catch (_: Exception) {
+            versionText.text = "v?.?.?"
+            updateIndicator.visibility = View.GONE
+        }
     }
 
     override fun onPause() {

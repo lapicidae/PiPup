@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_nav_updates"
+        android:textColor="@color/colorOnSurface"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <!-- Update Channel -->
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_channel" android:textColor="@color/colorOnSurfaceVariant"/>
+    <Spinner android:id="@+id/spinner_update_channel" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+
+    <!-- Update Interval -->
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_interval" android:textColor="@color/colorOnSurfaceVariant"/>
+    <Spinner android:id="@+id/spinner_update_interval" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+
+    <!-- Notification Style -->
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_notification_style" android:textColor="@color/colorOnSurfaceVariant"/>
+    <Spinner android:id="@+id/spinner_update_notification_style" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+
+    <!-- Repeat Notification -->
+    <LinearLayout
+        android:id="@+id/container_update_repeat"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:focusable="true"
+        android:clickable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="24dp">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_update_repeat"
+                android:textColor="@color/colorOnSurface"
+                android:textSize="18sp"/>
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_update_repeat_desc"
+                android:textColor="@color/colorOnSurfaceVariant"
+                android:textSize="14sp"/>
+        </LinearLayout>
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_update_repeat"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:focusable="false"
+            android:clickable="false"/>
+    </LinearLayout>
+
+    <!-- Action -->
+    <Button
+        android:id="@+id/btn_check_update"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/settings_check_update"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:gravity="start|center_vertical"
+        android:textAllCaps="false"
+        android:textColor="@color/colorOnSurface"/>
+
+</LinearLayout>

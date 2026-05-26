@@ -10,13 +10,14 @@
     <string name="more_information">For more information please read the documentation @ https://github.com/lapicidae/PiPup</string>
 
     <!-- Navigation & Sections -->
-    <string name="settings_back">Back</string>
+
     <string name="settings_nav_general">General</string>
     <string name="settings_nav_background">Background</string>
     <string name="settings_nav_text">Text Style</string>
     <string name="settings_nav_border">Border</string>
     <string name="settings_nav_animation">Animation</string>
     <string name="settings_nav_advanced">Advanced</string>
+    <string name="settings_nav_updates">Updates</string>
     <string name="settings_app_theme">App Theme</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_light">Light</string>
@@ -68,11 +69,43 @@
     <string name="settings_import_network">Import from another PiPup</string>
     <string name="settings_reset_settings">Reset Settings</string>
 
+    <!-- Update Settings -->
+    <string name="settings_update_channel">Update Channel</string>
+    <string name="settings_update_stable">Stable</string>
+    <string name="settings_update_beta">Beta</string>
+    <string name="settings_check_update">Check for Updates</string>
+    <string name="settings_checking_update">Checking for updates…</string>
+    <string name="settings_update_available">Update Available</string>
+    <string name="settings_update_none">You are using the latest version.</string>
+    <string name="settings_update_error">Update check failed: %1$s</string>
+    <string name="settings_update_dialog_msg">A new version (%1$s) is available. Would you like to download and install it now?</string>
+    <string name="settings_update_downloading">Downloading update…</string>
+    <string name="settings_update_install">Install</string>
+    <string name="settings_update_later">Later</string>
+
+    <string name="settings_update_interval">Automatic Check</string>
+    <string name="settings_update_off">Off</string>
+    <string name="settings_update_on_open">On App Open</string>
+    <string name="settings_update_daily">Daily</string>
+    <string name="settings_update_weekly">Weekly</string>
+    <string name="settings_update_monthly">Monthly</string>
+    <string name="settings_update_notification_style">Notification Style</string>
+    <string name="settings_update_style_silent">Silent (Main Menu only)</string>
+    <string name="settings_update_style_pipup">PiPup Overlay</string>
+    <string name="settings_update_style_toast">Toast (Mini-Popup)</string>
+    <string name="settings_update_found_indicator">Update Available!</string>
+    <string name="settings_update_repeat">Repeat notification</string>
+    <string name="settings_update_repeat_desc">Reminds you on every check until the update is installed.</string>
+    <string name="notification_update_title">PiPup Update Available</string>
+    <string name="notification_update_msg">Version %1$s is ready to download.</string>
+
+
+
     <!-- Dialogs & UI -->
     <string name="settings_yes">Yes</string>
     <string name="settings_no">No</string>
     <string name="settings_reset_confirm_title">Reset Settings?</string>
-    <string name="settings_reset_confirm_msg">Do you really want to restore all styling defaults?</string>
+    <string name="settings_reset_confirm_msg">Do you really want to reset all settings to their factory defaults?</string>
     <string name="settings_edit_hex_title">Enter HEX Color</string>
     <string name="settings_import_action">Import</string>
     <string name="settings_import_ip_title">Enter Source IP</string>
@@ -117,4 +150,5 @@
     <string name="energy_optimization_later">Later</string>
     <string name="energy_status_optimized">Optimized (problematic)</string>
     <string name="energy_status_unrestricted">Unrestricted (recommended)</string>
+    <string name="settings_app_version_label">PiPup %1$s</string>
 </resources>

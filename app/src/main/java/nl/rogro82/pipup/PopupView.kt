@@ -436,10 +436,12 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         player.setMediaItem(MediaItem.fromUri(uri))
         player.prepare()
 
-        val signaledReady = false
         player.addListener(object : Player.Listener {
+            private var signaledReady = false
+
             override fun onPlaybackStateChanged(state: Int) {
                 if (!signaledReady && state == Player.STATE_READY) {
+                    signaledReady = true
                     Log.d("PopupView", "Video ready: $uri")
 
                     // Adjust height to actual aspect ratio if it differs from 16:9
@@ -495,7 +497,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             val mediaFrame = binding.popupMediaFrame
             for (i in 0 until mediaFrame.childCount) {
                 val child = mediaFrame.getChildAt(i)
-                if (child is android.widget.ImageView) {
+                if (child is ImageView) {
                     Glide.with(context.applicationContext).clear(child)
                     child.setImageDrawable(null)
                 }
@@ -536,10 +538,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         binding.popupMediaFrame.removeAllViews()
     }
 
-    override fun onDetachedFromWindow() {
-        super.onDetachedFromWindow()
-        // cleanup() // Removed to allow animateOut to finish before resources are cleared
-    }
+
 
     /**
      * Renders a web page using WebView.
@@ -745,14 +744,12 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
                 this.animate().translationX(getSlideX()).translationY(getSlideY()).setDuration(duration).withEndAction(completion).start()
             }
             10 -> { // Diagonal Zoom
-                var targetX = 0f
-                var targetY = 0f
-                when (pos) {
-                    PopupProps.Position.TopRight -> { targetX = metrics.widthPixels.toFloat(); targetY = -500f }
-                    PopupProps.Position.TopLeft -> { targetX = -metrics.widthPixels.toFloat(); targetY = -500f }
-                    PopupProps.Position.BottomRight -> { targetX = metrics.widthPixels.toFloat(); targetY = metrics.heightPixels.toFloat() }
-                    PopupProps.Position.BottomLeft -> { targetX = -metrics.widthPixels.toFloat(); targetY = metrics.heightPixels.toFloat() }
-                    PopupProps.Position.Center -> { targetY = metrics.heightPixels.toFloat() }
+                val (targetX, targetY) = when (pos) {
+                    PopupProps.Position.TopRight -> metrics.widthPixels.toFloat() to -500f
+                    PopupProps.Position.TopLeft -> -metrics.widthPixels.toFloat() to -500f
+                    PopupProps.Position.BottomRight -> metrics.widthPixels.toFloat() to metrics.heightPixels.toFloat()
+                    PopupProps.Position.BottomLeft -> -metrics.widthPixels.toFloat() to metrics.heightPixels.toFloat()
+                    PopupProps.Position.Center -> 0f to metrics.heightPixels.toFloat()
                 }
                 this.animate().alpha(0f).translationX(targetX).translationY(targetY).scaleX(0f).scaleY(0f).setDuration(duration).withEndAction(completion).start()
             }
