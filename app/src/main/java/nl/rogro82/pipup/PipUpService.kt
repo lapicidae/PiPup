@@ -154,7 +154,20 @@ class PipUpService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action == "DISPLAY_NOTIFICATION") {
+            val json = intent.getStringExtra("props")
+            if (json != null) {
+                try {
+                    val props = mObjectMapper.readValue(json, PopupProps::class.java)
+                    mHandler.post { enqueueNotification(props) }
+                } catch (e: Exception) {
+                    Log.e(LOG_TAG, "Failed to parse internal notification props", e)
+                }
+            }
+        }
+        return START_STICKY
+    }
 
     private fun initNotificationChannel() {
         val channel = NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_LOW)

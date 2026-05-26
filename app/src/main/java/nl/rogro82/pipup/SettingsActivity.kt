@@ -86,7 +86,15 @@ class SettingsActivity : AppCompatActivity() {
     private var viewEnergyIndicator: View? = null
     private var btnReset: Button? = null
 
-    private var currentAdvancedMode = false
+    // Update View References
+    private var spinnerUpdateChannel: Spinner? = null
+    private var spinnerUpdateInterval: Spinner? = null
+    private var spinnerUpdateNotificationStyle: Spinner? = null
+    private var switchUpdateRepeat: SwitchCompat? = null
+    private var btnCheckUpdate: Button? = null
+    private var textAppVersion: TextView? = null
+
+    private var currentAdvancedMode: Boolean = false
     private var currentLayoutRes: Int = -1
     private var currentNavId: Int = -1
 
@@ -97,6 +105,8 @@ class SettingsActivity : AppCompatActivity() {
 
     private val saveHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val saveRunnable = Runnable { appSettings.save() }
+
+
 
     companion object {
         private const val TAG = "PiPupSettings"
@@ -141,16 +151,16 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupNavRail() {
-        configureNavItem(R.id.nav_item_back, R.string.settings_back, R.drawable.ic_back, -1)
         configureNavItem(R.id.nav_item_general, R.string.settings_nav_general, R.drawable.ic_general_style, R.layout.submenu_general)
         configureNavItem(R.id.nav_item_background, R.string.settings_nav_background, R.drawable.ic_bg, R.layout.submenu_background)
         configureNavItem(R.id.nav_item_text_style, R.string.settings_nav_text, R.drawable.ic_text_style, R.layout.submenu_text)
         configureNavItem(R.id.nav_item_border, R.string.settings_nav_border, R.drawable.ic_border_style, R.layout.submenu_border)
         configureNavItem(R.id.nav_item_animation, R.string.settings_nav_animation, R.drawable.ic_animation, R.layout.submenu_animation)
+        configureNavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, R.layout.submenu_updates)
         configureNavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, R.layout.submenu_advanced)
 
         // Vertical focus chain in rail
-        val railIds = listOf(R.id.nav_item_back, R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_advanced)
+        val railIds = listOf(R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_updates, R.id.nav_item_advanced)
         for (i in railIds.indices) {
             findViewById<View>(railIds[i])?.apply {
                 nextFocusUpId = if (i > 0) railIds[i - 1] else id
@@ -171,7 +181,7 @@ class SettingsActivity : AppCompatActivity() {
 
         fun updateItemAppearance() {
             val hasFocus = root.isFocused
-            val isSelected = currentLayoutRes == layoutRes && navId != R.id.nav_item_back
+            val isSelected = currentLayoutRes == layoutRes
 
             val color = when {
                 hasFocus -> ContextCompat.getColor(this, R.color.colorOnPrimary)
@@ -184,14 +194,7 @@ class SettingsActivity : AppCompatActivity() {
             root.isSelected = isSelected
         }
 
-        // Initialize appearance
         updateItemAppearance()
-
-        if (navId == R.id.nav_item_back) {
-            root.setOnClickListener { finish() }
-            root.setOnFocusChangeListener { _, _ -> updateItemAppearance() }
-            return
-        }
 
         root.setOnClickListener { focusFirstInSubmenu() }
 
@@ -211,7 +214,7 @@ class SettingsActivity : AppCompatActivity() {
         LayoutInflater.from(this).inflate(layoutRes, binding.submenuContainer, true)
 
         // Refresh all nav items to update isSelected state
-        val railIds = listOf(R.id.nav_item_back, R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_advanced)
+        val railIds = listOf(R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style, R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_updates, R.id.nav_item_advanced)
         railIds.forEach { id ->
             val v: View? = findViewById(id)
             v?.onFocusChangeListener?.onFocusChange(v, v.isFocused)
@@ -300,11 +303,19 @@ class SettingsActivity : AppCompatActivity() {
         textEnergyStatus = findViewById(R.id.text_energy_status)
         viewEnergyIndicator = findViewById(R.id.view_energy_indicator)
         btnReset = findViewById(R.id.btn_reset)
+
+        spinnerUpdateChannel = findViewById(R.id.spinner_update_channel)
+        spinnerUpdateInterval = findViewById(R.id.spinner_update_interval)
+        spinnerUpdateNotificationStyle = findViewById(R.id.spinner_update_notification_style)
+        switchUpdateRepeat = findViewById(R.id.switch_update_repeat)
+        btnCheckUpdate = findViewById(R.id.btn_check_update)
+        textAppVersion = findViewById(R.id.text_app_version)
     }
 
     private fun setupInputs() {
+        val suffix = getString(R.string.settings_default_suffix)
+
         spinnerPosition?.let {
-            val suffix = getString(R.string.settings_default_suffix)
             val items = PopupProps.Position.entries.map { p ->
                 val name = when (p) {
                     PopupProps.Position.TopRight -> getString(R.string.settings_pos_top_right)
@@ -320,7 +331,6 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         spinnerMediaPosition?.let {
-            val suffix = getString(R.string.settings_default_suffix)
             val items = listOf(
                 "${getString(R.string.settings_media_pos_top)}$suffix",
                 getString(R.string.settings_media_pos_bottom),
@@ -332,7 +342,6 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         spinnerAnimationType?.let {
-            val suffix = getString(R.string.settings_default_suffix)
             val items = listOf(
                 "${getString(R.string.settings_animation_none)}$suffix",
                 getString(R.string.settings_animation_fade),
@@ -359,7 +368,6 @@ class SettingsActivity : AppCompatActivity() {
             it.setSelection(appSettings.appTheme)
         }
 
-        val suffix = getString(R.string.settings_default_suffix)
         val alignmentItems = listOf("${getString(R.string.settings_alignment_left)}$suffix", getString(R.string.settings_alignment_center), getString(R.string.settings_alignment_right))
         val alignmentAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
 
@@ -386,6 +394,41 @@ class SettingsActivity : AppCompatActivity() {
         seekBorderWidth?.progress = appSettings.borderWidth
         spinnerBorderColor?.let { it.adapter = ColorSpinnerAdapter(this, materialColors, AppSettings.DEFAULT_BORDER_COLOR); setSelectedColorInSpinner(it, appSettings.borderColor) }
         btnEditBorderHex?.text = appSettings.borderColor
+
+        spinnerUpdateChannel?.let {
+            val items = listOf(getString(R.string.settings_update_stable), getString(R.string.settings_update_beta))
+            it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            it.setSelection(appSettings.updateChannel)
+        }
+
+        spinnerUpdateInterval?.let {
+            val items = listOf(
+                getString(R.string.settings_update_off),
+                getString(R.string.settings_update_on_open),
+                getString(R.string.settings_update_daily),
+                getString(R.string.settings_update_weekly),
+                getString(R.string.settings_update_monthly)
+            )
+            it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            it.setSelection(appSettings.updateInterval)
+        }
+
+        spinnerUpdateNotificationStyle?.let {
+            val items = listOf(
+                getString(R.string.settings_update_style_silent),
+                getString(R.string.settings_update_style_pipup),
+                getString(R.string.settings_update_style_toast)
+            )
+            it.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, items).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }
+            it.setSelection(appSettings.updateNotificationStyle)
+        }
+
+        switchUpdateRepeat?.isChecked = appSettings.updateRepeat
+
+        textAppVersion?.let {
+            val versionName = try { packageManager.getPackageInfo(packageName, 0).versionName } catch (_: Exception) { "v?.?.?" }
+            it.text = getString(R.string.settings_app_version_label, versionName)
+        }
 
         updateEnergyStatusDisplay()
 
@@ -496,6 +539,14 @@ class SettingsActivity : AppCompatActivity() {
                     R.id.spinner_title_color -> btnEditTitleHex?.text = materialColors[pos].hex
                     R.id.spinner_message_color -> btnEditMessageHex?.text = materialColors[pos].hex
                     R.id.spinner_border_color -> btnEditBorderHex?.text = materialColors[pos].hex
+                    R.id.spinner_update_channel -> appSettings.updateChannel = pos
+                    R.id.spinner_update_interval -> {
+                        appSettings.updateInterval = pos
+                        UpdateWorker.schedule(this@SettingsActivity, pos)
+                    }
+                    R.id.spinner_update_notification_style -> {
+                        appSettings.updateNotificationStyle = pos
+                    }
                 }
                 saveCurrentToSettings()
 
@@ -506,7 +557,7 @@ class SettingsActivity : AppCompatActivity() {
             override fun onNothingSelected(p: AdapterView<*>?) {}
         }
 
-        listOfNotNull(spinnerBgColor, spinnerTitleColor, spinnerMessageColor, spinnerBorderColor, spinnerPosition, spinnerMediaPosition, spinnerAnimationType, spinnerTitleAlignment, spinnerMessageAlignment, spinnerAppTheme).forEach {
+        listOfNotNull(spinnerBgColor, spinnerTitleColor, spinnerMessageColor, spinnerBorderColor, spinnerPosition, spinnerMediaPosition, spinnerAnimationType, spinnerTitleAlignment, spinnerMessageAlignment, spinnerAppTheme, spinnerUpdateChannel, spinnerUpdateInterval, spinnerUpdateNotificationStyle).forEach {
             it.onItemSelectedListener = spinnerListener
             val oldListener = it.onFocusChangeListener
             it.setOnFocusChangeListener { v, hasFocus ->
@@ -526,8 +577,18 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<View>(R.id.container_advanced)?.setOnFocusChangeListener { v, hasFocus -> updatePreviewPosition(hasFocus, v) }
 
+        findViewById<View>(R.id.container_update_repeat)?.setOnClickListener { switchUpdateRepeat?.toggle() }
+        switchUpdateRepeat?.setOnCheckedChangeListener { _, isChecked ->
+            appSettings.updateRepeat = isChecked
+            saveCurrentToSettings()
+            scheduleSave()
+        }
+
         btnReset?.setOnClickListener { showResetConfirmation() }
         btnReset?.setOnFocusChangeListener { v, hasFocus -> updatePreviewPosition(hasFocus, v) }
+
+        btnCheckUpdate?.setOnClickListener { performUpdateCheck() }
+        btnCheckUpdate?.setOnFocusChangeListener { v, hasFocus -> updatePreviewPosition(hasFocus, v) }
     }
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
@@ -665,6 +726,7 @@ class SettingsActivity : AppCompatActivity() {
         spinnerTitleAlignment?.let { appSettings.titleAlignment = it.selectedItemPosition }
         spinnerMessageAlignment?.let { appSettings.messageAlignment = it.selectedItemPosition }
         seekPadding?.let { appSettings.contentPadding = it.progress }
+        switchUpdateRepeat?.let { appSettings.updateRepeat = it.isChecked }
     }
 
     @OptIn(UnstableApi::class)
@@ -781,6 +843,56 @@ class SettingsActivity : AppCompatActivity() {
                 runOnUiThread { Toast.makeText(this, getString(R.string.settings_import_error, e.message), Toast.LENGTH_LONG).show() }
             }
         }.start()
+    }
+
+    private fun performUpdateCheck() {
+        val progress = AlertDialog.Builder(this)
+            .setMessage(R.string.settings_checking_update)
+            .setCancelable(true)
+            .show()
+
+        UpdateManager(this).checkForUpdates(appSettings.updateChannel == 1, object : UpdateManager.UpdateCallback {
+            override fun onUpdateAvailable(release: GitHubRelease) {
+                runOnUiThread {
+                    appSettings.updateAvailableTag = release.tagName
+                    appSettings.lastUpdateCheck = System.currentTimeMillis()
+                    appSettings.save(sync = false)
+
+                    progress.dismiss()
+                    showUpdateDialog(release)
+                }
+            }
+
+            override fun onNoUpdate() {
+                runOnUiThread {
+                    appSettings.updateAvailableTag = ""
+                    appSettings.lastUpdateCheck = System.currentTimeMillis()
+                    appSettings.save(sync = false)
+
+                    progress.dismiss()
+                    Toast.makeText(this@SettingsActivity, R.string.settings_update_none, Toast.LENGTH_SHORT).show()
+                }
+            }
+
+            override fun onError(message: String) {
+                runOnUiThread {
+                    progress.dismiss()
+                    Toast.makeText(this@SettingsActivity, getString(R.string.settings_update_error, message), Toast.LENGTH_LONG).show()
+                }
+            }
+        })
+    }
+
+    private fun showUpdateDialog(release: GitHubRelease) {
+        AlertDialog.Builder(this)
+            .setTitle(R.string.settings_update_available)
+            .setMessage(getString(R.string.settings_update_dialog_msg, release.tagName) + "\n\n" + (release.body ?: ""))
+            .setPositiveButton(R.string.settings_update_install) { _, _ ->
+                UpdateManager(this).downloadAndInstall(release)
+                Toast.makeText(this, R.string.settings_update_downloading, Toast.LENGTH_LONG).show()
+            }
+            .setNegativeButton(R.string.settings_update_later, null)
+            .show()
     }
 
     data class ColorEntry(val nameRes: Int, val hex: String)

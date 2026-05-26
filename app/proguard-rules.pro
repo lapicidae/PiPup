@@ -27,14 +27,25 @@
 
 # Ensure Jackson can access annotations and handle reflection for JSON mapping
 -keepattributes *Annotation*,EnclosingMethod,Signature
+-keep class * extends com.fasterxml.jackson.core.type.TypeReference { *; }
 -keepnames class com.fasterxml.jackson.** { *; }
 -dontwarn com.fasterxml.jackson.databind.**
 -keep @com.fasterxml.jackson.annotation.JsonIgnoreProperties class * { *; }
+
+# --- Jackson Kotlin Module ---
+-keep class com.fasterxml.jackson.module.kotlin.** { *; }
+-keepnames class com.fasterxml.jackson.module.kotlin.** { *; }
+-keep @com.fasterxml.jackson.annotation.JsonProperty class * { *; }
+-keepclassmembers class * {
+    @com.fasterxml.jackson.annotation.JsonProperty *;
+}
 
 
 # --- Application Models ---
 
 # Prevent R8 from stripping or renaming data classes used for JSON reflection
+-keep class nl.rogro82.pipup.GitHubRelease { *; }
+-keep class nl.rogro82.pipup.GitHubAsset { *; }
 -keep class nl.rogro82.pipup.PopupProps { *; }
 -keep class nl.rogro82.pipup.PopupProps$** { *; }
 -keep class nl.rogro82.pipup.models.** { *; }

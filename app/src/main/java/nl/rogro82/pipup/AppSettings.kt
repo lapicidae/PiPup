@@ -8,7 +8,7 @@ import androidx.core.content.edit
  * Manages application-wide settings using [SharedPreferences].
  * Provides a memory-cached access layer for high-performance UI updates.
  */
-class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChangeListener {
+class AppSettings(private val context: Context) : SharedPreferences.OnSharedPreferenceChangeListener {
 
     private val prefs = context.getSharedPreferences("pipup_settings", Context.MODE_PRIVATE)
 
@@ -35,6 +35,13 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
     private var _dismissBatteryOptimization = false
     private var _advancedMode = false
     private var _appTheme = 0 // 0 = Dark, 1 = Light
+    private var _updateChannel = -1 // -1 = Unset, 0 = Stable, 1 = Beta
+    private var _updateInterval = 4 // 0=Off, 1=On Open, 2=Daily, 3=Weekly, 4=Monthly
+    private var _updateNotificationStyle = 1 // 0=Silent, 1=PiPup, 2=Toast
+    private var _lastUpdateCheck = 0L
+    private var _updateAvailableTag = ""
+    private var _updateRepeat = false
+    private var _lastNotifiedTag = ""
 
     init {
         reload()
@@ -69,7 +76,14 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
         val animationDuration: Int,
         val animationExit: Boolean,
         val appTheme: Int,
-        val advancedMode: Boolean
+        val advancedMode: Boolean,
+        val updateChannel: Int,
+        val updateInterval: Int,
+        val updateNotificationStyle: Int,
+        val lastUpdateCheck: Long,
+        val updateAvailableTag: String,
+        val updateRepeat: Boolean,
+        val lastNotifiedTag: String
     )
 
     fun getAll(): SettingsData {
@@ -77,7 +91,9 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
             _positionIndex, _backgroundColor, _backgroundAlpha, _titleColor, _titleSize,
             _messageColor, _messageSize, _borderRadius, _borderWidth, _borderColor,
             _contentPadding, _titleAlignment, _messageAlignment, _mediaPosition,
-            _animationType, _animationDuration, _animationExit, _appTheme, _advancedMode
+            _animationType, _animationDuration, _animationExit, _appTheme, _advancedMode,
+            _updateChannel, _updateInterval, _updateNotificationStyle, _lastUpdateCheck, _updateAvailableTag,
+            _updateRepeat, _lastNotifiedTag
         )
     }
 
@@ -108,6 +124,13 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
             _animationExit = data.animationExit
             _appTheme = data.appTheme
             _advancedMode = data.advancedMode
+            _updateChannel = data.updateChannel
+            _updateInterval = data.updateInterval
+            _updateNotificationStyle = data.updateNotificationStyle
+            _lastUpdateCheck = data.lastUpdateCheck
+            _updateAvailableTag = data.updateAvailableTag
+            _updateRepeat = data.updateRepeat
+            _lastNotifiedTag = data.lastNotifiedTag
 
             // Note: _dismissBatteryOptimization is preserved as it is not part of SettingsData
             save(sync = true)
@@ -146,6 +169,13 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
                 putBoolean("animation_exit", _animationExit)
                 putInt("app_theme", _appTheme)
                 putBoolean("advanced_mode", _advancedMode)
+                putInt("update_channel", _updateChannel)
+                putInt("update_interval", _updateInterval)
+                putInt("update_notification_style", _updateNotificationStyle)
+                putLong("last_update_check", _lastUpdateCheck)
+                putString("update_available_tag", _updateAvailableTag)
+                putBoolean("update_repeat", _updateRepeat)
+                putString("last_notified_tag", _lastNotifiedTag)
                 putBoolean("dismiss_battery_optimization", _dismissBatteryOptimization)
             }
         } finally {
@@ -177,6 +207,24 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
         _dismissBatteryOptimization = prefs.getBoolean("dismiss_battery_optimization", false)
         _appTheme = prefs.getInt("app_theme", 0)
         _advancedMode = prefs.getBoolean("advanced_mode", false)
+        _updateChannel = prefs.getInt("update_channel", -1)
+        _updateInterval = prefs.getInt("update_interval", 4)
+        _updateNotificationStyle = prefs.getInt("update_notification_style", 1).coerceIn(0, 2)
+        _lastUpdateCheck = prefs.getLong("last_update_check", 0L)
+        _updateAvailableTag = prefs.getString("update_available_tag", "") ?: ""
+        _updateRepeat = prefs.getBoolean("update_repeat", false)
+        _lastNotifiedTag = prefs.getString("last_notified_tag", "") ?: ""
+
+        if (_updateChannel == -1) {
+            // Default logic: if version name contains prerelease or beta, default to Beta (1)
+            val versionName = try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            } catch (_: Exception) {
+                null
+            }
+            _updateChannel = if (versionName?.contains("prerelease", true) == true || versionName?.contains("beta", true) == true) 1 else 0
+            save()
+        }
     }
 
     companion object {
@@ -277,6 +325,34 @@ class AppSettings(context: Context) : SharedPreferences.OnSharedPreferenceChange
     var appTheme: Int
         get() = _appTheme
         set(value) { _appTheme = value }
+
+    var updateChannel: Int
+        get() = _updateChannel
+        set(value) { _updateChannel = value }
+
+    var updateInterval: Int
+        get() = _updateInterval
+        set(value) { _updateInterval = value }
+
+    var updateNotificationStyle: Int
+        get() = _updateNotificationStyle
+        set(value) { _updateNotificationStyle = value }
+
+    var lastUpdateCheck: Long
+        get() = _lastUpdateCheck
+        set(value) { _lastUpdateCheck = value }
+
+    var updateAvailableTag: String
+        get() = _updateAvailableTag
+        set(value) { _updateAvailableTag = value }
+
+    var updateRepeat: Boolean
+        get() = _updateRepeat
+        set(value) { _updateRepeat = value }
+
+    var lastNotifiedTag: String
+        get() = _lastNotifiedTag
+        set(value) { _lastNotifiedTag = value }
 
     fun getFullBackgroundColor(): String {
         val clean = backgroundColor.replace("#", "").let { if (it.length == 8) it.substring(2) else it }

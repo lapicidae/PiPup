@@ -142,10 +142,15 @@ dependencies {
     // Web server functionality
     implementation libs.nanohttpd
 
+    // WorkManager for background updates
+    implementation libs.work.runtime.ktx
+
     // Media3 (ExoPlayer) for faster video streaming
     implementation libs.media3.exoplayer
     implementation libs.media3.ui
     implementation libs.media3.rtsp
+
+    testImplementation libs.junit
 }
 /**
  * File reference to the shell script responsible for sending PiPup test notifications.
