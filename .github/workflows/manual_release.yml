@@ -67,15 +67,28 @@ jobs:
       - name: Get Last Git Tag
         id: get_last_tag
         run: |
+          ALL_TAGS=$(git tag --sort=-creatordate)
+          CURRENT_HEAD_TAG=$(git tag --points-at HEAD)
+
           if [ "${{ github.event.inputs.release_type }}" = "prerelease" ]; then
-            # For a prerelease, look back to ANY last tag (including previous prereleases)
-            LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+            if [ -n "$CURRENT_HEAD_TAG" ]; then
+              LAST_TAG=$(printf "%s\n" "$ALL_TAGS" | grep -v -x "$CURRENT_HEAD_TAG" | head -n 1)
+            else
+              LAST_TAG=$(printf "%s\n" "$ALL_TAGS" | head -n 1)
+            fi
           else
-            # For a final release, match all 'v*' tags but explicitly EXCLUDE those with a hyphen (your prereleases)
-            # This cleanly skips 'v0.3.0-2026...' and stops exactly at the last stable 'v0.2.5'
-            LAST_TAG=$(git describe --tags --abbrev=0 --match="v*" --exclude="*-*" HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+            if [ -n "$CURRENT_HEAD_TAG" ]; then
+              LAST_TAG=$(printf "%s\n" "$ALL_TAGS" | grep -v "-" | grep -v -x "$CURRENT_HEAD_TAG" | head -n 1)
+            else
+              LAST_TAG=$(printf "%s\n" "$ALL_TAGS" | grep -v "-" | head -n 1)
+            fi
           fi
-          echo "last_tag=$LAST_TAG" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$LAST_TAG" ]; then
+            LAST_TAG=$(git rev-list --max-parents=0 HEAD)
+          fi
+
+          printf "last_tag=%s\n" "$LAST_TAG" >> "$GITHUB_OUTPUT"
 
       # Step 7: Automatically build the changelog from commits since the last tag
       - name: Build Changelog
@@ -88,19 +101,30 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # Step 8: Execute Parallel Compilation
-      # Passes the extracted version string back into Gradle to freeze it
+     # Step 8: Decode Android Keystore from GitHub Secrets
+      - name: Decode Keystore
+        run: |
+          mkdir -p app/keystore
+          printf '%s' "${{ secrets.SIGNING_KEY }}" | base64 --decode > app/keystore/release.jks
+
+      # Step 9: Execute Parallel Compilation
       - name: Build APKs
         run: |
           ./gradlew clean assembleDebug assembleRelease \
             -PappStatus=${{ github.event.inputs.release_type }} \
             -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
+        env:
+          ANDROID_KEYSTORE_PATH: "app/keystore/release.jks"
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
-      # Step 9: Create GitHub Release and Upload Artifacts
+      # Step 10: Create GitHub Release and Upload Artifacts
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: "v${{ steps.gradle_version.outputs.version }}"
+          target_commitish: ${{ github.sha }}
           name: "${{ github.event.inputs.release_type == 'release' && 'Final Release' || 'Pre-Release' }} v${{ steps.gradle_version.outputs.version }}"
           body: |
             ### Build Information

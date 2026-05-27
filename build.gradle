@@ -4,6 +4,32 @@ plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.google.devtools.ksp) apply false
     alias(libs.plugins.detekt) apply false
+    alias(libs.plugins.versions)
+    alias(libs.plugins.catalog.update)
+}
+
+def isNonStable = { String version ->
+    def stableKeyword = ["RELEASE", "FINAL", "GA"].any { it -> version.toUpperCase().contains(it) }
+    def regex = /^[0-9,.v-]+(-r)?$/
+    return !stableKeyword && !(version ==~ regex)
+}
+
+// Configuration for dependencyUpdates task (ben-manes)
+tasks.named("dependencyUpdates").configure {
+    rejectVersionIf {
+        isNonStable(it.candidate.version) && !isNonStable(it.currentVersion)
+    }
+}
+
+// Configuration for versionCatalogUpdate task (little-robots)
+versionCatalogUpdate {
+    // Use the same filter logic for the catalog update
+    versionSelector {
+        !isNonStable(it.candidate.version) || isNonStable(it.currentVersion)
+    }
+
+    // Optional: keep unused items or pin versions if needed
+    // Using annotations in libs.versions.toml instead of the keep {} block for compatibility
 }
 
 tasks.register("clean", Delete) {

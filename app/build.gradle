@@ -13,6 +13,35 @@ plugins {
 
 apply from: "../gradle/versioning.gradle"
 
+/**
+ * Helper function to securely fetch passwords from the system keyring (KDE Wallet / GNOME Keyring)
+ * via the 'secret-tool' utility.
+ */
+static def fetchSecretFromKeyring(String credentialName) {
+    try {
+        def process = ["secret-tool", "lookup", "project", "pipup", "credential", credentialName].execute()
+        process.waitFor()
+        if (process.exitValue() == 0) {
+            return process.text.trim()
+        }
+    } catch (Exception ignored) {
+        // secret-tool is likely not installed or fails (e.g. on Windows or CI server)
+    }
+    return null
+}
+
+/**
+ * Manually load local.properties to access keystore path and alias without exposing
+ * passwords in the properties file.
+ */
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
 detekt {
     toolVersion = libs.versions.detekt.get()
     config.setFrom(rootProject.layout.projectDirectory.file("config/detekt/detekt.yml"))
@@ -59,15 +88,34 @@ android {
         }
     }
 
+    signingConfigs {
+        release {
+            // Priority: Keyring -> Environment Variables -> local.properties (if defined there)
+            def storePasswordValue = fetchSecretFromKeyring('keystore_password') ?: System.getenv('ANDROID_KEYSTORE_PASSWORD')
+            def keyPasswordValue = fetchSecretFromKeyring('key_password') ?: System.getenv('ANDROID_KEY_PASSWORD')
+
+            def localPath = localProperties.getProperty('keystore.path') ?: System.getenv('ANDROID_KEYSTORE_PATH')
+            def localAlias = localProperties.getProperty('keystore.alias') ?: localProperties.getProperty('key.alias') ?: System.getenv('ANDROID_KEY_ALIAS')
+
+            storeFile file(localPath ?: "dummy.jks")
+            storePassword storePasswordValue
+            keyAlias localAlias
+            keyPassword keyPasswordValue
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled = true
             shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 
-            // This allows the release build to be signed with the debug key
-            // for testing purposes without needing a production certificate.
-            signingConfig = signingConfigs.debug
+            // Use production key if the file exists, otherwise fallback to debug key
+            if (signingConfigs.release.storeFile.exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
         }
         debug {
             // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
