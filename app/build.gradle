@@ -86,6 +86,8 @@ android {
         } else {
             versionName "${libs.versions.pipup.get()}-" + getTimestampName()
         }
+
+        buildConfigField "String", "APP_STATUS", "\"${project.findProperty('appStatus') ?: "stable"}\""
     }
 
     signingConfigs {

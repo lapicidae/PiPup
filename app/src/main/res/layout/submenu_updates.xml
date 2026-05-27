@@ -13,6 +13,20 @@
         android:textStyle="bold"
         android:layout_marginBottom="32dp"/>
 
+    <!-- Action -->
+    <Button
+        android:id="@+id/btn_check_update"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="32dp"
+        android:text="@string/settings_check_update"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:gravity="start|center_vertical"
+        android:textAllCaps="false"
+        android:textColor="@color/colorOnSurface"/>
+
     <!-- Update Channel -->
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_channel" android:textColor="@color/colorOnSurfaceVariant"/>
     <Spinner android:id="@+id/spinner_update_channel" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
@@ -62,19 +76,5 @@
             android:focusable="false"
             android:clickable="false"/>
     </LinearLayout>
-
-    <!-- Action -->
-    <Button
-        android:id="@+id/btn_check_update"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/settings_check_update"
-        android:focusable="true"
-        android:background="@drawable/focus_background"
-        android:padding="12dp"
-        android:gravity="start|center_vertical"
-        android:textAllCaps="false"
-        android:textColor="@color/colorOnSurface"/>
 
 </LinearLayout>

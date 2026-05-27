@@ -37,6 +37,11 @@ import nl.rogro82.pipup.databinding.PopupBinding
 @UnstableApi
 class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) {
 
+    init {
+        clipChildren = false
+        clipToPadding = false
+    }
+
     private val binding: PopupBinding = PopupBinding.inflate(LayoutInflater.from(context), this)
     var readyListener: ReadyListener? = null
     private var mPlayer: ExoPlayer? = null
@@ -67,9 +72,12 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             LayoutParams.WRAP_CONTENT
         )
 
-        // Reset root background and alpha to ensure only container draws the background
+        // Reset root alpha
         this.alpha = 1.0f
         this.background = null
+        this.setPadding(0, 0, 0, 0)
+        this.clipChildren = false
+        this.clipToPadding = false
 
         val settings = AppSettings(context)
 
@@ -92,6 +100,8 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         }
         binding.popupContainer.background = bgDrawable
         binding.popupContainer.alpha = 1.0f
+        binding.popupContainer.clipChildren = false
+        binding.popupContainer.clipToPadding = false
 
         // 3. Dynamic Constraints & Auto-Scroll
         val maxTextWidth = if (props.scale) Utils.getScaledPixels(context, 500) else Utils.dpToPx(context, 500)
@@ -627,9 +637,10 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
         val pos = props.getPositionEnum()
 
         fun applySlide() {
+            val offset = (if (this.width > 0) this.width.toFloat() else Utils.dpToPx(context, 400).toFloat()) + baseMargin.toFloat() + 100f
             when (pos) {
-                PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> this.translationX = this.width.toFloat() + baseMargin.toFloat() + 100f
-                PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> this.translationX = -(this.width.toFloat() + baseMargin.toFloat() + 100f)
+                PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> this.translationX = offset
+                PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> this.translationX = -offset
                 PopupProps.Position.Center -> this.translationY = metrics.heightPixels.toFloat() / 2f
             }
         }
@@ -647,7 +658,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
                 this.alpha = 1f
                 applySlide()
                 this.animate().translationX(0f).translationY(0f)
-                    .setInterpolator(OvershootInterpolator(1.2f))
+                    .setInterpolator(OvershootInterpolator(1.5f))
                     .setDuration(duration).start()
             }
             4 -> { // Scale In
@@ -657,7 +668,7 @@ class PopupView(context: Context, val props: PopupProps) : FrameLayout(context) 
             5 -> { // Scale & Bounce
                 this.scaleX = 0f; this.scaleY = 0f
                 this.animate().alpha(1f).scaleX(1f).scaleY(1f)
-                    .setInterpolator(OvershootInterpolator(1.4f))
+                    .setInterpolator(OvershootInterpolator(1.5f))
                     .setDuration(duration).start()
             }
             6 -> { // Scale Ta-da

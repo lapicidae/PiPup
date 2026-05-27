@@ -136,7 +136,7 @@ class PipUpService : Service() {
                 val dummyJson = "{}"
                 mObjectMapper.readValue(dummyJson, PopupProps::class.java)
                 Log.d(LOG_TAG, "Jackson parser warmed up and ready.")
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 if (BuildConfig.DEBUG) {
                     Log.v(LOG_TAG, "Warm-up parsing finished (expected exceptions ignored)")
                 }
@@ -239,7 +239,10 @@ class PipUpService : Service() {
      */
     private fun ensureOverlay(): FrameLayout {
         mOverlay?.let { return it }
-        val overlay = FrameLayout(this)
+        val overlay = FrameLayout(this).apply {
+            clipChildren = false
+            clipToPadding = false
+        }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,

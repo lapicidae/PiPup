@@ -224,6 +224,9 @@ class AppSettings(private val context: Context) : SharedPreferences.OnSharedPref
             }
             val isBetaBuild = versionName?.contains("prerelease", true) == true ||
                              versionName?.contains("beta", true) == true ||
+                             versionName?.contains("rc", true) == true ||
+                             BuildConfig.APP_STATUS.contains("beta", true) ||
+                             BuildConfig.APP_STATUS.contains("prerelease", true) ||
                              BuildConfig.DEBUG
 
             _updateChannel = if (isBetaBuild) 1 else 0

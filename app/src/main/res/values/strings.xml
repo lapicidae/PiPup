@@ -81,6 +81,7 @@
     <string name="settings_update_dialog_msg">A new version (%1$s) is available. Would you like to download and install it now?</string>
     <string name="settings_update_downloading">Downloading update…</string>
     <string name="settings_update_install">Install</string>
+    <string name="settings_update_to">Update to %1$s</string>
     <string name="settings_update_later">Later</string>
 
     <string name="settings_update_interval">Automatic Check</string>

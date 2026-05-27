@@ -21,6 +21,8 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
@@ -105,6 +107,12 @@ class SettingsActivity : AppCompatActivity() {
 
     private val saveHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val saveRunnable = Runnable { appSettings.save() }
+
+    private var availableRelease: GitHubRelease? = null
+
+    private val previewRunnable = Runnable {
+        updatePreview(animate = true)
+    }
 
 
 
@@ -249,7 +257,7 @@ class SettingsActivity : AppCompatActivity() {
                         val oldListener = child.onFocusChangeListener
                         child.setOnFocusChangeListener { v, hasFocus ->
                             if (hasFocus) {
-                                (findViewById<View>(R.id.settings_scroll) as? android.widget.ScrollView)?.smoothScrollTo(0, 0)
+                                (findViewById<View>(R.id.settings_scroll) as? ScrollView)?.smoothScrollTo(0, 0)
                             }
                             oldListener?.onFocusChange(v, hasFocus)
                             updatePreviewPosition(hasFocus, v)
@@ -263,6 +271,9 @@ class SettingsActivity : AppCompatActivity() {
         findViewById<View>(R.id.settings_scroll)?.post {
             findViewById<View>(R.id.settings_scroll)?.scrollTo(0, 0)
         }
+
+        binding.previewArea.clipChildren = false
+        binding.previewArea.clipToPadding = false
 
         updatePreview()
     }
@@ -431,9 +442,20 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         updateEnergyStatusDisplay()
+        updateUpdateButtonState()
 
         // Initial values for sliders - MUST be called after all .progress = ...
         updateSliderValues()
+    }
+
+    private fun updateUpdateButtonState() {
+        btnCheckUpdate?.let { btn ->
+            if (appSettings.updateAvailableTag.isNotEmpty()) {
+                btn.text = getString(R.string.settings_update_to, appSettings.updateAvailableTag)
+            } else {
+                btn.text = getString(R.string.settings_check_update)
+            }
+        }
     }
 
     private fun updateEnergyStatusDisplay() {
@@ -467,19 +489,34 @@ class SettingsActivity : AppCompatActivity() {
                     s?.let { updateSliderValueDisplay(it) }
                 }
 
-                val oldDuration = appSettings.animationDuration
-
                 // Sync to memory and update preview instantly
                 saveCurrentToSettings()
 
-                val durationChanged = s?.id == R.id.seekbar_animation_duration && oldDuration != appSettings.animationDuration
-                updatePreview(animate = durationChanged)
+                if (s?.id == R.id.seekbar_animation_duration) {
+                    // Update size/look but defer entrance animation to avoid jarring jumps during drag
+                    updatePreview(animate = false)
+                    saveHandler.removeCallbacks(previewRunnable)
+                    saveHandler.postDelayed(previewRunnable, 800) // 800ms debounce for D-Pad
+                } else {
+                    updatePreview(animate = false)
+                }
 
                 // Schedule asynchronous disk persistence
                 scheduleSave()
             }
-            override fun onStartTrackingTouch(s: SeekBar?) {}
-            override fun onStopTrackingTouch(s: SeekBar?) {}
+
+            override fun onStartTrackingTouch(s: SeekBar?) {
+                if (s?.id == R.id.seekbar_animation_duration) {
+                    saveHandler.removeCallbacks(previewRunnable)
+                }
+            }
+
+            override fun onStopTrackingTouch(s: SeekBar?) {
+                if (s?.id == R.id.seekbar_animation_duration) {
+                    saveHandler.removeCallbacks(previewRunnable)
+                    updatePreview(animate = true)
+                }
+            }
         }
 
         listOfNotNull(seekBgAlpha, seekTitleSize, seekMessageSize, seekRadius, seekBorderWidth, seekPadding, seekAnimationDuration).forEach { sb ->
@@ -603,16 +640,29 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun updatePreviewPosition(hasFocus: Boolean, view: View) {
         if (!hasFocus) return
+
+        // Ignore focus changes in the navigation rail for positioning
+        if (view.id == R.id.nav_item_general || view.id == R.id.nav_item_background ||
+            view.id == R.id.nav_item_text_style || view.id == R.id.nav_item_border ||
+            view.id == R.id.nav_item_animation || view.id == R.id.nav_item_updates ||
+            view.id == R.id.nav_item_advanced) return
+
         val location = IntArray(2)
         view.getLocationOnScreen(location)
         val screenHeight = resources.displayMetrics.heightPixels
         val shouldBeAtTop = location[1] > screenHeight * 0.4
 
-        val params = binding.previewArea.layoutParams as ConstraintLayout.LayoutParams
-        params.topToTop = ConstraintLayout.LayoutParams.PARENT_ID
-        params.bottomToBottom = ConstraintLayout.LayoutParams.PARENT_ID
-        params.verticalBias = if (shouldBeAtTop) 0.02f else 0.98f
-        binding.previewArea.layoutParams = params
+        val popup = binding.previewArea.getChildAt(0) ?: return
+        val params = popup.layoutParams as FrameLayout.LayoutParams
+        val newGravity = (if (shouldBeAtTop) Gravity.TOP else Gravity.BOTTOM) or Gravity.END
+
+        if (params.gravity != newGravity) {
+            params.gravity = newGravity
+            // Maintain margins
+            val margin = Utils.dpToPx(this, 10)
+            params.setMargins(0, margin, margin, margin)
+            popup.layoutParams = params
+        }
     }
 
     private fun openEnergySettings() {
@@ -686,7 +736,10 @@ class SettingsActivity : AppCompatActivity() {
                     h.toColorInt()
                     btn.text = h
                     saveCurrentToSettings()
-                    updatePreview()
+                    binding.previewArea.clipChildren = false
+        binding.previewArea.clipToPadding = false
+
+        updatePreview()
                     scheduleSave()
                 } catch (_: Exception) {}
             }.setNegativeButton(android.R.string.cancel, null)
@@ -755,15 +808,38 @@ class SettingsActivity : AppCompatActivity() {
                 animationExit = appSettings.animationExit
             )
             val popup = PopupView.build(this, tempProps)
+
+            // Default to bottom when loading a submenu (focus is usually on the rail)
+            var initialGravity = Gravity.BOTTOM or Gravity.END
+
+            // Only adjust if current focus is NOT in the rail
+            currentFocus?.let { v ->
+                val isRailItem = v.id == R.id.nav_item_general || v.id == R.id.nav_item_background ||
+                                v.id == R.id.nav_item_text_style || v.id == R.id.nav_item_border ||
+                                v.id == R.id.nav_item_animation || v.id == R.id.nav_item_updates ||
+                                v.id == R.id.nav_item_advanced
+
+                if (!isRailItem) {
+                    val location = IntArray(2)
+                    v.getLocationOnScreen(location)
+                    if (location[1] > resources.displayMetrics.heightPixels * 0.4) {
+                        initialGravity = Gravity.TOP or Gravity.END
+                    }
+                }
+            }
+
             binding.previewArea.addView(popup, FrameLayout.LayoutParams(-2, -2).apply {
-                gravity = Gravity.BOTTOM or Gravity.END
-                setMargins(0, 0, Utils.dpToPx(this@SettingsActivity, 10), Utils.dpToPx(this@SettingsActivity, 10))
+                gravity = initialGravity
+                val m = Utils.dpToPx(this@SettingsActivity, 10)
+                setMargins(0, m, m, m)
             })
 
             if (animate && tempProps.animationType != 0) {
-                popup.post {
-                    popup.animateIn()
-                }
+                popup.postDelayed({
+                    if (popup.parent != null) {
+                        popup.animateIn()
+                    }
+                }, 500)
             }
         } catch (_: Exception) {}
     }
@@ -846,6 +922,11 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun performUpdateCheck() {
+        availableRelease?.let {
+            showUpdateDialog(it)
+            return
+        }
+
         val progress = AlertDialog.Builder(this)
             .setMessage(R.string.settings_checking_update)
             .setCancelable(true)
@@ -854,10 +935,12 @@ class SettingsActivity : AppCompatActivity() {
         UpdateManager(this).checkForUpdates(appSettings.updateChannel == 1, object : UpdateManager.UpdateCallback {
             override fun onUpdateAvailable(release: GitHubRelease) {
                 runOnUiThread {
+                    availableRelease = release
                     appSettings.updateAvailableTag = release.tagName
                     appSettings.lastUpdateCheck = System.currentTimeMillis()
                     appSettings.save(sync = false)
 
+                    updateUpdateButtonState()
                     progress.dismiss()
                     showUpdateDialog(release)
                 }
@@ -865,10 +948,12 @@ class SettingsActivity : AppCompatActivity() {
 
             override fun onNoUpdate() {
                 runOnUiThread {
+                    availableRelease = null
                     appSettings.updateAvailableTag = ""
                     appSettings.lastUpdateCheck = System.currentTimeMillis()
                     appSettings.save(sync = false)
 
+                    updateUpdateButtonState()
                     progress.dismiss()
                     Toast.makeText(this@SettingsActivity, R.string.settings_update_none, Toast.LENGTH_SHORT).show()
                 }
@@ -884,15 +969,63 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun showUpdateDialog(release: GitHubRelease) {
-        AlertDialog.Builder(this)
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            val p = Utils.dpToPx(this@SettingsActivity, 20)
+            setPadding(p, p, p, 0)
+        }
+
+        val introView = TextView(this).apply {
+            text = getString(R.string.settings_update_dialog_msg, release.tagName)
+            textSize = 16f
+            setTextColor(ContextCompat.getColor(this@SettingsActivity, R.color.colorOnSurface))
+        }
+        container.addView(introView)
+
+        val body = release.body ?: ""
+        if (body.isNotEmpty()) {
+            val scrollView = ScrollView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    Utils.dpToPx(this@SettingsActivity, 250)
+                ).apply {
+                    topMargin = Utils.dpToPx(this@SettingsActivity, 16)
+                }
+                isFocusable = true
+                isFocusableInTouchMode = true
+                setBackgroundColor(ContextCompat.getColor(this@SettingsActivity, R.color.colorSurfaceVariant))
+                setPadding(
+                    Utils.dpToPx(this@SettingsActivity, 12),
+                    Utils.dpToPx(this@SettingsActivity, 12),
+                    Utils.dpToPx(this@SettingsActivity, 12),
+                    Utils.dpToPx(this@SettingsActivity, 12)
+                )
+            }
+            val bodyView = TextView(this).apply {
+                text = body
+                textSize = 14f
+                setTextColor(ContextCompat.getColor(this@SettingsActivity, R.color.colorOnSurfaceVariant))
+            }
+            scrollView.addView(bodyView)
+            container.addView(scrollView)
+        }
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.settings_update_available)
-            .setMessage(getString(R.string.settings_update_dialog_msg, release.tagName) + "\n\n" + (release.body ?: ""))
+            .setView(container)
             .setPositiveButton(R.string.settings_update_install) { _, _ ->
                 UpdateManager(this).downloadAndInstall(release)
                 Toast.makeText(this, R.string.settings_update_downloading, Toast.LENGTH_LONG).show()
             }
             .setNegativeButton(R.string.settings_update_later, null)
-            .show()
+            .create()
+
+        dialog.show()
+
+        // Pre-select "Later" button for safer navigation
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).post {
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus()
+        }
     }
 
     data class ColorEntry(val nameRes: Int, val hex: String)
