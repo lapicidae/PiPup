@@ -30,6 +30,9 @@ import androidx.media3.common.util.UnstableApi
 @OptIn(UnstableApi::class)
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var appSettings: AppSettings
+    private var isEnergyDialogOpen = false
+
     private val mHandler = Handler(Looper.getMainLooper())
     private val mAutoFinishRunnable = Runnable {
         if (!isFinishing && !isDestroyed) {
@@ -49,6 +52,8 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
+
+        appSettings = AppSettings(this)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.mainLayout)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -92,13 +97,16 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshVersionAndUpdates()
-        requestBatteryOptimizationExemption()
+        // Only request battery exemption if overlay permission is granted
+        // to avoid double dialogs during the onboarding flow.
+        if (Settings.canDrawOverlays(this)) {
+            requestBatteryOptimizationExemption()
+        }
     }
 
     private fun refreshVersionAndUpdates() {
         val versionText = findViewById<TextView>(R.id.textViewVersion)
         val updateIndicator = findViewById<TextView>(R.id.textViewUpdateAvailable)
-        val appSettings = AppSettings(this)
         val updateManager = UpdateManager(this)
 
         try {
@@ -173,7 +181,8 @@ class MainActivity : AppCompatActivity() {
 
     @SuppressLint("BatteryLife")
     private fun requestBatteryOptimizationExemption() {
-        val appSettings = AppSettings(this)
+        if (isEnergyDialogOpen) return
+
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val isIgnoring = powerManager.isIgnoringBatteryOptimizations(packageName)
 
@@ -183,7 +192,8 @@ class MainActivity : AppCompatActivity() {
 
         if (isIgnoring || appSettings.dismissBatteryOptimization) return
 
-        AlertDialog.Builder(this)
+        isEnergyDialogOpen = true
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.energy_optimization_title)
             .setMessage(getString(R.string.energy_optimization_message) + "\n\n" + getString(R.string.energy_optimization_instructions))
             .setPositiveButton(R.string.settings_yes) { _, _ ->
@@ -208,7 +218,12 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(R.string.energy_optimization_later) { _, _ ->
                 appSettings.dismissBatteryOptimization = true
             }
-            .show()
+            .setOnDismissListener { isEnergyDialogOpen = false }
+            .create()
+
+        dialog.show()
+        // Pre-select "Later" for better TV navigation
+        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
     }
 
     private fun showEnergyInstructionsDialog() {

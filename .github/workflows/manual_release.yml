@@ -101,11 +101,25 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-     # Step 8: Decode Android Keystore from GitHub Secrets
-      - name: Decode Keystore
+      # Step 8: Verify and Extract Keystore
+      - name: Extract secrets into required files
+        shell: bash
+        env:
+          SIGNING_KEY_BASE64: ${{ secrets.SIGNING_KEY }}
         run: |
+          if [ -z "$SIGNING_KEY_BASE64" ]; then echo "SIGNING_KEY secret is missing!"; exit 1; fi
+          if [ -z "${{ secrets.KEYSTORE_PASSWORD }}" ]; then echo "KEYSTORE_PASSWORD secret is missing!"; exit 1; fi
+          if [ -z "${{ secrets.KEY_ALIAS }}" ]; then echo "KEY_ALIAS secret is missing!"; exit 1; fi
+          if [ -z "${{ secrets.KEY_PASSWORD }}" ]; then echo "KEY_PASSWORD secret is missing!"; exit 1; fi
+
           mkdir -p app/keystore
-          printf '%s' "${{ secrets.SIGNING_KEY }}" | base64 --decode > app/keystore/release.jks
+          # Write the base64 string to a temporary file
+          printf '%s' "$SIGNING_KEY_BASE64" > release.jks.base64
+          # Decode the file
+          base64 --decode release.jks.base64 > app/keystore/release.jks
+          # Cleanup and Verify
+          rm release.jks.base64
+          ls -l app/keystore/release.jks
 
       # Step 9: Execute Parallel Compilation
       - name: Build APKs

@@ -89,15 +89,21 @@ android {
     }
 
     signingConfigs {
+        debug {
+            storeFile file("debug.keystore")
+            storePassword "android"
+            keyAlias "androiddebugkey"
+            keyPassword "android"
+        }
         release {
             // Priority: Keyring -> Environment Variables -> local.properties (if defined there)
             def storePasswordValue = fetchSecretFromKeyring('keystore_password') ?: System.getenv('ANDROID_KEYSTORE_PASSWORD')
             def keyPasswordValue = fetchSecretFromKeyring('key_password') ?: System.getenv('ANDROID_KEY_PASSWORD')
 
-            def localPath = localProperties.getProperty('keystore.path') ?: System.getenv('ANDROID_KEYSTORE_PATH')
+            def localPath = System.getenv('ANDROID_KEYSTORE_PATH') ?: localProperties.getProperty('keystore.path')
             def localAlias = localProperties.getProperty('keystore.alias') ?: localProperties.getProperty('key.alias') ?: System.getenv('ANDROID_KEY_ALIAS')
 
-            storeFile file(localPath ?: "dummy.jks")
+            storeFile rootProject.file(localPath ?: "app/dummy.jks")
             storePassword storePasswordValue
             keyAlias localAlias
             keyPassword keyPasswordValue
@@ -109,16 +115,11 @@ android {
             minifyEnabled = true
             shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-
-            // Use production key if the file exists, otherwise fallback to debug key
-            if (signingConfigs.release.storeFile.exists()) {
-                signingConfig signingConfigs.release
-            } else {
-                signingConfig signingConfigs.debug
-            }
+            signingConfig signingConfigs.release
         }
         debug {
             // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
+            signingConfig signingConfigs.debug
             debuggable true
             // Minification disabled for easier debugging during development
             minifyEnabled false

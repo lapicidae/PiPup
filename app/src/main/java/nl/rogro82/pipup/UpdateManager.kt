@@ -209,7 +209,36 @@ class UpdateManager(private val context: Context) {
     }
 
     fun downloadAndInstall(release: GitHubRelease) {
-        val asset = release.assets.find { it.name.endsWith(".apk") } ?: return
+        val appSettings = AppSettings(context)
+        val isBetaChannel = appSettings.updateChannel == 1
+        val isCurrentDebug = BuildConfig.DEBUG
+
+        val asset = if (isCurrentDebug) {
+            // 1. Current app is DEBUG: ONLY look for debug APKs to maintain signature compatibility
+            release.assets.find { it.name.contains("debug", true) && it.name.endsWith(".apk", true) }
+        } else {
+            // 2. Current app is RELEASE/BETA: strictly EXCLUDE debug APKs
+            val possibleApks = release.assets.filter {
+                it.name.endsWith(".apk", true) && !it.name.contains("debug", true)
+            }
+
+            if (isBetaChannel) {
+                // Beta Channel: Just the latest APK (could be prerelease OR stable)
+                possibleApks.firstOrNull()
+            } else {
+                // Stable Channel: Exclude prerelease/beta assets
+                possibleApks.find {
+                    !it.name.contains("prerelease", true) && !it.name.contains("beta", true)
+                }
+            }
+        }
+
+        if (asset == null) {
+            Log.e("UpdateManager", "No suitable APK found in release ${release.tagName} (Debug: $isCurrentDebug, Beta: $isBetaChannel)")
+            return
+        }
+
+        Log.i("UpdateManager", "Selected asset: ${asset.name} (Debug: $isCurrentDebug, Channel: ${if (isBetaChannel) "Beta" else "Stable"})")
 
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val request = DownloadManager.Request(asset.browserDownloadUrl.toUri())

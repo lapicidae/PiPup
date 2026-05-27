@@ -222,7 +222,11 @@ class AppSettings(private val context: Context) : SharedPreferences.OnSharedPref
             } catch (_: Exception) {
                 null
             }
-            _updateChannel = if (versionName?.contains("prerelease", true) == true || versionName?.contains("beta", true) == true) 1 else 0
+            val isBetaBuild = versionName?.contains("prerelease", true) == true ||
+                             versionName?.contains("beta", true) == true ||
+                             BuildConfig.DEBUG
+
+            _updateChannel = if (isBetaBuild) 1 else 0
             save()
         }
     }

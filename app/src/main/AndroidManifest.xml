@@ -76,8 +76,6 @@
         <activity
                 android:name=".MainActivity"
                 android:exported="true"
-                android:banner="@drawable/ic_banner"
-                android:logo="@drawable/ic_banner"
                 android:theme="@style/MainTheme">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
