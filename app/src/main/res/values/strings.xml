@@ -80,6 +80,8 @@
     <string name="settings_update_error">Update check failed: %1$s</string>
     <string name="settings_update_dialog_msg">A new version (%1$s) is available. Would you like to download and install it now?</string>
     <string name="settings_update_downloading">Downloading update…</string>
+    <string name="settings_update_verifying">Verifying update online…</string>
+    <string name="settings_update_no_longer_available">This update is no longer available online. Please check again.</string>
     <string name="settings_update_install">Install</string>
     <string name="settings_update_to">Update to %1$s</string>
     <string name="settings_update_later">Later</string>
@@ -152,4 +154,11 @@
     <string name="energy_status_optimized">Optimized (problematic)</string>
     <string name="energy_status_unrestricted">Unrestricted (recommended)</string>
     <string name="settings_app_version_label">PiPup %1$s</string>
+
+    <!-- Web Server Landing Page -->
+    <string name="server_landing_title">%1$s Server</string>
+    <string name="server_landing_status">SERVER ACTIVE</string>
+    <string name="server_landing_description">Your Android TV notification gateway is online and waiting for payloads.</string>
+    <string name="server_landing_docs">Documentation and API usage can be found on GitHub.</string>
+    <string name="server_landing_running_on">Running on %1$s (Android %2$s)</string>
 </resources>

@@ -25,12 +25,10 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     override fun onUpdateAvailable(release: GitHubRelease) {
                         appSettings.updateAvailableTag = release.tagName
                         appSettings.lastUpdateCheck = System.currentTimeMillis()
-                        appSettings.save(sync = true)
 
                         if (appSettings.updateRepeat || appSettings.lastNotifiedTag != release.tagName) {
                             updateManager.showUpdateNotification(release)
                             appSettings.lastNotifiedTag = release.tagName
-                            appSettings.save(sync = true)
                         }
 
                         if (continuation.isActive) continuation.resume(Result.success())
@@ -39,7 +37,6 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                     override fun onNoUpdate() {
                         appSettings.updateAvailableTag = ""
                         appSettings.lastUpdateCheck = System.currentTimeMillis()
-                        appSettings.save(sync = true)
                         if (continuation.isActive) continuation.resume(Result.success())
                     }
 

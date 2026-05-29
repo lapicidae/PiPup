@@ -90,9 +90,11 @@ You can send notifications either as an **application/json** payload (for extern
 For JSON payloads, the `media` object supports 3 types:
 
 ```json
-"image": { "uri": "...", "width": 480, "cache": true, "scale": true } // cache and scale are optional
-"video": { "uri": "...", "width": 480, "scale": true } // scale is optional
-"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true } // cache and scale are optional
+{
+"image": { "uri": "...", "width": 480, "cache": true, "scale": true },                "//comment_i": "cache and scale are optional",
+"video": { "uri": "...", "width": 480, "scale": true },                               "//comment_v": "scale is optional",
+"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true }, "//comment_w": "cache and scale are optional"
+}
 ```
 
 ---

@@ -1,0 +1,36 @@
+<resources>
+    <string-array name="position_options">
+        <item>@string/settings_pos_top_right</item>
+        <item>@string/settings_pos_top_left</item>
+        <item>@string/settings_pos_bottom_right</item>
+        <item>@string/settings_pos_bottom_left</item>
+        <item>@string/settings_pos_center</item>
+    </string-array>
+
+    <string-array name="media_position_options">
+        <item>@string/settings_media_pos_top</item>
+        <item>@string/settings_media_pos_bottom</item>
+        <item>@string/settings_media_pos_left</item>
+        <item>@string/settings_media_pos_right</item>
+    </string-array>
+
+    <string-array name="animation_options">
+        <item>@string/settings_animation_none</item>
+        <item>@string/settings_animation_fade</item>
+        <item>@string/settings_animation_slide</item>
+        <item>@string/settings_animation_slide_bounce</item>
+        <item>@string/settings_animation_scale</item>
+        <item>@string/settings_animation_scale_bounce</item>
+        <item>@string/settings_animation_scale_tada</item>
+        <item>@string/settings_animation_slide_zoom</item>
+        <item>@string/settings_animation_slide_flip</item>
+        <item>@string/settings_animation_slide_tada</item>
+        <item>@string/settings_animation_diagonal_zoom</item>
+    </string-array>
+
+    <string-array name="alignment_options">
+        <item>@string/settings_alignment_left</item>
+        <item>@string/settings_alignment_center</item>
+        <item>@string/settings_alignment_right</item>
+    </string-array>
+</resources>

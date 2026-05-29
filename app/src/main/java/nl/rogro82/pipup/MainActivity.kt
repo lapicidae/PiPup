@@ -13,6 +13,8 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
+import nl.rogro82.pipup.service.PipUpService
+import nl.rogro82.pipup.ui.SettingsActivity
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
@@ -67,11 +69,11 @@ class MainActivity : AppCompatActivity() {
 
         // IP Address retrieval is moved to a background thread to prevent UI stutter
         Thread {
-            val ip = Utils.getIpAddress()
+            val ip = getIpAddress()
             runOnUiThread {
                 if (ip != null) {
                     statusLabel.text = getString(R.string.server_running)
-                    addressLabel.text = getString(R.string.server_address, ip, PipUpService.PIPUP_SERVER_PORT)
+                    addressLabel.text = getString(R.string.server_address, ip, PipUpService.SERVER_PORT)
                 } else {
                     statusLabel.text = getString(R.string.no_network_connection)
                     addressLabel.text = "---.---.---.---"
@@ -119,7 +121,15 @@ class MainActivity : AppCompatActivity() {
             }
 
             // Show update indicator if a newer version was found by background worker
-            val updateAvailable = appSettings.updateAvailableTag.isNotEmpty() && updateManager.isNewer(appSettings.updateAvailableTag)
+            val hasUpdateTag = appSettings.updateAvailableTag.isNotEmpty()
+            val updateAvailable = hasUpdateTag && updateManager.isNewer(appSettings.updateAvailableTag)
+
+            if (hasUpdateTag && !updateAvailable) {
+                // We have a stored update tag, but we are already on that version or newer.
+                // Clear the tag to avoid unnecessary checks or confusing state.
+                appSettings.updateAvailableTag = ""
+            }
+
             Log.d("MainActivity", "Update check: tag=${appSettings.updateAvailableTag}, available=$updateAvailable")
 
             if (updateAvailable) {
@@ -139,12 +149,10 @@ class MainActivity : AppCompatActivity() {
                         override fun onUpdateAvailable(release: GitHubRelease) {
                             appSettings.updateAvailableTag = release.tagName
                             appSettings.lastUpdateCheck = System.currentTimeMillis()
-                            appSettings.save(sync = true)
 
                             if (appSettings.updateRepeat || appSettings.lastNotifiedTag != release.tagName) {
                                 updateManager.showUpdateNotification(release)
                                 appSettings.lastNotifiedTag = release.tagName
-                                appSettings.save(sync = true)
                             }
 
                             runOnUiThread {
@@ -155,7 +163,6 @@ class MainActivity : AppCompatActivity() {
                             runOnUiThread {
                                 appSettings.updateAvailableTag = ""
                                 appSettings.lastUpdateCheck = System.currentTimeMillis()
-                                appSettings.save(sync = false)
                                 updateIndicator.visibility = View.GONE
                             }
                         }

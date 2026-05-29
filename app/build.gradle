@@ -117,14 +117,15 @@ android {
             minifyEnabled = true
             shrinkResources = true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            signingConfig = signingConfigs.release
         }
+
         debug {
-            // applicationIdSuffix ".debug" // Allows installing both versions side-by-side
-            signingConfig signingConfigs.debug
-            debuggable true
+            // applicationIdSuffix = ".debug" // Allows installing both versions side-by-side
+            signingConfig = signingConfigs.debug
+            debuggable = true
             // Minification disabled for easier debugging during development
-            minifyEnabled false
+            minifyEnabled = false
         }
     }
 

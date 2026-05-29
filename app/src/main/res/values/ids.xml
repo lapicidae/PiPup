@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="nav_item_general" type="id" />
+    <item name="nav_item_background" type="id" />
+    <item name="nav_item_text_style" type="id" />
+    <item name="nav_item_border" type="id" />
+    <item name="nav_item_animation" type="id" />
+    <item name="nav_item_updates" type="id" />
+    <item name="nav_item_advanced" type="id" />
+</resources>

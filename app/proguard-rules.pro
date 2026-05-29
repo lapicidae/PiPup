@@ -24,21 +24,17 @@
 
 
 # --- Jackson (JSON Framework) ---
-
 # Ensure Jackson can access annotations and handle reflection for JSON mapping
 -keepattributes *Annotation*,EnclosingMethod,Signature
--keep class * extends com.fasterxml.jackson.core.type.TypeReference { *; }
--keepnames class com.fasterxml.jackson.** { *; }
 -dontwarn com.fasterxml.jackson.databind.**
--keep @com.fasterxml.jackson.annotation.JsonIgnoreProperties class * { *; }
+-keep class com.fasterxml.jackson.annotation.** { *; }
+-keep class com.fasterxml.jackson.databind.annotation.** { *; }
+-keep class com.fasterxml.jackson.core.type.TypeReference { *; }
 
 # --- Jackson Kotlin Module ---
--keep class com.fasterxml.jackson.module.kotlin.** { *; }
--keepnames class com.fasterxml.jackson.module.kotlin.** { *; }
--keep @com.fasterxml.jackson.annotation.JsonProperty class * { *; }
--keepclassmembers class * {
-    @com.fasterxml.jackson.annotation.JsonProperty *;
-}
+-keep class com.fasterxml.jackson.module.kotlin.KotlinModule { *; }
+-keep class com.fasterxml.jackson.module.kotlin.KotlinModule$Builder { *; }
+-keep class com.fasterxml.jackson.module.kotlin.KotlinFeature { *; }
 
 
 # --- Application Models ---
@@ -49,13 +45,14 @@
 -keep class nl.rogro82.pipup.PopupProps { *; }
 -keep class nl.rogro82.pipup.PopupProps$** { *; }
 -keep class nl.rogro82.pipup.models.** { *; }
--keep class nl.rogro82.pipup.AppSettings$SettingsData { *; }
+-keep class nl.rogro82.pipup.AppSettings { *; }
+-keep class nl.rogro82.pipup.AppSettings$** { *; }
 
 # CRITICAL: Keep all members (fields and methods) within these classes.
-# Without this, R8 might rename 'title' to 'a', causing Jackson to fail.
 -keepclassmembers class nl.rogro82.pipup.PopupProps { *; }
 -keepclassmembers class nl.rogro82.pipup.models.** { *; }
--keepclassmembers class nl.rogro82.pipup.AppSettings$SettingsData { *; }
+-keepclassmembers class nl.rogro82.pipup.AppSettings { *; }
+-keepclassmembers class nl.rogro82.pipup.AppSettings$** { *; }
 
 # Preserve specific Jackson annotations to ensure mapping works at runtime
 -keepclassmembers class * {

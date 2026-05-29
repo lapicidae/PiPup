@@ -5,6 +5,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import nl.rogro82.pipup.service.PipUpService
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 

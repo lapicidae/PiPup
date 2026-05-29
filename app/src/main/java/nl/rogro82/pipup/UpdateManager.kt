@@ -7,7 +7,11 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Environment
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
+import android.widget.Toast
+import nl.rogro82.pipup.service.PipUpService
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
@@ -158,12 +162,12 @@ class UpdateManager(private val context: Context) {
     }
 
     private fun showToastNotification(release: GitHubRelease) {
-        val handler = android.os.Handler(android.os.Looper.getMainLooper())
+        val handler = Handler(Looper.getMainLooper())
         handler.post {
-            android.widget.Toast.makeText(
+            Toast.makeText(
                 context,
                 context.getString(R.string.notification_update_msg, release.tagName),
-                android.widget.Toast.LENGTH_LONG
+                Toast.LENGTH_LONG
             ).show()
         }
     }
@@ -217,19 +221,15 @@ class UpdateManager(private val context: Context) {
         val isCurrentDebug = BuildConfig.DEBUG
 
         val asset = if (isCurrentDebug) {
-            // 1. Current app is DEBUG: ONLY look for debug APKs to maintain signature compatibility
             release.assets.find { it.name.contains("debug", true) && it.name.endsWith(".apk", true) }
         } else {
-            // 2. Current app is RELEASE/BETA: strictly EXCLUDE debug APKs
             val possibleApks = release.assets.filter {
                 it.name.endsWith(".apk", true) && !it.name.contains("debug", true)
             }
 
             if (isBetaChannel) {
-                // Beta Channel: Just the latest APK (could be prerelease OR stable)
                 possibleApks.firstOrNull()
             } else {
-                // Stable Channel: Exclude prerelease/beta assets
                 possibleApks.find {
                     !it.name.contains("prerelease", true) && !it.name.contains("beta", true)
                 }
@@ -237,11 +237,15 @@ class UpdateManager(private val context: Context) {
         }
 
         if (asset == null) {
-            Log.e("UpdateManager", "No suitable APK found in release ${release.tagName} (Debug: $isCurrentDebug, Beta: $isBetaChannel)")
+            Log.e("UpdateManager", "No suitable APK found in release ${release.tagName}")
             return
         }
 
-        Log.i("UpdateManager", "Selected asset: ${asset.name} (Debug: $isCurrentDebug, Channel: ${if (isBetaChannel) "Beta" else "Stable"})")
+        // Clean up old download if it exists
+        val oldFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
+        if (oldFile.exists()) {
+            oldFile.delete()
+        }
 
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val request = DownloadManager.Request(asset.browserDownloadUrl.toUri())
@@ -253,36 +257,55 @@ class UpdateManager(private val context: Context) {
             .setAllowedOverRoaming(true)
 
         val downloadId = downloadManager.enqueue(request)
+        val appContext = context.applicationContext
 
         val onComplete = object : BroadcastReceiver() {
-            override fun onReceive(context: Context, intent: Intent) {
+            override fun onReceive(recvContext: Context, intent: Intent) {
                 if (intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) == downloadId) {
-                    Log.d("UpdateManager", "Download complete, starting verification...")
-                    context.unregisterReceiver(this)
+                    appContext.unregisterReceiver(this)
 
-                    if (!asset.digest.isNullOrEmpty()) {
-                        verifyAndInstall(asset.digest)
-                    } else {
-                        // Fallback if digest is missing (e.g. older release)
-                        val checksumAsset = release.assets.find { it.name == "checksums.txt" }
-                        if (checksumAsset != null) {
-                            verifyAndInstallLegacy(checksumAsset.browserDownloadUrl, asset.name)
+                    val query = DownloadManager.Query().setFilterById(downloadId)
+                    val cursor = downloadManager.query(query)
+
+                    if (cursor.moveToFirst()) {
+                        val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+                        val status = if (statusIdx != -1) cursor.getInt(statusIdx) else -1
+
+                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
+                            Log.i("UpdateManager", "Download successful for release ${release.tagName}")
+                            if (!asset.digest.isNullOrEmpty()) {
+                                verifyAndInstall(asset.digest)
+                            } else {
+                                val checksumAsset = release.assets.find { it.name == "checksums.txt" }
+                                if (checksumAsset != null) {
+                                    verifyAndInstallLegacy(checksumAsset.browserDownloadUrl, asset.name)
+                                } else {
+                                    Log.w("UpdateManager", "No checksum found, skipping verification")
+                                    installApk(appContext)
+                                }
+                            }
                         } else {
-                            installApk(context)
+                            val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
+                            val reason = if (reasonIdx != -1) cursor.getInt(reasonIdx) else -1
+                            Log.e("UpdateManager", "Download failed. Status: $status, Reason: $reason")
+                            Handler(Looper.getMainLooper()).post {
+                                Toast.makeText(appContext, "Download failed (Code: $reason)", Toast.LENGTH_LONG).show()
+                            }
                         }
                     }
+                    cursor.close()
                 }
             }
         }
+
         val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
-        context.registerReceiver(onComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), flags)
+        appContext.registerReceiver(onComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), flags)
     }
 
     private fun verifyAndInstall(digest: String) {
         thread {
             try {
-                // GitHub digest format is usually "sha256:abc..."
-                val expectedHash = digest.replace("sha256:", "").trim()
+                val expectedHash = digest.substringAfter("sha256:").trim()
                 val apkFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
                 val actualHash = calculateSha256(apkFile)
 
@@ -290,16 +313,16 @@ class UpdateManager(private val context: Context) {
 
                 if (expectedHash.equals(actualHash, ignoreCase = true)) {
                     Log.i("UpdateManager", "SHA-256 verification successful.")
-                    val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                    handler.post { installApk(context) }
+                    Handler(Looper.getMainLooper()).post { installApk(context) }
                 } else {
-                    Log.e("UpdateManager", "SHA-256 mismatch! Download might be corrupted.")
-                    // Optional: Notify user
+                    Log.e("UpdateManager", "SHA-256 mismatch!")
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(context, "Update verification failed", Toast.LENGTH_LONG).show()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "Error during checksum verification", e)
-                val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                handler.post { installApk(context) }
+                Handler(Looper.getMainLooper()).post { installApk(context) }
             }
         }
     }
@@ -310,36 +333,32 @@ class UpdateManager(private val context: Context) {
                 val connection = URL(checksumUrl).openConnection() as HttpURLConnection
                 val checksums = connection.inputStream.bufferedReader().use { it.readText() }
 
-                // Format: <hash>  <filename>
                 val expectedHash = checksums.lines()
-                    .find { it.contains(apkName) }
-                    ?.split(" ")
+                    .map { it.trim() }
+                    .find { it.endsWith(apkName) }
+                    ?.split(Regex("\\s+"))
                     ?.firstOrNull()
-                    ?.trim()
 
                 if (expectedHash == null) {
-                    Log.w("UpdateManager", "No legacy checksum found for $apkName, skipping verification")
-                    val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                    handler.post { installApk(context) }
+                    Log.w("UpdateManager", "No legacy checksum found for $apkName")
+                    Handler(Looper.getMainLooper()).post { installApk(context) }
                     return@thread
                 }
 
                 val apkFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
                 val actualHash = calculateSha256(apkFile)
 
-                Log.d("UpdateManager", "Legacy Verification: expected=$expectedHash, actual=$actualHash")
-
                 if (expectedHash.equals(actualHash, ignoreCase = true)) {
-                    Log.i("UpdateManager", "Legacy SHA-256 verification successful.")
-                    val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                    handler.post { installApk(context) }
+                    Handler(Looper.getMainLooper()).post { installApk(context) }
                 } else {
                     Log.e("UpdateManager", "Legacy SHA-256 mismatch!")
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(context, "Update verification failed", Toast.LENGTH_LONG).show()
+                    }
                 }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "Error during legacy verification", e)
-                val handler = android.os.Handler(android.os.Looper.getMainLooper())
-                handler.post { installApk(context) }
+                Handler(Looper.getMainLooper()).post { installApk(context) }
             }
         }
     }
@@ -356,32 +375,39 @@ class UpdateManager(private val context: Context) {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
-    private fun installApk(context: Context) {
-        val file = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
+    private fun installApk(installContext: Context) {
+        val file = File(installContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
         if (!file.exists()) {
             Log.e("UpdateManager", "APK file not found at: ${file.absolutePath}")
             return
         }
 
-        val fileSize = file.length()
-        Log.i("UpdateManager", "Downloaded APK size: $fileSize bytes")
+        val size = file.length()
+        Log.i("UpdateManager", "Installing APK. Size: $size bytes, Path: ${file.absolutePath}")
 
-        if (fileSize < 1024 * 100) { // Less than 100KB is definitely not a valid PiPup APK
-            Log.e("UpdateManager", "Downloaded file is too small, likely a failed download or error page.")
+        if (size < 1024 * 100) {
+            Log.e("UpdateManager", "Downloaded file is too small ($size bytes). Likely a failed download.")
             return
         }
 
         try {
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            Log.d("UpdateManager", "Installing APK via URI: $uri")
+            val uri = FileProvider.getUriForFile(installContext, "${installContext.packageName}.fileprovider", file)
+            Log.d("UpdateManager", "Generated FileProvider URI: $uri")
+
             val intent = Intent(Intent.ACTION_VIEW).apply {
                 setDataAndType(uri, "application/vnd.android.package-archive")
                 addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addCategory(Intent.CATEGORY_DEFAULT)
             }
-            context.startActivity(intent)
+
+            installContext.startActivity(intent)
+            Log.i("UpdateManager", "Installer intent started successfully.")
         } catch (e: Exception) {
             Log.e("UpdateManager", "Error launching APK installer", e)
+            Handler(Looper.getMainLooper()).post {
+                Toast.makeText(installContext, "Failed to launch installer: ${e.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 }
