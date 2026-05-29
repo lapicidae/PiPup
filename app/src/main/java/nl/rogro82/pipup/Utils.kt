@@ -8,85 +8,55 @@ import java.net.NetworkInterface.getNetworkInterfaces
 import java.net.SocketException
 
 /**
- * General utility functions for the PiPup application.
+ * General utility extension functions for the PiPup application.
  */
-object Utils {
 
-    /**
-     * Retrieves the first non-loopback IPv4 address of the device.
-     *
-     * @return The IPv4 address as a string, or null if none is found or a socket error occurs.
-     */
-    fun getIpAddress(): String? {
-        try {
-            val interfaces = getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val networkInterface = interfaces.nextElement()
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val address = addresses.nextElement()
-                    if (!address.isLoopbackAddress && address is Inet4Address) {
-                        return address.hostAddress
-                    }
-                }
-            }
-        } catch (_: SocketException) {
-            // Log or handle exception as needed
+/**
+ * Retrieves the first non-loopback IPv4 address of the device.
+ */
+fun getIpAddress(): String? {
+    return try {
+        getNetworkInterfaces().asSequence()
+            .flatMap { it.inetAddresses.asSequence() }
+            .filterIsInstance<Inet4Address>()
+            .firstOrNull { !it.isLoopbackAddress }
+            ?.hostAddress
+    } catch (_: SocketException) {
+        null
+    }
+}
+
+/**
+ * Converts density-independent pixels (dp) to device-specific pixels (px).
+ */
+fun Context.dpToPx(dp: Int): Int = TypedValue.applyDimension(
+    TypedValue.COMPLEX_UNIT_DIP,
+    dp.toFloat(),
+    resources.displayMetrics
+).toInt()
+
+/**
+ * Scales pixel values relative to a 1080p reference resolution.
+ */
+fun Context.getScaledPixels(pixels: Int): Int {
+    val displayMetrics = resources.displayMetrics
+    val scaleFactor = displayMetrics.widthPixels.toFloat() / 1920f
+    return (pixels * scaleFactor).toInt()
+}
+
+/**
+ * Calculates the sample size for bitmap decoding based on target dimensions.
+ */
+fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
+    val (height: Int, width: Int) = options.outHeight to options.outWidth
+    var inSampleSize = 1
+
+    if (height > reqHeight || width > reqWidth) {
+        val halfHeight: Int = height / 2
+        val halfWidth: Int = width / 2
+        while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
+            inSampleSize *= 2
         }
-
-        return null
     }
-
-    /**
-     * Converts density-independent pixels (dp) to device-specific pixels (px).
-     *
-     * This ensures that UI elements maintain consistent physical size across
-     * different screen densities.
-     *
-     * @param context The current context.
-     * @param dp The value in dp to convert.
-     * @return The equivalent value in pixels (px).
-     */
-    fun dpToPx(context: Context, dp: Int): Int {
-        return TypedValue.applyDimension(
-            TypedValue.COMPLEX_UNIT_DIP,
-            dp.toFloat(),
-            context.resources.displayMetrics
-        ).toInt()
-    }
-
-    /**
-     * Scales pixel values relative to a 1080p reference resolution.
-     *
-     * This ensures that media elements take up the same proportional space
-     * on screen regardless of whether the TV is 720p, 1080p, or 4K.
-     *
-     * @param context The current context.
-     * @param pixels The pixel value defined for a 1080p display.
-     * @return The scaled pixel value for the current screen resolution.
-     */
-    fun getScaledPixels(context: Context, pixels: Int): Int {
-        val displayMetrics = context.resources.displayMetrics
-        val screenWidth = displayMetrics.widthPixels
-        // Use 1920 (Full HD) as the base reference for all scaling
-        val scaleFactor = screenWidth.toFloat() / 1920f
-        return (pixels * scaleFactor).toInt()
-    }
-
-    /**
-     * Calculates the sample size for bitmap decoding based on target dimensions.
-     */
-    fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
-        val (height: Int, width: Int) = options.outHeight to options.outWidth
-        var inSampleSize = 1
-
-        if (height > reqHeight || width > reqWidth) {
-            val halfHeight: Int = height / 2
-            val halfWidth: Int = width / 2
-            while (halfHeight / inSampleSize >= reqHeight && halfWidth / inSampleSize >= reqWidth) {
-                inSampleSize *= 2
-            }
-        }
-        return inSampleSize
-    }
+    return inSampleSize
 }

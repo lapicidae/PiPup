@@ -16,7 +16,7 @@ leanback = "1.2.0"
 media3 = "1.10.1"
 nanohttpd = "2.3.1"
 # @keep
-pipup = "0.3.1"
+pipup = "0.4.0"
 versions-plugin = "0.54.0"
 work = "2.11.2"
 
