@@ -35,14 +35,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var appSettings: AppSettings
     private var isEnergyDialogOpen = false
 
-    private val mHandler = Handler(Looper.getMainLooper())
-    private val mAutoFinishRunnable = Runnable {
-        if (!isFinishing && !isDestroyed) {
-            Log.d("MainActivity", "Auto-finishing MainActivity to save resources")
-            finish()
-        }
-    }
-
     private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         if (!Settings.canDrawOverlays(this)) {
             Log.w("MainActivity", "Overlay permission not granted!")
@@ -85,7 +77,6 @@ class MainActivity : AppCompatActivity() {
 
         // Settings Button
         findViewById<ImageButton>(R.id.btn_open_settings).setOnClickListener {
-            mHandler.removeCallbacks(mAutoFinishRunnable)
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
@@ -183,7 +174,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        mHandler.removeCallbacks(mAutoFinishRunnable)
     }
 
     @SuppressLint("BatteryLife")
