@@ -38,6 +38,12 @@
             android:visibility="gone"
             tools:text="10 / 100" />
     </LinearLayout>
-    <SeekBar android:id="@+id/seekbar_padding" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
+    <SeekBar android:id="@+id/seekbar_padding" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector" android:layout_marginBottom="24dp"/>
+
+    <TextView android:id="@+id/text_language" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_language" android:textColor="@color/colorOnSurfaceVariant"/>
+    <Spinner android:id="@+id/spinner_language" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+
+    <TextView android:id="@+id/text_app_theme" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_app_theme" android:textColor="@color/colorOnSurfaceVariant"/>
+    <Spinner android:id="@+id/spinner_app_theme" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
 
 </LinearLayout>

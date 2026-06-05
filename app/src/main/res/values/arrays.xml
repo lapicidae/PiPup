@@ -33,4 +33,16 @@
         <item>@string/settings_alignment_center</item>
         <item>@string/settings_alignment_right</item>
     </string-array>
+
+    <string-array name="language_options">
+        <item>@string/language_default</item>
+        <item>@string/language_en</item>
+        <item>@string/language_de</item>
+    </string-array>
+
+    <string-array name="language_codes">
+        <item>default</item>
+        <item>en</item>
+        <item>de</item>
+    </string-array>
 </resources>

@@ -66,7 +66,7 @@ class UpdateManager(private val context: Context) {
                     val json = connection.inputStream.bufferedReader().use { it.readText() }
                     val rootNode = mapper.readTree(json)
                     if (!rootNode.isArray) {
-                        callback.onError("Invalid API response")
+                        callback.onError(context.getString(R.string.update_error_invalid_api))
                         return@thread
                     }
 
@@ -115,7 +115,7 @@ class UpdateManager(private val context: Context) {
                 }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "Error checking for updates", e)
-                callback.onError(e.localizedMessage ?: "Network error")
+                callback.onError(e.localizedMessage ?: context.getString(R.string.update_error_network))
             }
         }
     }
@@ -249,8 +249,8 @@ class UpdateManager(private val context: Context) {
 
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val request = DownloadManager.Request(asset.browserDownloadUrl.toUri())
-            .setTitle("PiPup Update ${release.tagName}")
-            .setDescription("Downloading new version...")
+            .setTitle(context.getString(R.string.update_download_title, release.tagName))
+            .setDescription(context.getString(R.string.update_download_desc))
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "pipup-update.apk")
             .setAllowedOverMetered(true)
@@ -289,7 +289,7 @@ class UpdateManager(private val context: Context) {
                             val reason = if (reasonIdx != -1) cursor.getInt(reasonIdx) else -1
                             Log.e("UpdateManager", "Download failed. Status: $status, Reason: $reason")
                             Handler(Looper.getMainLooper()).post {
-                                Toast.makeText(appContext, "Download failed (Code: $reason)", Toast.LENGTH_LONG).show()
+                                Toast.makeText(appContext, appContext.getString(R.string.update_download_failed, reason), Toast.LENGTH_LONG).show()
                             }
                         }
                     }
@@ -317,7 +317,7 @@ class UpdateManager(private val context: Context) {
                 } else {
                     Log.e("UpdateManager", "SHA-256 mismatch!")
                     Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, "Update verification failed", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, context.getString(R.string.update_verification_failed), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
@@ -353,7 +353,7 @@ class UpdateManager(private val context: Context) {
                 } else {
                     Log.e("UpdateManager", "Legacy SHA-256 mismatch!")
                     Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, "Update verification failed", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, context.getString(R.string.update_verification_failed), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
@@ -406,7 +406,7 @@ class UpdateManager(private val context: Context) {
         } catch (e: Exception) {
             Log.e("UpdateManager", "Error launching APK installer", e)
             Handler(Looper.getMainLooper()).post {
-                Toast.makeText(installContext, "Failed to launch installer: ${e.message}", Toast.LENGTH_LONG).show()
+                Toast.makeText(installContext, installContext.getString(R.string.update_installer_failed, e.message), Toast.LENGTH_LONG).show()
             }
         }
     }

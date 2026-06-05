@@ -49,8 +49,8 @@ class PipUpService : Service() {
         initNotificationChannel()
 
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("PiPup")
-            .setContentText("Listening for notifications...")
+            .setContentTitle(getString(R.string.app_name))
+            .setContentText(getString(R.string.service_listening))
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
             .build()

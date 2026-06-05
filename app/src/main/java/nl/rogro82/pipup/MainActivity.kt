@@ -1,11 +1,8 @@
 package nl.rogro82.pipup
 
 import android.annotation.SuppressLint
-import androidx.appcompat.app.AlertDialog
 import android.content.Intent
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
@@ -13,16 +10,17 @@ import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import nl.rogro82.pipup.service.PipUpService
-import nl.rogro82.pipup.ui.SettingsActivity
-import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.util.UnstableApi
+import nl.rogro82.pipup.service.PipUpService
+import nl.rogro82.pipup.ui.SettingsActivity
 
 /**
  * Main Activity displaying server status and version information.
@@ -58,6 +56,7 @@ class MainActivity : AppCompatActivity() {
         // Server Status
         val statusLabel = findViewById<TextView>(R.id.textViewConnection)
         val addressLabel = findViewById<TextView>(R.id.textViewServerAddress)
+        val infoLabel = findViewById<TextView>(R.id.textViewInfo)
 
         // IP Address retrieval is moved to a background thread to prevent UI stutter
         Thread {
@@ -68,12 +67,12 @@ class MainActivity : AppCompatActivity() {
                     addressLabel.text = getString(R.string.server_address, ip, PipUpService.SERVER_PORT)
                 } else {
                     statusLabel.text = getString(R.string.no_network_connection)
-                    addressLabel.text = "---.---.---.---"
+                    addressLabel.text = getString(R.string.address_placeholder)
                 }
             }
         }.start()
 
-        findViewById<TextView>(R.id.textViewInfo).text = getString(R.string.more_information)
+        infoLabel.text = getString(R.string.more_information)
 
         // Settings Button
         findViewById<ImageButton>(R.id.btn_open_settings).setOnClickListener {
@@ -167,13 +166,9 @@ class MainActivity : AppCompatActivity() {
             }
 
         } catch (_: Exception) {
-            versionText.text = "v?.?.?"
+            versionText.text = getString(R.string.version_placeholder)
             updateIndicator.visibility = View.GONE
         }
-    }
-
-    override fun onPause() {
-        super.onPause()
     }
 
     @SuppressLint("BatteryLife")

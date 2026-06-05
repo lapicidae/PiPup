@@ -8,10 +8,6 @@ import java.net.NetworkInterface.getNetworkInterfaces
 import java.net.SocketException
 
 /**
- * General utility extension functions for the PiPup application.
- */
-
-/**
  * Retrieves the first non-loopback IPv4 address of the device.
  */
 fun getIpAddress(): String? {

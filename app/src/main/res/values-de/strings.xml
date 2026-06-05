@@ -1,0 +1,182 @@
+<resources>
+    <string name="app_name">PiPup</string>
+    <string name="settings_title">Einstellungen</string>
+    <string name="settings_open">Einstellungen öffnen</string>
+    <string name="version_number_debug">v%1$s (debug)</string>
+    <string name="version_number">v%1$s</string>
+    <string name="server_running">Der Server ist erreichbar unter:</string>
+    <string name="server_address">%1$s:%2$d</string>
+    <string name="no_network_connection">Keine Netzwerkverbindung gefunden.</string>
+    <string name="more_information">Für weitere Informationen lesen Sie bitte die Dokumentation @ https://github.com/lapicidae/PiPup</string>
+
+    <!-- Navigation & Sektionen -->
+    <string name="settings_nav_general">Allgemein</string>
+    <string name="settings_nav_background">Hintergrund</string>
+    <string name="settings_nav_text">Textstil</string>
+    <string name="settings_nav_border">Rahmen</string>
+    <string name="settings_nav_animation">Animation</string>
+    <string name="settings_nav_advanced">Erweitert</string>
+    <string name="settings_nav_updates">Updates</string>
+    <string name="settings_language">Sprache</string>
+    <string name="settings_app_theme">App-Design</string>
+    <string name="settings_theme_dark">Dunkel</string>
+    <string name="settings_theme_light">Hell</string>
+
+    <!-- Allgemeine Einstellungen -->
+    <string name="settings_position">Popup-Position</string>
+    <string name="settings_padding">Inhaltspolsterung</string>
+    <string name="settings_media_position">Medienposition</string>
+    <string name="settings_animation_type">Animations-Typ</string>
+    <string name="settings_animation_duration">Animations-Dauer</string>
+    <string name="settings_animation_none">Keine</string>
+    <string name="settings_animation_fade">Einblenden</string>
+    <string name="settings_animation_slide">Schieben</string>
+    <string name="settings_animation_slide_bounce">Schieben &amp; Prellen</string>
+    <string name="settings_animation_scale">Skalieren</string>
+    <string name="settings_animation_scale_bounce">Skalieren &amp; Prellen</string>
+    <string name="settings_animation_scale_tada">Skalieren Ta-da</string>
+    <string name="settings_animation_slide_zoom">Schieben &amp; Zoom</string>
+    <string name="settings_animation_slide_flip">Schieben &amp; Flip</string>
+    <string name="settings_animation_slide_tada">Schieben &amp; Ta-da</string>
+    <string name="settings_animation_diagonal_zoom">Diagonaler Zoom</string>
+    <string name="settings_exit_animation">Beendigungs-Animation</string>
+    <string name="settings_exit_animation_desc">Invertiert die Eingangs-Animation beim Schließen des Popups.</string>
+
+    <!-- Hintergrund Einstellungen -->
+    <string name="settings_bg_color">Hintergrundfarbe</string>
+    <string name="settings_opacity">Hintergrund-Deckkraft</string>
+
+    <!-- Text Einstellungen -->
+    <string name="settings_title_color">Titelfarbe</string>
+    <string name="settings_title_size">Titel-Schriftgröße</string>
+    <string name="settings_message_color">Nachrichtenfarbe</string>
+    <string name="settings_message_size">Nachrichten-Schriftgröße</string>
+    <string name="settings_title_alignment">Titel-Ausrichtung</string>
+    <string name="settings_message_alignment">Nachrichten-Ausrichtung</string>
+
+    <!-- Rahmen Einstellungen -->
+    <string name="settings_border_radius">Eckenradius</string>
+    <string name="settings_border_width">Rahmenbreite</string>
+    <string name="settings_border_color">Rahmenfarbe</string>
+
+    <!-- Erweiterte Einstellungen -->
+    <string name="settings_stability">Stabilität</string>
+    <string name="settings_migration">Migration &amp; Synchronisation</string>
+    <string name="settings_tools">Experten-Tools</string>
+    <string name="settings_danger_zone">Gefahrenzone</string>
+    <string name="settings_advanced_mode">Erweiterter Modus</string>
+    <string name="settings_advanced_mode_desc">Aktiviert die manuelle HEX-Code Eingabe und zeigt präzise numerische Schieberegler-Werte an.</string>
+    <string name="settings_import_network">Von anderem PiPup importieren</string>
+    <string name="settings_reset_settings">Einstellungen zurücksetzen</string>
+
+    <!-- Update Einstellungen -->
+    <string name="settings_update_channel">Update-Kanal</string>
+    <string name="settings_update_stable">Stabil</string>
+    <string name="settings_update_beta">Beta</string>
+    <string name="settings_check_update">Auf Updates prüfen</string>
+    <string name="settings_checking_update">Prüfe auf Updates…</string>
+    <string name="settings_update_available">Update verfügbar</string>
+    <string name="settings_update_none">Sie verwenden die neueste Version.</string>
+    <string name="settings_update_error">Update-Prüfung fehlgeschlagen: %1$s</string>
+    <string name="settings_update_dialog_msg">Eine neue Version (%1$s) ist verfügbar. Möchten Sie diese jetzt herunterladen und installieren?</string>
+    <string name="settings_update_downloading">Update wird heruntergeladen…</string>
+    <string name="settings_update_verifying">Update wird online verifiziert…</string>
+    <string name="settings_update_no_longer_available">Dieses Update ist online nicht mehr verfügbar. Bitte erneut prüfen.</string>
+    <string name="settings_update_install">Installieren</string>
+    <string name="settings_update_to">Update auf %1$s</string>
+    <string name="settings_update_later">Später</string>
+
+    <string name="settings_update_interval">Automatische Prüfung</string>
+    <string name="settings_update_off">Aus</string>
+    <string name="settings_update_on_open">Beim App-Start</string>
+    <string name="settings_update_daily">Täglich</string>
+    <string name="settings_update_weekly">Wöchentlich</string>
+    <string name="settings_update_monthly">Monatlich</string>
+    <string name="settings_update_notification_style">Benachrichtigungs-Stil</string>
+    <string name="settings_update_style_silent">Stumm (nur Hauptmenü)</string>
+    <string name="settings_update_style_pipup">PiPup Overlay</string>
+    <string name="settings_update_style_toast">Toast (Mini-Popup)</string>
+    <string name="settings_update_found_indicator">Update verfügbar!</string>
+    <string name="settings_update_repeat">Benachrichtigung wiederholen</string>
+    <string name="settings_update_repeat_desc">Erinnert bei jeder Prüfung, bis das Update installiert ist.</string>
+    <string name="notification_update_title">PiPup Update verfügbar</string>
+    <string name="notification_update_msg">Version %1$s ist bereit zum Download.</string>
+
+    <string name="update_error_invalid_api">Ungültige API-Antwort</string>
+    <string name="update_error_network">Netzwerkfehler</string>
+    <string name="update_download_title">PiPup Update %1$s</string>
+    <string name="update_download_desc">Neue Version wird heruntergeladen…</string>
+    <string name="update_download_failed">Download fehlgeschlagen (Code: %1$d)</string>
+    <string name="update_verification_failed">Update-Verifizierung fehlgeschlagen</string>
+    <string name="update_installer_failed">Installer konnte nicht gestartet werden: %1$s</string>
+
+    <string name="service_listening">Warten auf Benachrichtigungen…</string>
+    <string name="address_placeholder">---.---.---.---</string>
+    <string name="version_placeholder">v?.?.?</string>
+
+    <!-- Dialoge & UI -->
+    <string name="settings_yes">Ja</string>
+    <string name="settings_no">Nein</string>
+    <string name="settings_reset_confirm_title">Einstellungen zurücksetzen?</string>
+    <string name="settings_reset_confirm_msg">Möchten Sie wirklich alle Einstellungen auf die Werkseinstellungen zurücksetzen?</string>
+    <string name="settings_edit_hex_title">HEX-Farbe eingeben</string>
+    <string name="settings_import_action">Importieren</string>
+    <string name="settings_import_ip_title">Quell-IP eingeben</string>
+    <string name="settings_import_ip_hint">z.B. 192.168.1.50</string>
+    <string name="settings_import_success">Einstellungen erfolgreich importiert</string>
+    <string name="settings_import_error">Import fehlgeschlagen: %1$s</string>
+    <string name="settings_preview_media">Medien</string>
+    <string name="settings_preview_title">Live-Vorschau</string>
+    <string name="settings_preview_message">Das Overlay wird in Echtzeit aktualisiert.</string>
+    <string name="settings_slider_value_format">%1$d / %2$d</string>
+    <string name="settings_default_suffix"> (Standard)</string>
+    <string name="settings_alignment_left">Links</string>
+    <string name="settings_alignment_center">Zentriert</string>
+    <string name="settings_alignment_right">Rechts</string>
+    <string name="settings_media_pos_top">Oben</string>
+    <string name="settings_media_pos_bottom">Unten</string>
+    <string name="settings_media_pos_left">Links</string>
+    <string name="settings_media_pos_right">Rechts</string>
+    <string name="settings_pos_top_right">Oben Rechts</string>
+    <string name="settings_pos_top_left">Oben Links</string>
+    <string name="settings_pos_bottom_right">Unten Rechts</string>
+    <string name="settings_pos_bottom_left">Unten Links</string>
+    <string name="settings_pos_center">Zentriert</string>
+
+    <!-- Sprachnamen -->
+    <string name="language_default">Systemstandard</string>
+    <string name="language_en">Englisch</string>
+    <string name="language_de">Deutsch</string>
+
+    <!-- Credits -->
+    <string name="translator_credits">Übersetzt von: lapicidae &amp; Gemini KI</string>
+
+    <!-- Farben -->
+    <string name="color_black">Schwarz</string>
+    <string name="color_white">Weiß</string>
+    <string name="color_grey">Grau</string>
+    <string name="color_blue">Blau</string>
+    <string name="color_teal">Türkis</string>
+    <string name="color_pink">Rosa</string>
+    <string name="color_red">Rot</string>
+    <string name="color_light_blue">Hellblau</string>
+    <string name="color_green">Grün</string>
+    <string name="color_orange">Orange</string>
+
+    <!-- Energie-Optimierung -->
+    <string name="energy_optimization_title">Hintergrund-Aktivität</string>
+    <string name="energy_optimization_message">Um sicherzustellen, dass PiPup Benachrichtigungen zuverlässig empfangen kann, sollte die App ohne Energieeinschränkungen laufen dürfen. Möchten Sie dies jetzt konfigurieren?</string>
+    <string name="energy_optimization_instructions">Bitte wählen Sie \"Apps\" -> \"Spezieller App-Zugriff\" -> \"Optimierter Energieverbrauch\" und setzen Sie PiPup auf \"Nicht optimieren\".</string>
+    <string name="energy_optimization_manual">Manuelle Konfiguration:\n\n1. Systemeinstellungen öffnen\n2. Gehen Sie zu Apps -> Spezieller App-Zugriff\n3. Wählen Sie \"Optimierter Energieverbrauch\"\n4. Setzen Sie PiPup auf \"Nicht optimieren\"</string>
+    <string name="energy_optimization_later">Später</string>
+    <string name="energy_status_optimized">Optimiert (problematisch)</string>
+    <string name="energy_status_unrestricted">Uneingeschränkt (empfohlen)</string>
+    <string name="settings_app_version_label">PiPup %1$s</string>
+
+    <!-- Web Server Landing Page -->
+    <string name="server_landing_title">%1$s Server</string>
+    <string name="server_landing_status">SERVER AKTIV</string>
+    <string name="server_landing_description">Ihr Android TV Benachrichtigungs-Gateway ist online und wartet auf Daten.</string>
+    <string name="server_landing_docs">Dokumentation und API-Nutzung finden Sie auf GitHub.</string>
+    <string name="server_landing_running_on">Läuft auf %1$s (Android %2$s)</string>
+</resources>

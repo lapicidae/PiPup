@@ -9,7 +9,6 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.WindowManager
-import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -32,17 +31,6 @@ class AdvancedSubmenu(
 ) : SubmenuBase(context, settings, onSettingsChanged, previewArea) {
 
     override fun onBind(root: View) {
-        // App Theme
-        val themeItems = listOf(context.getString(R.string.settings_theme_dark), context.getString(R.string.settings_theme_light))
-        setupSpinner(root, R.id.spinner_app_theme, ArrayAdapter(context, android.R.layout.simple_spinner_item, themeItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.appTheme) {
-            if (settings.appTheme != it) {
-                settings.appTheme = it
-                val mode = if (it == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-                AppCompatDelegate.setDefaultNightMode(mode)
-                (context as? SettingsActivity)?.recreate()
-            }
-        }
-
         // Energy Status
         updateEnergyStatusDisplay(root)
         root.findViewById<View>(R.id.container_energy_status)?.apply {

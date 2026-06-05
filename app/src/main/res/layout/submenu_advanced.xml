@@ -14,10 +14,6 @@
         android:textStyle="bold"
         android:layout_marginBottom="32dp"/>
 
-    <!-- Theme -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_app_theme" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_app_theme" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
-
     <!-- Stability -->
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_stability" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="20dp"/>
     <LinearLayout

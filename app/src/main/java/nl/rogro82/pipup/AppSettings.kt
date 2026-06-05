@@ -36,6 +36,7 @@ class AppSettings(context: Context) {
     var dismissBatteryOptimization by BooleanPref("dismiss_battery_optimization", false)
     var advancedMode by BooleanPref("advanced_mode", false)
     var appTheme by IntPref("app_theme", 0)
+    var language by StringPref("language", "default")
 
     // Updates
     var updateChannel by IntPref("update_channel", -1)
@@ -89,7 +90,8 @@ class AppSettings(context: Context) {
         val lastUpdateCheck: Long,
         val updateAvailableTag: String,
         val updateRepeat: Boolean,
-        val lastNotifiedTag: String
+        val lastNotifiedTag: String,
+        val language: String
     )
 
     fun getAll() = SettingsData(
@@ -98,7 +100,7 @@ class AppSettings(context: Context) {
         contentPadding, titleAlignment, messageAlignment, mediaPosition,
         animationType, animationDuration, animationExit, appTheme, advancedMode,
         updateChannel, updateInterval, updateNotificationStyle, lastUpdateCheck,
-        updateAvailableTag, updateRepeat, lastNotifiedTag
+        updateAvailableTag, updateRepeat, lastNotifiedTag, language
     )
 
     fun apply(data: SettingsData) {
@@ -129,6 +131,7 @@ class AppSettings(context: Context) {
             putString("update_available_tag", data.updateAvailableTag)
             putBoolean("update_repeat", data.updateRepeat)
             putString("last_notified_tag", data.lastNotifiedTag)
+            putString("language", data.language)
         }
     }
 
