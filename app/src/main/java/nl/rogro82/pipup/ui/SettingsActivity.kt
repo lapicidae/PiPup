@@ -47,16 +47,22 @@ class SettingsActivity : AppCompatActivity() {
     )
 
     val materialColors = listOf(
-        ColorEntry(R.string.color_black, "#0F1417"),
-        ColorEntry(R.string.color_white, "#DFE3E7"),
-        ColorEntry(R.string.color_grey, "#C0C7CD"),
-        ColorEntry(R.string.color_blue, "#8ECFF2"),
-        ColorEntry(R.string.color_teal, "#625B71"),
-        ColorEntry(R.string.color_pink, "#7D5260"),
-        ColorEntry(R.string.color_red, "#B3261E"),
-        ColorEntry(R.string.color_light_blue, "#D0BCFF"),
-        ColorEntry(R.string.color_green, "#388E3C"),
-        ColorEntry(R.string.color_orange, "#F57C00")
+        ColorEntry(R.string.color_deep_slate,    "#0F1417"), // Deep Slate (Basis-Hintergrund)
+        ColorEntry(R.string.color_midnight_violet,   "#312B3F"), // Midnight Violet (Tonal Tone 20)
+        ColorEntry(R.string.color_black_plum,     "#492532"), // Black Plum (Tonal Tone 20)
+        ColorEntry(R.string.color_rosewood,      "#601410"), // Rosewood (Tonal Tone 20)
+        ColorEntry(R.string.color_forest_green,    "#0A3915"), // Forest Green (Tonal Tone 20)
+        ColorEntry(R.string.color_deep_umber,   "#4D2B00"), // Deep Umber (Tonal Tone 20)
+        ColorEntry(R.string.color_gunmetal,     "#2F3033"), // Gunmetal (Tonal Tone 20)
+        ColorEntry(R.string.color_navy_blue,    "#002F54"), // Navy Blue (Tonal Tone 20)
+        ColorEntry(R.string.color_platinum,    "#DFE3E7"), // Platinum (Basis-Text)
+        ColorEntry(R.string.color_sweet_lavender, "#D0BCFF"), // Sweet Lavender (Tonal Tone 80)
+        ColorEntry(R.string.color_cotton_candy,"#FFB2C5"),// Cotton Candy (Tonal Tone 80)
+        ColorEntry(R.string.color_peach_blossom,"#F2B8B5"), // Peach Blossom (Tonal Tone 80)
+        ColorEntry(R.string.color_celadon_pastel,     "#B6E3B3"), // Celadon Pastel (Tonal Tone 80)
+        ColorEntry(R.string.color_peach_cream,     "#FFDCBE"), // Peach Cream (Tonal Tone 80)
+        ColorEntry(R.string.color_silver,       "#C6C6C9"), // Silver (Tonal Tone 80)
+        ColorEntry(R.string.color_sky_blue,     "#D1E4FF")  // Sky Blue (Tonal Tone 80)
     )
 
     private var cachedPlaceholder: android.graphics.Bitmap? = null
@@ -315,7 +321,7 @@ class SettingsActivity : AppCompatActivity() {
             res.findViewById<View>(R.id.color_preview).background.setTint(entry.hex.toColorInt())
             val label = res.findViewById<TextView>(R.id.color_name)
             val name = context.getString(entry.nameRes)
-            label.text = if (entry.hex.equals(other = defaultHex, ignoreCase = true)) "$name${context.getString(R.string.settings_default_suffix)}" else name
+            label.text = if (entry.hex.equals(other = defaultHex, ignoreCase = true)) "$name ${context.getString(R.string.settings_default_suffix)}" else name
             label.setTextColor(ContextCompat.getColor(context, R.color.colorOnSurface))
             return res
         }

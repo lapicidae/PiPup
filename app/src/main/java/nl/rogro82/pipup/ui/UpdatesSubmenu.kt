@@ -27,6 +27,8 @@ class UpdatesSubmenu(
     private var availableRelease: GitHubRelease? = null
 
     override fun onBind(root: View) {
+        val suffix = context.getString(R.string.settings_default_suffix)
+
         // Check Update Button
         root.findViewById<Button>(R.id.btn_check_update)?.apply {
             updateButtonText(this)
@@ -35,7 +37,7 @@ class UpdatesSubmenu(
         }
 
         // Update Channel
-        val channelItems = listOf(context.getString(R.string.settings_update_stable), context.getString(R.string.settings_update_beta))
+        val channelItems = listOf(context.getString(R.string.settings_update_stable), context.getString(R.string.settings_update_beta)).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_update_channel, ArrayAdapter(context, android.R.layout.simple_spinner_item, channelItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateChannel) {
             settings.updateChannel = it
         }
@@ -47,7 +49,7 @@ class UpdatesSubmenu(
             context.getString(R.string.settings_update_daily),
             context.getString(R.string.settings_update_weekly),
             context.getString(R.string.settings_update_monthly)
-        )
+        ).mapIndexed { i, s -> if (i == 4) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_update_interval, ArrayAdapter(context, android.R.layout.simple_spinner_item, intervalItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateInterval) {
             settings.updateInterval = it
             UpdateWorker.schedule(context, it)
@@ -58,7 +60,7 @@ class UpdatesSubmenu(
             context.getString(R.string.settings_update_style_silent),
             context.getString(R.string.settings_update_style_pipup),
             context.getString(R.string.settings_update_style_toast)
-        )
+        ).mapIndexed { i, s -> if (i == 1) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_update_notification_style, ArrayAdapter(context, android.R.layout.simple_spinner_item, styleItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateNotificationStyle) {
             settings.updateNotificationStyle = it
         }

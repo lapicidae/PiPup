@@ -24,12 +24,12 @@ class GeneralSubmenu(
     override fun onBind(root: View) {
         val suffix = context.getString(R.string.settings_default_suffix)
 
-        val posItems = context.resources.getStringArray(R.array.position_options).mapIndexed { i, s -> if (i == 0) "$s$suffix" else s }
+        val posItems = context.resources.getStringArray(R.array.position_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_position, ArrayAdapter(context, android.R.layout.simple_spinner_item, posItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.positionIndex) {
             settings.positionIndex = it
         }
 
-        val mediaPosItems = context.resources.getStringArray(R.array.media_position_options).mapIndexed { i, s -> if (i == 0) "$s$suffix" else s }
+        val mediaPosItems = context.resources.getStringArray(R.array.media_position_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_media_position, ArrayAdapter(context, android.R.layout.simple_spinner_item, mediaPosItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.mediaPosition) {
             settings.mediaPosition = it
         }
@@ -66,7 +66,7 @@ class GeneralSubmenu(
         }
 
         // App Theme
-        val themeItems = listOf(context.getString(R.string.settings_theme_dark), context.getString(R.string.settings_theme_light))
+        val themeItems = listOf(context.getString(R.string.settings_theme_dark), context.getString(R.string.settings_theme_light)).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_app_theme, ArrayAdapter(context, android.R.layout.simple_spinner_item, themeItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.appTheme) {
             if (settings.appTheme != it) {
                 settings.appTheme = it

@@ -203,11 +203,11 @@ class AppSettings(context: Context) {
         const val DEFAULT_BG_ALPHA = 225
         const val DEFAULT_TITLE_COLOR = "#DFE3E7"
         const val DEFAULT_TITLE_SIZE = 22f
-        const val DEFAULT_MSG_COLOR = "#C0C7CD"
+        const val DEFAULT_MSG_COLOR = "#C6C6C9" // Silver instead of old #C0C7CD
         const val DEFAULT_MSG_SIZE = 16f
         const val DEFAULT_RADIUS = 16
         const val DEFAULT_BORDER_WIDTH = 0
-        const val DEFAULT_BORDER_COLOR = "#625B71"
+        const val DEFAULT_BORDER_COLOR = "#2F3033" // Gunmetal instead of old Teal-ish #625B71
         const val DEFAULT_PADDING = 20
     }
 }

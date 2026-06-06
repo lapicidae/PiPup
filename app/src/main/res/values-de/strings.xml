@@ -129,7 +129,7 @@
     <string name="settings_preview_title">Live-Vorschau</string>
     <string name="settings_preview_message">Das Overlay wird in Echtzeit aktualisiert.</string>
     <string name="settings_slider_value_format">%1$d / %2$d</string>
-    <string name="settings_default_suffix"> (Standard)</string>
+    <string name="settings_default_suffix">(Standard)</string>
     <string name="settings_alignment_left">Links</string>
     <string name="settings_alignment_center">Zentriert</string>
     <string name="settings_alignment_right">Rechts</string>
@@ -152,16 +152,22 @@
     <string name="translator_credits">Übersetzt von: lapicidae &amp; Gemini KI</string>
 
     <!-- Farben -->
-    <string name="color_black">Schwarz</string>
-    <string name="color_white">Weiß</string>
-    <string name="color_grey">Grau</string>
-    <string name="color_blue">Blau</string>
-    <string name="color_teal">Türkis</string>
-    <string name="color_pink">Rosa</string>
-    <string name="color_red">Rot</string>
-    <string name="color_light_blue">Hellblau</string>
-    <string name="color_green">Grün</string>
-    <string name="color_orange">Orange</string>
+    <string name="color_deep_slate">Dunkler Schiefer</string>
+    <string name="color_midnight_violet">Mitternachtsviolett</string>
+    <string name="color_black_plum">Schwarze Pflaume</string>
+    <string name="color_rosewood">Rosenholz</string>
+    <string name="color_forest_green">Waldgrün</string>
+    <string name="color_deep_umber">Dunkles Umbra</string>
+    <string name="color_platinum">Platin</string>
+    <string name="color_sweet_lavender">Süßer Lavendel</string>
+    <string name="color_cotton_candy">Zuckerwatte</string>
+    <string name="color_peach_blossom">Pfirsichblüte</string>
+    <string name="color_celadon_pastel">Celadon Pastell</string>
+    <string name="color_peach_cream">Pfirsichcreme</string>
+    <string name="color_gunmetal">Bronzegrau</string>
+    <string name="color_navy_blue">Marineblau</string>
+    <string name="color_silver">Silber</string>
+    <string name="color_sky_blue">Himmelblau</string>
 
     <!-- Energie-Optimierung -->
     <string name="energy_optimization_title">Hintergrund-Aktivität</string>

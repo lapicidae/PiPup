@@ -58,7 +58,8 @@ class TextSubmenu(
         setupSeekBar(root, R.id.seekbar_title_size, R.id.text_title_size_value, settings.titleSize.toInt()) { settings.titleSize = it.toFloat() }
         setupSeekBar(root, R.id.seekbar_message_size, R.id.text_message_size_value, settings.messageSize.toInt()) { settings.messageSize = it.toFloat() }
 
-        val alignmentItems = context.resources.getStringArray(R.array.alignment_options).toList()
+        val suffix = context.getString(R.string.settings_default_suffix)
+        val alignmentItems = context.resources.getStringArray(R.array.alignment_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_title_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.titleAlignment) { settings.titleAlignment = it }
         setupSpinner(root, R.id.spinner_message_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.messageAlignment) { settings.messageAlignment = it }
     }
