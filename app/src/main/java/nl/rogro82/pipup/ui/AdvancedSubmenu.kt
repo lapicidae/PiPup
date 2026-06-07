@@ -3,11 +3,13 @@ package nl.rogro82.pipup.ui
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.graphics.Rect
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
@@ -63,12 +65,6 @@ class AdvancedSubmenu(
             setOnClickListener { showResetConfirmation() }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
-
-        // Version Info
-        root.findViewById<TextView>(R.id.text_app_version)?.apply {
-            val versionName = try { context.packageManager.getPackageInfo(context.packageName, 0).versionName } catch (_: Exception) { "v?.?.?" }
-            text = context.getString(R.string.settings_app_version_label, versionName)
-        }
     }
 
     private fun updateEnergyStatusDisplay(root: View) {
@@ -112,7 +108,7 @@ class AdvancedSubmenu(
                 settings.resetToDefaults()
                 val mode = if (settings.appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
                 AppCompatDelegate.setDefaultNightMode(mode)
-                (context as? SettingsActivity)?.recreate()
+                settingsActivity?.recreate()
             }
             .setNegativeButton(R.string.settings_no, null)
             .create()
@@ -126,6 +122,12 @@ class AdvancedSubmenu(
         val input = EditText(context).apply {
             hint = context.getString(R.string.settings_import_ip_hint)
             isSingleLine = true
+            onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
+                if (hasFocus) {
+                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                    imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                }
+            }
         }
         val dialog = AlertDialog.Builder(context)
             .setTitle(R.string.settings_import_ip_title).setView(input)
@@ -135,12 +137,46 @@ class AdvancedSubmenu(
             }.setNegativeButton(android.R.string.cancel, null)
             .create()
 
+        // Initial state: TOP to avoid overlap and resizing
         dialog.window?.apply {
-            setGravity(Gravity.TOP)
-            attributes = attributes.apply { y = 100 } // Offset from top
-            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE)
+            setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+            attributes = attributes.apply { y = 100 }
+            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
         }
         dialog.show()
+
+        // Reliable detection via Activity decor view
+        context.findActivity()?.window?.decorView?.let { decor ->
+            var wasKeyboardVisible = true
+            val posUpdater = Runnable {
+                dialog.window?.let { win ->
+                    val p = win.attributes
+                    p.gravity = if (wasKeyboardVisible) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
+                    p.y = if (wasKeyboardVisible) 100 else 0
+                    win.attributes = p
+                }
+            }
+            val listener = ViewTreeObserver.OnGlobalLayoutListener {
+                val r = Rect()
+                decor.getWindowVisibleDisplayFrame(r)
+                val screenHeight = decor.rootView.height
+                val keypadHeight = screenHeight - r.bottom
+                val isKeyboardVisible = (keypadHeight > screenHeight * 0.15) ||
+                        (decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
+
+                if (isKeyboardVisible != wasKeyboardVisible) {
+                    wasKeyboardVisible = isKeyboardVisible
+                    handler.removeCallbacks(posUpdater)
+                    // Immediate move to top, 250ms delay to move to center (debouncing)
+                    handler.postDelayed(posUpdater, if (isKeyboardVisible) 0 else 250)
+                }
+            }
+            decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
+            dialog.setOnDismissListener {
+                decor.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+                handler.removeCallbacks(posUpdater)
+            }
+        }
 
         val buttonKeyListener = View.OnKeyListener { _, keyCode, event ->
             if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
@@ -162,19 +198,19 @@ class AdvancedSubmenu(
                 connection.connectTimeout = 5000; connection.readTimeout = 5000
                 if (connection.responseCode == 200) {
                     val json = connection.inputStream.bufferedReader().use { it.readText() }
-                    val data = (context as SettingsActivity).mapper.readValue(json, AppSettings.SettingsData::class.java)
-                    (context as SettingsActivity).runOnUiThread {
-                        settings.apply(data)
-                        (context as SettingsActivity).recreate()
+                    val data = settingsActivity?.mapper?.readValue(json, AppSettings.SettingsData::class.java)
+                    settingsActivity?.runOnUiThread {
+                        if (data != null) settings.apply(data)
+                        settingsActivity?.recreate()
                         Toast.makeText(context, R.string.settings_import_success, Toast.LENGTH_SHORT).show()
                     }
                 } else {
-                    (context as SettingsActivity).runOnUiThread {
+                    settingsActivity?.runOnUiThread {
                         Toast.makeText(context, context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
-                (context as SettingsActivity).runOnUiThread {
+                settingsActivity?.runOnUiThread {
                     Toast.makeText(context, context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), Toast.LENGTH_LONG).show()
                 }
             }

@@ -36,8 +36,7 @@
             android:layout_height="0dp"
             android:layout_weight="1"
             android:scrollbars="none"
-            android:requiresFadingEdge="vertical"
-            android:fadingEdgeLength="40dp"
+            android:saveEnabled="false"
             android:clipToPadding="false">
 
             <LinearLayout
@@ -58,19 +57,21 @@
 
     </LinearLayout>
 
-    <!-- Submenu Content -->
     <ScrollView
         android:id="@+id/settings_scroll"
         android:layout_width="0dp"
-        android:layout_height="match_parent"
+        android:layout_height="0dp"
         android:clipToPadding="false"
+        android:saveEnabled="false"
         android:fadeScrollbars="false"
         android:scrollbarStyle="outsideOverlay"
         android:scrollbars="vertical"
         android:descendantFocusability="afterDescendants"
         android:contentDescription="@string/settings_title"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@id/nav_rail">
+        app:layout_constraintStart_toEndOf="@id/nav_rail"
+        app:layout_constraintTop_toTopOf="parent">
 
         <LinearLayout
             android:id="@+id/submenu_container"

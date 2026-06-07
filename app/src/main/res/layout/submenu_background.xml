@@ -16,7 +16,21 @@
 
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_bg_color" android:textColor="@color/colorOnSurfaceVariant"/>
     <Spinner android:id="@+id/spinner_bg_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
-    <Button android:id="@+id/btn_edit_bg_hex" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_bg_color" tools:text="#000000" android:visibility="gone" style="@android:style/Widget.DeviceDefault.Button.Toggle" android:focusable="true" android:gravity="start|center_vertical" android:paddingStart="12dp" android:paddingEnd="12dp" android:textColor="@color/colorOnSurface"/>
+    <Button android:id="@+id/btn_edit_bg_hex"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:text="@string/settings_bg_color"
+        tools:text="#000000"
+        android:visibility="gone"
+        android:background="@drawable/field_background"
+        android:focusable="true"
+        android:gravity="start|center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/colorOnSurface"
+        android:textAllCaps="false"
+        android:fontFamily="monospace"/>
 
     <LinearLayout
         android:layout_width="match_parent"

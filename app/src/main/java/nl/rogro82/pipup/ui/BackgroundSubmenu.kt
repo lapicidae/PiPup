@@ -3,10 +3,7 @@ package nl.rogro82.pipup.ui
 import android.content.Context
 import android.view.View
 import android.widget.Button
-import android.widget.EditText
 import android.widget.FrameLayout
-import androidx.appcompat.app.AlertDialog
-import androidx.core.graphics.toColorInt
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
@@ -20,7 +17,8 @@ class BackgroundSubmenu(
 ) : SubmenuBase(context, settings, onSettingsChanged, previewArea) {
 
     override fun onBind(root: View) {
-        val adapter = SettingsActivity.ColorSpinnerAdapter(context, (context as SettingsActivity).materialColors, AppSettings.DEFAULT_BG_COLOR)
+        val colors = settingsActivity?.materialColors ?: emptyList()
+        val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, AppSettings.DEFAULT_BG_COLOR)
         setupSpinner(root, R.id.spinner_bg_color, adapter, 0) {
             val color = adapter.colors[it].hex
             settings.backgroundColor = color
@@ -44,19 +42,5 @@ class BackgroundSubmenu(
         val clean = hex.replace("#", "").let { if (it.length == 8) it.substring(2) else it }
         val idx = adapter.colors.indexOfFirst { it.hex.equals("#$clean", true) }
         if (idx != -1) root.findViewById<android.widget.Spinner>(spinnerId)?.setSelection(idx)
-    }
-
-    private fun showHexInputDialog(btn: Button, onSet: (String) -> Unit) {
-        val input = EditText(context).apply { setText(btn.text.toString().replace("#", "")); isSingleLine = true }
-        AlertDialog.Builder(context)
-            .setTitle(R.string.settings_edit_hex_title).setView(input)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val h = "#${input.text.toString().uppercase()}"
-                try {
-                    h.toColorInt()
-                    btn.text = h
-                    onSet(h)
-                } catch (_: Exception) {}
-            }.setNegativeButton(android.R.string.cancel, null).show()
     }
 }

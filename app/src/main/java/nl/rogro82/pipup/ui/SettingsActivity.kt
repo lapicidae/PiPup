@@ -14,6 +14,7 @@ import android.view.ViewGroup
 import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -103,8 +104,18 @@ class SettingsActivity : AppCompatActivity() {
         root.findViewById<ImageView>(R.id.nav_icon)?.setImageResource(iconRes)
 
         root.setOnClickListener { focusFirstInSubmenu() }
-        root.setOnFocusChangeListener { _, hasFocus ->
-            if (hasFocus && currentLayoutRes != layoutRes) loadSubmenu(layoutRes, navId)
+        root.setOnFocusChangeListener { v, hasFocus ->
+            if (hasFocus) {
+                // Centering for NavRail (if it scrolls)
+                (v.parent.parent as? ScrollView)?.let { scroll ->
+                    val rect = android.graphics.Rect()
+                    v.getDrawingRect(rect)
+                    scroll.offsetDescendantRectToMyCoords(v, rect)
+                    val pivotY = scroll.height * 0.3f
+                    scroll.smoothScrollTo(0, (rect.top - pivotY).toInt().coerceAtLeast(0))
+                }
+                if (currentLayoutRes != layoutRes) loadSubmenu(layoutRes, navId)
+            }
             updateNavAppearance()
         }
 
@@ -151,6 +162,8 @@ class SettingsActivity : AppCompatActivity() {
         binding.submenuContainer.removeAllViews()
         val root = LayoutInflater.from(this).inflate(layoutRes, binding.submenuContainer, true)
 
+        binding.settingsScroll.post { binding.settingsScroll.scrollTo(0, 0) }
+
         getController(layoutRes).onBind(root)
         setupSubmenuFocus(navId)
         updateNavAppearance()
@@ -194,7 +207,24 @@ class SettingsActivity : AppCompatActivity() {
 
             val old = child.onFocusChangeListener
             child.setOnFocusChangeListener { v, f ->
-                if (f && i == 0) binding.settingsScroll.smoothScrollTo(0, 0)
+                if (f) {
+                    // Gold Standard: Smooth Focus Centering (Pivot Scrolling)
+                    val scroll = binding.settingsScroll
+                    val container = binding.submenuContainer
+
+                    val rect = android.graphics.Rect()
+                    v.getDrawingRect(rect)
+                    scroll.offsetDescendantRectToMyCoords(v, rect)
+
+                    val viewportHeight = scroll.height
+                    if (viewportHeight > 0) {
+                        // Pivot at 30% from the top
+                        val pivotY = viewportHeight * 0.3f
+                        val targetScrollY = (rect.top - pivotY).toInt()
+                        val maxScroll = (container.height - viewportHeight).coerceAtLeast(0)
+                        scroll.smoothScrollTo(0, targetScrollY.coerceIn(0, maxScroll))
+                    }
+                }
                 old?.onFocusChange(v, f)
                 if (f) getController(currentLayoutRes).updatePreviewPosition(v)
             }

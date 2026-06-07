@@ -180,7 +180,6 @@
     <string name="energy_optimization_later">Later</string>
     <string name="energy_status_optimized">Optimized (problematic)</string>
     <string name="energy_status_unrestricted">Unrestricted (recommended)</string>
-    <string name="settings_app_version_label">PiPup %1$s</string>
 
     <!-- Web Server Landing Page -->
     <string name="server_landing_title">%1$s Server</string>
