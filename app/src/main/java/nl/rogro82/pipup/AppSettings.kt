@@ -47,19 +47,21 @@ class AppSettings(context: Context) {
     var updateRepeat by BooleanPref("update_repeat", false)
     var lastNotifiedTag by StringPref("last_notified_tag", "")
 
+    val isBetaBuild: Boolean by lazy {
+        val versionName = try {
+            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+        } catch (_: Exception) { null }
+
+        versionName?.let { v ->
+            listOf("prerelease", "beta", "rc").any { v.contains(it, true) }
+        } == true ||
+                BuildConfig.APP_STATUS.contains("beta", true) ||
+                BuildConfig.APP_STATUS.contains("prerelease", true) ||
+                BuildConfig.DEBUG
+    }
+
     init {
         if (updateChannel == -1) {
-            val versionName = try {
-                context.packageManager.getPackageInfo(context.packageName, 0).versionName
-            } catch (_: Exception) { null }
-
-            val isBetaBuild = versionName?.let { v ->
-                listOf("prerelease", "beta", "rc").any { v.contains(it, true) }
-            } == true ||
-                    BuildConfig.APP_STATUS.contains("beta", true) ||
-                    BuildConfig.APP_STATUS.contains("prerelease", true) ||
-                    BuildConfig.DEBUG
-
             updateChannel = if (isBetaBuild) 1 else 0
         }
     }

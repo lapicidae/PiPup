@@ -37,7 +37,8 @@ class UpdatesSubmenu(
         }
 
         // Update Channel
-        val channelItems = listOf(context.getString(R.string.settings_update_stable), context.getString(R.string.settings_update_beta)).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
+        val defaultChannelIndex = if (settings.isBetaBuild) 1 else 0
+        val channelItems = listOf(context.getString(R.string.settings_update_stable), context.getString(R.string.settings_update_beta)).mapIndexed { i, s -> if (i == defaultChannelIndex) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_update_channel, ArrayAdapter(context, android.R.layout.simple_spinner_item, channelItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateChannel) {
             settings.updateChannel = it
         }

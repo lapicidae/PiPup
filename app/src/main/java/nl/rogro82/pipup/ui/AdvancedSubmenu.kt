@@ -125,7 +125,7 @@ class AdvancedSubmenu(
             onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
                 if (hasFocus) {
                     val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                    imm.showSoftInput(v, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT)
+                    imm.showSoftInput(v, 0)
                 }
             }
         }
