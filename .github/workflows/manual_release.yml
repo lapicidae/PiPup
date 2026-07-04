@@ -34,7 +34,7 @@ jobs:
     steps:
       # Step 1: Initialize environment and fetch source
       - name: Checkout code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Fetch all history for accurate tag comparison
           fetch-tags: true

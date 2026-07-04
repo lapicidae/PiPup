@@ -27,7 +27,7 @@ jobs:
     steps:
       # Step 1: Clone the repository onto the virtual runner
       - name: Checkout Source Code
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Fetch all history for accurate tag comparison
           fetch-tags: true
