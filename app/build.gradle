@@ -73,9 +73,9 @@ android {
 
     defaultConfig {
         applicationId "nl.rogro82.pipup"
-        minSdk 31
+        minSdk 26
 
-        targetSdk 35
+        targetSdk 37
 
         // Automatic versioning logic
         versionCode getTimestampVersion()

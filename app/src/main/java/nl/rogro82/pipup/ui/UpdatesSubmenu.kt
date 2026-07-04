@@ -186,17 +186,19 @@ class UpdatesSubmenu(
                     }
 
                     override fun onNoUpdate() {
-                        (context as? SettingsActivity)?.runOnUiThread {
-                            Toast.makeText(context, R.string.settings_update_no_longer_available, Toast.LENGTH_LONG).show()
-                            // Refresh UI state
-                            availableRelease = null
-                            settings.updateAvailableTag = ""
-                            (context as? SettingsActivity)?.findViewById<Button>(R.id.btn_check_update)?.let { updateButtonText(it) }
+                        (context as SettingsActivity).run {
+                            runOnUiThread {
+                                Toast.makeText(context, R.string.settings_update_no_longer_available, Toast.LENGTH_LONG).show()
+                                // Refresh UI state
+                                availableRelease = null
+                                settings.updateAvailableTag = ""
+                                findViewById<Button>(R.id.btn_check_update)?.let { updateButtonText(it) }
+                            }
                         }
                     }
 
                     override fun onError(message: String) {
-                        (context as? SettingsActivity)?.runOnUiThread {
+                        (context as SettingsActivity).runOnUiThread {
                             Toast.makeText(context, "Verification failed: $message", Toast.LENGTH_LONG).show()
                         }
                     }
