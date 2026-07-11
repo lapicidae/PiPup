@@ -13,12 +13,19 @@ readonly PORT='7979'
 readonly DURATION=10
 readonly STRESS_ITERATIONS=50
 
+readonly MOCK_WHEP_DEFAULT_PORT='8889'
+readonly WHEP_STATE_FILE='/dev/shm/pipup_whep.state'
+readonly WHEP_TIMEOUT=600  # 10 minutes
+
+# Fully-formed mock SDP WebRTC Answer profile for response execution
+readonly MOCK_SDP_ANSWER=$'v=0\r\no=- 1719830000 1719830000 IN IP4 127.0.0.1\r\ns=-\r\nc=IN IP4 127.0.0.1\r\nt=0 0\r\na=group:BUNDLE 0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=mid:0\r\na=rtcp-mux\r\na=setup:active\r\na=sendonly\r\na=ice-ufrag:mockufrag\r\na=ice-pwd:mockpwd_at_least_22_chars_long\r\na=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\na=rtpmap:96 H264/90000\r\n'
+
 # Style Variations
 readonly DEFAULT_TITLE_SIZE=24
 readonly DEFAULT_MSG_SIZE=14
 readonly MIN_PADDING=16
 
-readonly TEST_TYPES=("png" "jpg" "svg" "video" "web" "multipart" "message" "cancel")
+readonly TEST_TYPES=("png" "jpg" "svg" "video" "whep" "web" "multipart" "message" "cancel")
 
 # Theme definitions: "background;border;title_text;message_text"
 declare -A THEMES
@@ -49,6 +56,9 @@ readonly SVG_URL="https://upload.wikimedia.org/wikipedia/commons/b/bd/Test.svg"
 readonly VIDEO_URL="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_5MB.mp4"
 readonly WEB_URL="https://opensource.org"
 
+# Dynamic Mock WHEP URL (will be updated if server starts)
+WHEP_URL="http://127.0.0.1:${MOCK_WHEP_DEFAULT_PORT}/whep"
+
 # Combined UTF-8 and Lorem Ipsum Stress Test (Ensures encoding stability)
 readonly TEXT_UTF8="🚀 UTF-8 Test: Ää Öö Üü ß | € | 漢字 (Kanji) | עִבְรִית (Hebrew) | Special: \"Quoted Text\", 'Single Quotes', {Braces}, [Brackets], /Slashes/ & \Backslashes\. Symbols: ☢☣⚡🔥🌈 | 100% | 180°C."
 readonly TEXT_LOREM_IPSUM="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat."
@@ -77,12 +87,15 @@ readonly CLR_ERROR='\033[1;31m'   # Bold Red
 #######################################
 get_media_payload() {
   local type="${1}"
+  local url="${2:-}"
+  local fit="${3:-cover}"
   case "${type}" in
-    png)   echo "{\"image\": {\"uri\": \"${PNG_URL}\", \"width\": 480}}" ;;
-    jpg)   echo "{\"image\": {\"uri\": \"${JPG_URL}\", \"width\": 480}}" ;;
-    svg)   echo "{\"image\": {\"uri\": \"${SVG_URL}\", \"width\": 480}}" ;;
-    video) echo "{\"video\": {\"uri\": \"${VIDEO_URL}\", \"width\": 480}}" ;;
-    web)   echo "{\"web\": {\"uri\": \"${WEB_URL}\", \"width\": 640, \"height\": 480}}" ;;
+    png)   echo "{\"image\": {\"uri\": \"${url:-$PNG_URL}\", \"width\": 480}}" ;;
+    jpg)   echo "{\"image\": {\"uri\": \"${url:-$JPG_URL}\", \"width\": 480}}" ;;
+    svg)   echo "{\"image\": {\"uri\": \"${url:-$SVG_URL}\", \"width\": 480}}" ;;
+    video) echo "{\"video\": {\"uri\": \"${url:-$VIDEO_URL}\", \"width\": 480}}" ;;
+    whep)  echo "{\"whep\": {\"uri\": \"${url:-$WHEP_URL}\", \"width\": 640, \"videoFit\": \"${fit}\"}}" ;;
+    web)   echo "{\"web\": {\"uri\": \"${url:-$WEB_URL}\", \"width\": 640, \"height\": 480}}" ;;
     *)     printf "null" ;;
   esac
 }
@@ -115,8 +128,106 @@ print_table_header() {
 }
 
 #######################################
+# Starts a persistent background mock server serving the video in a loop.
+# The server remains active for 10 minutes to support multiple tests
+# and then terminates automatically.
+# Globals:
+#   MOCK_WHEP_DEFAULT_PORT: Preferred port.
+#   WHEP_STATE_FILE: Path to store PID and Port.
+#   WHEP_TIMEOUT: Seconds until self-destruction.
+#######################################
+start_mock_whep_server() {
+  if [[ -f "${WHEP_STATE_FILE}" ]]; then
+    local state_data
+    state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
+    if [[ "${state_data}" == *":"* ]]; then
+      local state_pid="${state_data%:*}"
+      local state_port="${state_data#*:}"
+      if kill -0 "${state_pid}" 2>/dev/null; then
+        WHEP_URL="http://127.0.0.1:${state_port}/whep"
+        return 0
+      fi
+    fi
+    rm -f "${WHEP_STATE_FILE}"
+  fi
+
+  local assigned_port="${MOCK_WHEP_DEFAULT_PORT}"
+
+  # Check if default port is free (connection fails if free)
+  if (printf "" > "/dev/tcp/127.0.0.1/${assigned_port}") >/dev/null 2>&1; then
+    # Default busy, find another one
+    local found=false
+    local p
+    for p in {8890..8990}; do
+      if ! (printf "" > "/dev/tcp/127.0.0.1/${p}") >/dev/null 2>&1; then
+        assigned_port=$p
+        found=true
+        break
+      fi
+    done
+    if [[ "$found" == "false" ]]; then
+       printf "[SYSTEM] Error: Could not find any free port for mock WHEP server.\n" >&2
+       return 1
+    fi
+  fi
+
+  printf "[SYSTEM] Spawning persistent WHEP mock server on port %s (timeout: %dm)...\n" \
+    "${assigned_port}" $((WHEP_TIMEOUT / 60))
+
+  (
+    set +e
+    local start_time
+	start_time=$(date +%s)
+
+    # Store state before starting loop
+    printf "%s:%s" "$BASHPID" "${assigned_port}" > "${WHEP_STATE_FILE}"
+
+    trap 'rm -f "${WHEP_STATE_FILE}"; exit 0' SIGTERM SIGINT
+
+    while true; do
+      local now
+      now=$(date +%s)
+      if (( now - start_time > WHEP_TIMEOUT )); then break; fi
+
+      # Read request (discarded) and send response
+      # Use a simplified response to avoid complex logic in background
+      {
+        printf "HTTP/1.1 200 OK\r\n"
+        printf "Content-Type: application/sdp\r\n"
+        printf "Access-Control-Allow-Origin: *\r\n"
+        printf "Access-Control-Allow-Methods: POST, GET, OPTIONS\r\n"
+        printf "Access-Control-Allow-Headers: Content-Type, *\r\n"
+        printf 'Content-Length: %s\r\n' "${#MOCK_SDP_ANSWER}"
+        printf "Connection: close\r\n\r\n"
+        printf "%s" "${MOCK_SDP_ANSWER}"
+      } | timeout 2 nc -lp "${assigned_port}" -s 0.0.0.0 > /dev/null 2>&1 || true
+    done
+    rm -f "${WHEP_STATE_FILE}"
+  ) &
+  disown
+
+  # Allow server a moment to bind and update global URL
+  local wait_count=0
+  while [[ ! -f "${WHEP_STATE_FILE}" && $wait_count -lt 10 ]]; do
+    sleep 0.1
+    ((wait_count++))
+  done
+
+  if [[ -f "${WHEP_STATE_FILE}" ]]; then
+    local state_data
+    state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
+    if [[ "${state_data}" == *":"* ]]; then
+       local state_port="${state_data#*:}"
+       local host_ip
+       host_ip=$(ip route get 1 2>/dev/null | awk '{print $7;exit}' || hostname -I | awk '{print $1}')
+       WHEP_URL="http://${host_ip}:${state_port}/whep"
+    fi
+  fi
+}
+
+#######################################
 # Sets up ADB port forwarding based on target location or specific device.
-# Resolves connected target network IP addresses or falls back to locally 
+# Resolves connected target network IP addresses or falls back to locally
 # deployed emulators to prevent device collisions.
 # Globals:
 #   PORT: Integer, read-only system service port identifier.
@@ -309,7 +420,7 @@ send_multipart_test() {
   local anim_type="${6:-0}"
   local anim_duration="${7:-500}"
   local endpoint="http://${target_ip}:${PORT}/notify"
-  local temp_file="/tmp/pipup_test.png"
+  local temp_file="/dev/shm/pipup_test.png"
 
   local full_msg
   full_msg=$(printf "Mode: Form-Data\nPos: %s\nMediaPos: %s\nPadding: %s%b" "${position}" "${media_pos}" "${padding}" "${suffix}")
@@ -334,7 +445,7 @@ send_multipart_test() {
   local status_color="${CLR_SUCCESS}"
   [[ "${response}" != "200" ]] && status_color="${CLR_ERROR}"
 
-  local style_info  
+  local style_info
   style_info=$(printf "Pos:%s MedPos:%s Rad:-- Bdr:-- Pad:%sdp Anim:%s (%sms)" \
     "${position}" "${media_pos}" "${padding}" "${anim_type}" "${anim_duration}")
 
@@ -351,14 +462,16 @@ send_multipart_test() {
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-h host] [-t type] [-a] [-l] [-c] [-s]
+Usage: ${0##*/} [-h host] [-t type] [-u url] [-a] [-l] [-c] [-s] [-k]
 Options:
   -h    Target IP (default: ${DEFAULT_IP})
   -t    Test type: ${TEST_TYPES[*]}
+  -u    Custom media URL (overrides default assets)
   -a    Run all standard tests in sequence
   -l    Add long text to messages
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
+  -k    Kill the background WHEP mock server
 EOF
   exit 1
 }
@@ -373,22 +486,43 @@ EOF
 main() {
   local target_ip="${DEFAULT_IP}"
   local test_type=""
+  local custom_url=""
   local run_all="false"
   local use_long_text="false"
   local immediate_cancel="false"
   local run_stress="false"
+  local kill_mock="false"
 
-  while getopts "h:t:alcs" opt; do
+  while getopts "h:t:u:alcks" opt; do
     case "${opt}" in
       h) target_ip="${OPTARG}" ;;
       t) test_type="${OPTARG}" ;;
+      u) custom_url="${OPTARG}" ;;
       a) run_all="true" ;;
       l) use_long_text="true" ;;
       c) immediate_cancel="true" ;;
+      k) kill_mock="true" ;;
       s) run_stress="true" ;;
       *) usage ;;
     esac
   done
+
+  if [[ "${kill_mock}" == "true" ]]; then
+    if [[ -f "${WHEP_STATE_FILE}" ]]; then
+      local state_data
+      state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
+      if [[ "${state_data}" == *":"* ]]; then
+        local state_pid="${state_data%:*}"
+        local state_port="${state_data#*:}"
+        printf "[SYSTEM] Killing WHEP mock server (PID: %s, Port: %s)... " "${state_pid}" "${state_port}"
+        kill "${state_pid}" 2>/dev/null && printf "OK\n" || printf "FAILED (already dead?)\n"
+      fi
+      rm -f "${WHEP_STATE_FILE}"
+    else
+      printf "[SYSTEM] No WHEP mock server state file found.\n"
+    fi
+    return 0
+  fi
 
   if [[ "${run_all}" == "true" && "${run_stress}" == "true" ]]; then
     printf "Error: Options -a (run all) and -s (stress test) are mutually exclusive.\n" >&2
@@ -401,9 +535,18 @@ main() {
   fi
 
   local suffix=""
-  [[ "${use_long_text}" == "true" ]] && suffix="\n\n${LONG_TEXT}"
+  if [[ "${use_long_text}" == "true" ]]; then
+    suffix="\n\n${LONG_TEXT}"
+  fi
 
-  [[ "${target_ip}" =~ ^(localhost|127\.0\.0\.1)$ ]] && setup_adb_forwarding
+  if [[ "${target_ip}" =~ ^(localhost|127\.0\.0\.1)$ ]]; then
+    setup_adb_forwarding || true
+  fi
+
+  # Start the background mock server for WebRTC/WHEP testing only if needed
+  if [[ "${test_type}" == "whep" && -z "${custom_url}" ]] || [[ "${run_all}" == "true" ]] || [[ "${run_stress}" == "true" ]]; then
+    start_mock_whep_server || true
+  fi
 
   #######################################
   # Wraps randomized styling configurations and maps variables to json dispatchers.
@@ -418,6 +561,7 @@ main() {
     local title="${2}"
     local pos="${3}"
     local media="${4}"
+    local fit="${5:-}"
 
     local theme_name="${THEME_KEYS[$((RANDOM % ${#THEME_KEYS[@]}))]}"
     local theme_str="${THEMES[$theme_name]}"
@@ -433,8 +577,10 @@ main() {
     local rand_anim_duration=$((300 + RANDOM % 1201))
 
     local info_msg
-    info_msg=$(printf "Theme: %s\nType: %s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)%b" \
-      "${theme_name}" "${type}" "${rand_radius}" "${rand_border}" "${rand_media_pos}" "${rand_padding}" \
+    local fit_label=""
+    [[ -n "${fit}" ]] && fit_label=" | Fit: ${fit}"
+    info_msg=$(printf "Theme: %s\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)%b" \
+      "${theme_name}" "${type}" "${fit_label}" "${rand_radius}" "${rand_border}" "${rand_media_pos}" "${rand_padding}" \
       "${rand_anim_type}" "${rand_anim_duration}" "${suffix}")
 
     # Fire the notification and catch the returned HTTP code
@@ -449,12 +595,14 @@ main() {
 
     # Print the beautiful, single-line table row
     local style_info
+    local table_type="${type^^}"
+    [[ -n "${fit}" ]] && table_type="${table_type}(${fit:0:1})"
     style_info=$(printf "Pos:%s MedPos:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms)" \
       "${pos}" "${rand_media_pos}" "${rand_radius}" "${rand_border}" "${rand_padding}" \
       "${rand_anim_type}" "${rand_anim_duration}")
 
     printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-60s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET}\n" \
-      "${type^^}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
+      "${table_type}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
   }
 
   #######################################
@@ -491,7 +639,7 @@ run_stress_test() {
     local type="${TEST_TYPES[rand_idx]}"
 
     if [[ "${type}" == "cancel" ]]; then
-      continue 
+      continue
     fi
 
     if [[ "${type}" == "multipart" ]]; then
@@ -505,8 +653,13 @@ run_stress_test() {
     fi
 
     local media
-    media=$(get_media_payload "${type}")
-    dispatch_test "${type}" "Stress #${i}" "$((RANDOM % 5))" "${media}" &
+    local fit="cover"
+    if [[ "${type}" == "whep" ]]; then
+      local fits=("cover" "contain" "fill")
+      fit="${fits[$((RANDOM % 3))]}"
+    fi
+    media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
+    dispatch_test "${type}" "Stress #${i}" "$((RANDOM % 5))" "${media}" "${fit}" &
   done
 
   wait
@@ -525,18 +678,23 @@ run_stress_test() {
     local idx=0
     for type in "${TEST_TYPES[@]}"; do
       [[ "${type}" == "cancel" ]] && continue
-      
+
       if [[ "${type}" == "multipart" ]]; then
         local mp_padding=$((MIN_PADDING + (RANDOM % 25)))
         local mp_anim_type=$((RANDOM % 11))
         local mp_anim_duration=$((300 + RANDOM % 1201))
         send_multipart_test "${target_ip}" "${pos_list[idx]}" "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}"
       else
+        local fit="cover"
+        if [[ "${type}" == "whep" ]]; then
+          local fits=("cover" "contain" "fill")
+          fit="${fits[$((RANDOM % 3))]}"
+        fi
         local media
-        media=$(get_media_payload "${type}")
-        dispatch_test "${type}" "${type^^} Test" "${pos_list[idx]}" "${media}"
+        media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
+        dispatch_test "${type}" "${type^^} Test" "${pos_list[idx]}" "${media}" "${fit}"
       fi
-      
+
       idx=$((idx + 1))
       sleep "$((DURATION - 1))"
     done
@@ -550,16 +708,17 @@ run_stress_test() {
 
   # Single Test Case Execution
   [[ -z "${test_type}" ]] && test_type="message"
-  
+
   if [[ "${test_type}" == "multipart" ]]; then
-    print_table_header
     local mp_padding=$((MIN_PADDING + (RANDOM % 25)))
     local mp_anim_type=$((RANDOM % 11))
     local mp_anim_duration=$((300 + RANDOM % 1201))
+    print_table_header
     send_multipart_test "${target_ip}" 0 "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}"
   elif [[ "${test_type}" == "cancel" ]]; then
     local media
     media=$(get_media_payload "png")
+    print_table_header
     dispatch_test "cancel" "Abort Test" 0 "${media}"
     sleep 2
     send_cancel_request "${target_ip}"
@@ -568,10 +727,29 @@ run_stress_test() {
       printf "Test '%s' not recognized.\n" "${test_type}" >&2
       usage
     fi
-    print_table_header
+
+    local fit="cover"
+    if [[ "${test_type}" == "whep" ]]; then
+      local fits=("cover" "contain" "fill")
+      fit="${fits[$((RANDOM % 3))]}"
+    fi
+
     local media
-    media=$(get_media_payload "${test_type}")
-    dispatch_test "${test_type}" "${test_type^^} Test" 0 "${media}"
+    media=$(get_media_payload "${test_type}" "${custom_url}" "${fit}")
+
+    if [[ "${test_type}" == "whep" && -z "${custom_url}" ]]; then
+      if [[ -f "${WHEP_STATE_FILE}" ]]; then
+        local state_data
+        state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
+        if [[ "${state_data}" == *":"* ]]; then
+          local state_pid="${state_data%:*}"
+          local state_port="${state_data#*:}"
+          printf "[SYSTEM] Mock WHEP server is active in background (PID: %s, Port: %s)\n\n" "${state_pid}" "${state_port}"
+        fi
+      fi
+    fi
+    print_table_header
+    dispatch_test "${test_type}" "${test_type^^} Test" 0 "${media}" "${fit}"
   fi
 }
 

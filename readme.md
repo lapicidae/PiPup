@@ -87,13 +87,14 @@ You can send notifications either as an **application/json** payload (for extern
 }
 ```
 
-For JSON payloads, the `media` object supports 3 types:
+For JSON payloads, the `media` object supports 4 types:
 
 ```json
 {
-"image": { "uri": "...", "width": 480, "cache": true, "scale": true },                "//comment_i": "cache and scale are optional",
-"video": { "uri": "...", "width": 480, "scale": true },                               "//comment_v": "scale is optional",
-"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true }, "//comment_w": "cache and scale are optional"
+"image": { "uri": "...", "width": 480, "cache": true, "scale": true },                      "//comment_im": "cache and scale are optional",
+"video": { "uri": "...", "width": 480, "scale": true },                                     "//comment_vi": "scale is optional",
+"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true },       "//comment_we": "cache and scale are optional",
+"whep":  { "uri": "...", "width": 640, "height": 480, "scale": true, "videoFit": "cover" }, "//comment_wh": "videoFit and scale are optional"
 }
 ```
 
@@ -138,8 +139,9 @@ All fields below are optional for both JSON properties (top-level keys) and Mult
 | **mediaPosition** | Integer | 0         | Position of the media relative to text (0..3)                                 |
 | **image**         | File    |           | **(Multipart only)** Local image file upload                                  |
 | **imageWidth**    | Integer | 480       | **(Multipart only)** Width of the uploaded image in pixels                    |
-| **cache**         | Boolean | true      | **(JSON only)** Toggles disk/memory caching for images and web content        |
-| **scale**         | Boolean | true      | **(JSON only)** Automatically scales dimensions relative to a 1080p reference |
+| **cache**         | Boolean | true      | Toggles disk/memory caching for images and web content                        |
+| **scale**         | Boolean | true      | Automatically scales dimensions relative to a 1080p reference                 |
+| **videoFit**      | String  | cover     | **(WHEP only)** CSS object-fit property for WHEP video (cover, contain, fill) |
 
 ---
 

@@ -54,7 +54,8 @@ data class PopupProps(
     @JsonSubTypes(
         JsonSubTypes.Type(Media.Video::class, name = "video"),
         JsonSubTypes.Type(Media.Image::class, name = "image"),
-        JsonSubTypes.Type(Media.Web::class, name = "web")
+        JsonSubTypes.Type(Media.Web::class, name = "web"),
+        JsonSubTypes.Type(Media.Whep::class, name = "whep")
     )
     sealed class Media {
         data class Video(
@@ -74,6 +75,13 @@ data class PopupProps(
             val height: Int = 480,
             val cache: Boolean = true,
             val scale: Boolean = true
+        ) : Media()
+        data class Whep(
+            val uri: String,
+            val width: Int = 640,
+            val height: Int = 480,
+            val scale: Boolean = true,
+            val videoFit: String = "cover" // cover, contain, fill
         ) : Media()
         data class Bitmap(
             val bitmap: android.graphics.Bitmap,

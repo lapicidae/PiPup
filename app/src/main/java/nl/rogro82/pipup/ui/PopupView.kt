@@ -9,9 +9,12 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.TextureView
 import android.view.animation.OvershootInterpolator
+import android.webkit.PermissionRequest
+import android.webkit.WebChromeClient
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import java.net.URLEncoder
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -268,6 +271,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             is PopupProps.Media.Image -> renderImage(frame, media.uri, media.width, media.cache, media.scale)
             is PopupProps.Media.Video -> renderVideo(frame, media.uri, media.width, media.scale)
             is PopupProps.Media.Web -> renderWeb(frame, media.uri, media.width, media.height, media.cache, media.scale)
+            is PopupProps.Media.Whep -> renderWhep(frame, media.uri, media.width, media.height, media.scale, media.videoFit)
             is PopupProps.Media.Bitmap -> renderBitmap(frame, media.bitmap, media.width, media.scale)
         }
     }
@@ -354,17 +358,74 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 @Deprecated("Deprecated in Java")
                 override fun onReceivedError(v: WebView?, r: Int, d: String?, u: String?) { readyListener?.onReady(); adjustHeights() }
             }
+            webChromeClient = object : WebChromeClient() {
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    request.grant(request.resources)
+                }
+            }
             @SuppressLint("SetJavaScriptEnabled")
             with(settings) {
                 javaScriptEnabled = true
                 domStorageEnabled = true
                 loadWithOverviewMode = true
                 useWideViewPort = true
+                mediaPlaybackRequiresUserGesture = false
+                allowFileAccess = true
+                allowContentAccess = true
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 cacheMode = if (cache) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_NO_CACHE
             }
         }
         frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         wv.loadUrl(uri)
+    }
+
+    private fun renderWhep(frame: FrameLayout, uri: String, width: Int, height: Int, scale: Boolean, videoFit: String) {
+        val finalUri = if (uri.contains("127.0.0.1")) uri.replace("127.0.0.1", "10.0.2.2")
+                      else if (uri.contains("localhost")) uri.replace("localhost", "10.0.2.2")
+                      else uri
+
+        try {
+            val html = context.assets.open("whep.html").bufferedReader().use { it.readText() }
+            val injectedHtml = html.replace(
+                "const urlParams = new URLSearchParams(window.location.search);",
+                "const streamUrl = '$finalUri';"
+            ).replace(
+                "const streamUrl = urlParams.get('url');",
+                ""
+            ).replace(
+                "object-fit: cover;",
+                "object-fit: $videoFit;"
+            )
+
+            val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
+            val th = if (scale) context.getScaledPixels(height) else context.dpToPx(height)
+            targetMediaHeight = th
+            frame.layoutParams.apply { this.width = tw; this.height = th }
+
+            val wv = WebView(context).apply {
+                mWebView = this
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(v: WebView?, u: String?) { readyListener?.onReady(); adjustHeights() }
+                }
+                webChromeClient = object : WebChromeClient() {
+                    override fun onPermissionRequest(request: PermissionRequest) { request.grant(request.resources) }
+                }
+                @SuppressLint("SetJavaScriptEnabled")
+                with(settings) {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    loadWithOverviewMode = true
+                    useWideViewPort = true
+                    mediaPlaybackRequiresUserGesture = false
+                    mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                }
+            }
+            frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
+            wv.loadDataWithBaseURL(finalUri, injectedHtml, "text/html", "UTF-8", null)
+        } catch (e: Exception) {
+            readyListener?.onReady()
+        }
     }
 
     private fun renderBitmap(frame: FrameLayout, bitmap: Bitmap, width: Int, scale: Boolean) {
