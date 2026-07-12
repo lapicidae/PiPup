@@ -228,8 +228,13 @@ class MainActivity : AppCompatActivity() {
 
     private fun askPermission() {
         if (!Settings.canDrawOverlays(this)) {
-            val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:$packageName".toUri())
-            overlayPermissionLauncher.launch(intent)
+            try {
+                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:$packageName".toUri())
+                overlayPermissionLauncher.launch(intent)
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to launch overlay permission settings", e)
+                Toast.makeText(this, "Please grant overlay permission via ADB if settings are unavailable.", Toast.LENGTH_LONG).show()
+            }
         }
     }
 }

@@ -108,7 +108,12 @@ class NotificationManager(
     }
 
     private fun showPopup(view: PopupView, props: PopupProps) {
-        val overlayView = ensureOverlay()
+        val overlayView = ensureOverlay() ?: run {
+            Log.e(TAG, "Aborting popup: could not create overlay (check SYSTEM_ALERT_WINDOW permission)")
+            view.cleanup()
+            checkNextAfterRemoval()
+            return
+        }
 
         val params = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
@@ -168,7 +173,7 @@ class NotificationManager(
         }
     }
 
-    private fun ensureOverlay(): FrameLayout {
+    private fun ensureOverlay(): FrameLayout? {
         overlay?.let { return it }
         val view = FrameLayout(context).apply {
             clipChildren = false
@@ -180,9 +185,14 @@ class NotificationManager(
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         )
-        windowManager.addView(view, params)
-        overlay = view
-        return view
+        return try {
+            windowManager.addView(view, params)
+            overlay = view
+            view
+        } catch (e: Exception) {
+            Log.e(TAG, "WindowManager failed to add overlay view: ${e.message}")
+            null
+        }
     }
 
     private fun removeOverlay() {
