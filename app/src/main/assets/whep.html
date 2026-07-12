@@ -31,6 +31,10 @@
 
                 const pc = new RTCPeerConnection(config);
 
+                video.onplaying = () => {
+                    if (window.PiPup) window.PiPup.onMediaPlaying();
+                };
+
                 pc.ontrack = (e) => {
                     if (e.track.kind === 'video') {
                         stream.addTrack(e.track);
@@ -56,6 +60,7 @@
                 await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
             } catch (e) {
                 console.error('WHEP Error:', e);
+                if (window.PiPup) window.PiPup.onMediaError(e.message);
             }
         }
 

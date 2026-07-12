@@ -16,6 +16,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.JavascriptInterface
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -52,6 +53,25 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var isScrolling = false
     private var targetMediaHeight = 0
     private var isReadyCalled = false
+
+    inner class JsBridge {
+        @JavascriptInterface
+        fun onMediaPlaying() {
+            mainHandler.post {
+                android.util.Log.d("PopupView", "WHEP video playing signal received from JS")
+                notifyReady()
+            }
+        }
+
+        @JavascriptInterface
+        fun onMediaError(error: String) {
+            mainHandler.post {
+                android.util.Log.e("PopupView", "WHEP error signal received from JS: $error")
+                showPlaceholder(error)
+                notifyReady()
+            }
+        }
+    }
 
     private val timeoutRunnable = Runnable {
         if (!isReadyCalled) {
@@ -490,8 +510,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
             val wv = WebView(context).apply {
                 mWebView = this
+                addJavascriptInterface(JsBridge(), "PiPup")
                 webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(v: WebView?, u: String?) { notifyReady(); adjustHeights() }
+                    override fun onPageFinished(v: WebView?, u: String?) {
+                        // For WHEP, we don't call notifyReady here.
+                        // We wait for the JS bridge "onMediaPlaying" signal.
+                        adjustHeights()
+                    }
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                         if (request?.isForMainFrame == true) {
                             showPlaceholder(error?.description?.toString() ?: context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
@@ -558,7 +583,17 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         mPlayer?.let { it.stop(); it.release() }
         mPlayer = null
 
-        mWebView?.let { try { it.stopLoading(); it.loadUrl("about:blank"); it.destroy() } catch (_: Exception) {} }
+        mWebView?.let { wv ->
+            try {
+                wv.stopLoading()
+                wv.webViewClient = WebViewClient()
+                wv.webChromeClient = WebChromeClient()
+                wv.removeJavascriptInterface("PiPup")
+                binding.popupMediaFrame.removeView(wv)
+                wv.loadUrl("about:blank")
+                wv.destroy()
+            } catch (_: Exception) {}
+        }
         mWebView = null
         binding.popupMediaFrame.removeAllViews()
     }
