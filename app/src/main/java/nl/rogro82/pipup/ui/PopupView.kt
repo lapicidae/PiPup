@@ -1,6 +1,7 @@
 package nl.rogro82.pipup.ui
 
 import android.annotation.SuppressLint
+import androidx.annotation.Keep
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
@@ -55,6 +56,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var isReadyCalled = false
 
     inner class JsBridge {
+        @Keep
         @JavascriptInterface
         fun onMediaPlaying() {
             mainHandler.post {
@@ -63,6 +65,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }
         }
 
+        @Keep
         @JavascriptInterface
         fun onMediaError(error: String) {
             mainHandler.post {
