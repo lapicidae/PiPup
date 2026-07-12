@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.res.ColorStateList
 import android.graphics.Rect
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
@@ -157,8 +158,15 @@ abstract class SubmenuBase(
     }
 
     protected fun updateSliderValueDisplay(bar: SeekBar, textView: TextView?) {
-        val format = if (bar.id == R.id.seekbar_animation_duration) "%d ms" else context.getString(R.string.settings_slider_value_format, bar.progress, bar.max)
-        textView?.text = if (bar.id == R.id.seekbar_animation_duration) String.format(format, bar.progress) else format
+        val format = when (bar.id) {
+            R.id.seekbar_animation_duration -> "%d ms"
+            R.id.seekbar_media_timeout -> context.resources.getQuantityString(R.plurals.settings_media_timeout_seconds, bar.progress, bar.progress)
+            else -> context.getString(R.string.settings_slider_value_format, bar.progress, bar.max)
+        }
+        textView?.text = when (bar.id) {
+            R.id.seekbar_animation_duration -> String.format(format, bar.progress)
+            else -> format
+        }
     }
 
     protected fun updateSeekBarAppearance(bar: SeekBar, active: Boolean) {
@@ -257,7 +265,7 @@ abstract class SubmenuBase(
                 val screenHeight = decor.rootView.height
                 val keypadHeight = screenHeight - r.bottom
                 val isKeyboardVisible = (keypadHeight > screenHeight * 0.15) ||
-                        (decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
+                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
 
                 if (isKeyboardVisible != wasKeyboardVisible) {
                     wasKeyboardVisible = isKeyboardVisible

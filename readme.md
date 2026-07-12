@@ -78,6 +78,7 @@ You can send notifications either as an **application/json** payload (for extern
     "animationType": 0,
     "animationDuration": 500,
     "animationExit": false,
+    "mediaTimeout": 10,
     "media": {
         "image": {
             "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png",
@@ -122,6 +123,7 @@ All fields below are optional for both JSON properties (top-level keys) and Mult
 | **animationType**     | Integer | 0         | Animation type index for popup entrance (0..10)                   |
 | **animationDuration** | Integer | 500       | Duration of the entrance animation in milliseconds                |
 | **animationExit**     | Boolean | false     | Toggles whether the entrance animation is inverted upon dismissal |
+| **mediaTimeout**      | Integer | 10        | Global timeout in seconds for loading external media (1..30)      |
 
 #### Background & Border Styling
 

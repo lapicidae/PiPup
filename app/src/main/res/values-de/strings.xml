@@ -26,6 +26,11 @@
     <string name="settings_position">Popup-Position</string>
     <string name="settings_padding">Inhaltspolsterung</string>
     <string name="settings_media_position">Medienposition</string>
+    <string name="settings_media_timeout">Lade-Timeout für Medien</string>
+    <plurals name="settings_media_timeout_seconds">
+        <item quantity="one">%1$d Sekunde</item>
+        <item quantity="other">%1$d Sekunden</item>
+    </plurals>
     <string name="settings_animation_type">Animations-Typ</string>
     <string name="settings_animation_duration">Animations-Dauer</string>
     <string name="settings_animation_none">Keine</string>
@@ -111,6 +116,11 @@
     <string name="update_installer_failed">Installer konnte nicht gestartet werden: %1$s</string>
 
     <string name="service_listening">Warten auf Benachrichtigungen…</string>
+    <string name="media_error_prefix">Medienfehler: %1$s</string>
+    <string name="media_error_timeout">Zeitüberschreitung</string>
+    <string name="media_error_load_failed">Laden fehlgeschlagen</string>
+    <string name="media_error_with_message">%1$s\n\n[%2$s]</string>
+    <string name="media_error_only">[%1$s]</string>
     <string name="address_placeholder">---.---.---.---</string>
     <string name="version_placeholder">v?.?.?</string>
 

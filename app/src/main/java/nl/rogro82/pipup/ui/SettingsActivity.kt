@@ -16,6 +16,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.applyCanvas
@@ -73,6 +74,19 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (getController(currentLayoutRes).onBackPress()) return
+                if (binding.submenuContainer.findFocus() != null) {
+                    focusRail()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                    isEnabled = true
+                }
+            }
+        })
 
         setupNavRail()
         loadSubmenu(R.layout.submenu_general, R.id.nav_item_general)
@@ -241,7 +255,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updatePreview(animate: Boolean = false) {
-        handler.removeCallbacksAndMessages("preview")
+        handler.removeCallbacksAndMessages(null)
         handler.postDelayed({
             val placeholder = cachedPlaceholder ?: createBitmap(320, 180).applyCanvas {
                 drawColor(ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_bg))
@@ -320,24 +334,13 @@ class SettingsActivity : AppCompatActivity() {
                     preview.postDelayed({ if (preview.parent != null) preview.animateIn() }, 500)
                 }
             }
-        }, "preview", 10)
+        }, 10)
     }
 
     override fun onDestroy() {
         super.onDestroy()
         cachedPlaceholder?.recycle()
         cachedPlaceholder = null
-    }
-
-    override fun onKeyDown(keyCode: Int, event: KeyEvent?): Boolean {
-        if (keyCode == KeyEvent.KEYCODE_BACK) {
-            if (getController(currentLayoutRes).onBackPress()) return true
-            if (binding.submenuContainer.findFocus() != null) {
-                focusRail()
-                return true
-            }
-        }
-        return super.onKeyDown(keyCode, event)
     }
 
     data class ColorEntry(val nameRes: Int, val hex: String)

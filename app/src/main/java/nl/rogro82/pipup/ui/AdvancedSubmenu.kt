@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Rect
+import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.view.Gravity
@@ -44,6 +45,11 @@ class AdvancedSubmenu(
         root.findViewById<Button>(R.id.btn_import_network)?.apply {
             setOnClickListener { showImportIpDialog() }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+
+        // Media Timeout
+        setupSeekBar(root, R.id.seekbar_media_timeout, R.id.text_media_timeout_value, settings.mediaTimeout) {
+            settings.mediaTimeout = it
         }
 
         // Advanced Mode Toggle
@@ -162,7 +168,7 @@ class AdvancedSubmenu(
                 val screenHeight = decor.rootView.height
                 val keypadHeight = screenHeight - r.bottom
                 val isKeyboardVisible = (keypadHeight > screenHeight * 0.15) ||
-                        (decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
+                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
 
                 if (isKeyboardVisible != wasKeyboardVisible) {
                     wasKeyboardVisible = isKeyboardVisible

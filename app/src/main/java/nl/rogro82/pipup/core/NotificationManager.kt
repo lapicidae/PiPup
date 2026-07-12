@@ -75,14 +75,14 @@ class NotificationManager(
     private fun preparePopup(props: PopupProps) {
         isPreparing = true
 
-        // Safety timeout
+        // Safety timeout (longer than any media timeout)
         handler.postAtTime({
-            Log.w(TAG, "Popup preparation timed out")
+            Log.w(TAG, "Popup preparation timed out (hard safety)")
             isPreparing = false
             preparingView?.cleanup()
             preparingView = null
             processNext()
-        }, SAFETY_TIMEOUT_TOKEN, android.os.SystemClock.uptimeMillis() + 10000)
+        }, SAFETY_TIMEOUT_TOKEN, android.os.SystemClock.uptimeMillis() + 45000)
 
         val view = PopupView(context, props)
         preparingView = view

@@ -11,10 +11,11 @@ import android.view.TextureView
 import android.view.animation.OvershootInterpolator
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import java.net.URLEncoder
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -28,8 +29,11 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
-import nl.rogro82.pipup.*
+import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.databinding.PopupBinding
+import nl.rogro82.pipup.dpToPx
+import nl.rogro82.pipup.getScaledPixels
 
 /**
  * Modern PopupView using ViewBinding and modular rendering logic.
@@ -39,6 +43,7 @@ import nl.rogro82.pipup.databinding.PopupBinding
 class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) {
 
     private val binding: PopupBinding = PopupBinding.inflate(LayoutInflater.from(context), this)
+    private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     var readyListener: ReadyListener? = null
 
     private var mPlayer: ExoPlayer? = null
@@ -46,6 +51,61 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var mWebView: WebView? = null
     private var isScrolling = false
     private var targetMediaHeight = 0
+    private var isReadyCalled = false
+
+    private val timeoutRunnable = Runnable {
+        if (!isReadyCalled) {
+            android.util.Log.w("PopupView", "Media loading timed out, showing placeholder")
+            showPlaceholder(context.getString(nl.rogro82.pipup.R.string.media_error_timeout))
+            notifyReady()
+        }
+    }
+
+    private fun notifyReady() {
+        if (isReadyCalled) return
+        isReadyCalled = true
+        mainHandler.removeCallbacks(timeoutRunnable)
+        readyListener?.onReady()
+    }
+
+    fun showPlaceholder(errorMessage: String? = null) {
+        val frame = binding.popupMediaFrame
+        frame.removeAllViews()
+        val iv = ImageView(context).apply {
+            setImageResource(nl.rogro82.pipup.R.drawable.ic_banner)
+            alpha = 0.5f
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        val width = when (val m = props.media) {
+            is PopupProps.Media.Image -> m.width
+            is PopupProps.Media.Video -> m.width
+            is PopupProps.Media.Web -> m.width
+            is PopupProps.Media.Whep -> m.width
+            is PopupProps.Media.Bitmap -> m.width
+            else -> props.imageWidth ?: 480
+        }
+        val tw = if (props.scale) context.getScaledPixels(width) else context.dpToPx(width)
+        targetMediaHeight = (tw * 9) / 16
+        frame.layoutParams.width = tw
+        frame.layoutParams.height = targetMediaHeight
+        frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        frame.isVisible = true
+
+        errorMessage?.let { msg ->
+            val errorDetails = context.getString(nl.rogro82.pipup.R.string.media_error_prefix, msg)
+            val mainMessage = props.message
+
+            binding.popupMessage.text = if (mainMessage.isNullOrBlank()) {
+                context.getString(nl.rogro82.pipup.R.string.media_error_only, errorDetails)
+            } else {
+                context.getString(nl.rogro82.pipup.R.string.media_error_with_message, mainMessage, errorDetails)
+            }
+            binding.popupMessage.isVisible = true
+            binding.popupScrollView.isVisible = true
+        }
+
+        adjustHeights()
+    }
 
     interface ReadyListener {
         fun onReady()
@@ -257,10 +317,19 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val currentImage = props.image
         val media = props.media ?: if (currentImage != null) PopupProps.Media.Image(currentImage, props.imageWidth ?: 480, cache = true, scale = true) else null
 
+        isReadyCalled = false
+        mainHandler.removeCallbacks(timeoutRunnable)
+
         if (media == null) {
             frame.isVisible = false
-            readyListener?.onReady()
+            notifyReady()
             return
+        }
+
+        val settings = AppSettings(context)
+        val timeoutSec = settings.mediaTimeout
+        if (timeoutSec > 0) {
+            mainHandler.postDelayed(timeoutRunnable, timeoutSec * 1000L)
         }
 
         frame.isVisible = true
@@ -294,14 +363,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             .dontAnimate()
             .listener(object : com.bumptech.glide.request.RequestListener<Drawable> {
                 override fun onLoadFailed(e: com.bumptech.glide.load.engine.GlideException?, model: Any?, target: com.bumptech.glide.request.target.Target<Drawable>, isFirstResource: Boolean): Boolean {
-                    readyListener?.onReady()
+                    showPlaceholder(context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
+                    notifyReady()
                     return false
                 }
                 override fun onResourceReady(resource: Drawable, model: Any, target: com.bumptech.glide.request.target.Target<Drawable>?, dataSource: com.bumptech.glide.load.DataSource, isFirstResource: Boolean): Boolean {
                     if (resource.intrinsicWidth > 0) {
                         targetMediaHeight = (tw * resource.intrinsicHeight) / resource.intrinsicWidth
                     }
-                    readyListener?.onReady()
+                    notifyReady()
                     adjustHeights()
                     return false
                 }
@@ -334,12 +404,16 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                         frame.layoutParams.height = targetMediaHeight
                         frame.requestLayout()
                     }
-                    readyListener?.onReady()
+                    notifyReady()
                     adjustHeights()
                 }
             }
             override fun onPlayerError(error: PlaybackException) {
-                if (!ready) { readyListener?.onReady(); adjustHeights() }
+                if (!ready) {
+                    showPlaceholder(error.errorCodeName)
+                    notifyReady()
+                    adjustHeights()
+                }
             }
         })
         frame.addView(tv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
@@ -354,9 +428,20 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val wv = WebView(context).apply {
             mWebView = this
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(v: WebView?, u: String?) { readyListener?.onReady(); adjustHeights() }
+                override fun onPageFinished(v: WebView?, u: String?) { notifyReady(); adjustHeights() }
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                    if (request?.isForMainFrame == true) {
+                        showPlaceholder(error?.description?.toString() ?: context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
+                        notifyReady()
+                        adjustHeights()
+                    }
+                }
                 @Deprecated("Deprecated in Java")
-                override fun onReceivedError(v: WebView?, r: Int, d: String?, u: String?) { readyListener?.onReady(); adjustHeights() }
+                override fun onReceivedError(v: WebView?, r: Int, d: String?, u: String?) {
+                    showPlaceholder(d ?: context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
+                    notifyReady()
+                    adjustHeights()
+                }
             }
             webChromeClient = object : WebChromeClient() {
                 override fun onPermissionRequest(request: PermissionRequest) {
@@ -406,7 +491,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             val wv = WebView(context).apply {
                 mWebView = this
                 webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(v: WebView?, u: String?) { readyListener?.onReady(); adjustHeights() }
+                    override fun onPageFinished(v: WebView?, u: String?) { notifyReady(); adjustHeights() }
+                    override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                        if (request?.isForMainFrame == true) {
+                            showPlaceholder(error?.description?.toString() ?: context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
+                            notifyReady()
+                        }
+                    }
                 }
                 webChromeClient = object : WebChromeClient() {
                     override fun onPermissionRequest(request: PermissionRequest) { request.grant(request.resources) }
@@ -423,14 +514,14 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }
             frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
             wv.loadDataWithBaseURL(finalUri, injectedHtml, "text/html", "UTF-8", null)
-        } catch (e: Exception) {
-            readyListener?.onReady()
+        } catch (_: Exception) {
+            notifyReady()
         }
     }
 
     private fun renderBitmap(frame: FrameLayout, bitmap: Bitmap, width: Int, scale: Boolean) {
         if (bitmap.isRecycled) {
-            readyListener?.onReady()
+            notifyReady()
             return
         }
         val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
@@ -443,7 +534,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
         frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        readyListener?.onReady()
+        notifyReady()
     }
 
     fun startMedia() {
@@ -452,7 +543,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     fun cleanup() {
-        handler?.removeCallbacksAndMessages(null)
+        mainHandler.removeCallbacksAndMessages(null)
         try {
             Glide.with(context.applicationContext).clear(this)
             val frame = binding.popupMediaFrame
