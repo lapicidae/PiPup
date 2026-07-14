@@ -20,8 +20,10 @@
             const streamUrl = urlParams.get('url');
             if (!streamUrl) return;
 
+            console.log('WHEP: Starting connection to ' + streamUrl);
+            const startTime = Date.now();
+
             try {
-                // Optimize: Disable STUN for local network URLs to avoid timeouts
                 const isLocal = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|localhost|10\.0\.2\.2)/.test(new URL(streamUrl).hostname);
                 const config = {
                     iceServers: isLocal ? [] : [{ urls: 'stun:stun.l.google.com:19302' }],
@@ -32,32 +34,40 @@
                 const pc = new RTCPeerConnection(config);
 
                 video.onplaying = () => {
+                    const elapsed = Date.now() - startTime;
+                    console.log('WHEP: Video playing after ' + elapsed + 'ms');
                     if (window.PiPup) window.PiPup.onMediaPlaying();
                 };
 
                 pc.ontrack = (e) => {
+                    console.log('WHEP: Received remote track: ' + e.track.kind);
                     if (e.track.kind === 'video') {
                         stream.addTrack(e.track);
-                        video.play().catch(() => {});
+                        video.play().catch(err => console.error('WHEP: Play failed', err));
                     }
                 };
 
-                // Video only for faster connection and less overhead
                 pc.addTransceiver('video', { direction: 'recvonly' });
 
+                console.log('WHEP: Creating offer...');
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
 
+                console.log('WHEP: Fetching SDP answer...');
                 const response = await fetch(streamUrl, {
                     method: 'POST',
                     body: offer.sdp,
                     headers: { 'Content-Type': 'application/sdp' }
                 });
 
-                if (!response.ok) return;
+                if (!response.ok) {
+                    throw new Error('HTTP error ' + response.status);
+                }
 
                 const answerSdp = await response.text();
+                console.log('WHEP: Received answer, setting remote description...');
                 await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+                console.log('WHEP: Setup complete, waiting for tracks...');
             } catch (e) {
                 console.error('WHEP Error:', e);
                 if (window.PiPup) window.PiPup.onMediaError(e.message);

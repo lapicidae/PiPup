@@ -32,6 +32,7 @@ class AppSettings(context: Context) {
     var animationDuration by IntPref("animation_duration", 500)
     var animationExit by BooleanPref("animation_exit", false)
     var mediaTimeout by IntPref("media_timeout", 10)
+    var preWarmWebView by BooleanPref("pre_warm_webview", false)
 
     // System / App
     var dismissBatteryOptimization by BooleanPref("dismiss_battery_optimization", false)
@@ -86,6 +87,7 @@ class AppSettings(context: Context) {
         val animationDuration: Int,
         val animationExit: Boolean,
         val mediaTimeout: Int,
+        val preWarmWebView: Boolean,
         val appTheme: Int,
         val advancedMode: Boolean,
         val updateChannel: Int,
@@ -102,7 +104,7 @@ class AppSettings(context: Context) {
         positionIndex, backgroundColor, backgroundAlpha, titleColor, titleSize,
         messageColor, messageSize, borderRadius, borderWidth, borderColor,
         contentPadding, titleAlignment, messageAlignment, mediaPosition,
-        animationType, animationDuration, animationExit, mediaTimeout, appTheme, advancedMode,
+        animationType, animationDuration, animationExit, mediaTimeout, preWarmWebView, appTheme, advancedMode,
         updateChannel, updateInterval, updateNotificationStyle, lastUpdateCheck,
         updateAvailableTag, updateRepeat, lastNotifiedTag, language
     )
@@ -127,6 +129,7 @@ class AppSettings(context: Context) {
             putInt("animation_duration", data.animationDuration)
             putBoolean("animation_exit", data.animationExit)
             putInt("media_timeout", data.mediaTimeout)
+            putBoolean("pre_warm_webview", data.preWarmWebView)
             putInt("app_theme", data.appTheme)
             putBoolean("advanced_mode", data.advancedMode)
             putInt("update_channel", data.updateChannel)

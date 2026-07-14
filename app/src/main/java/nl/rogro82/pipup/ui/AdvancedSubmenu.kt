@@ -52,6 +52,18 @@ class AdvancedSubmenu(
             settings.mediaTimeout = it
         }
 
+        // Pre-warm WebView Toggle
+        root.findViewById<View>(R.id.container_pre_warm)?.apply {
+            val sw = findViewById<SwitchCompat>(R.id.switch_pre_warm)
+            sw.isChecked = settings.preWarmWebView
+            setOnClickListener { sw.toggle() }
+            sw.setOnCheckedChangeListener { _, isChecked ->
+                settings.preWarmWebView = isChecked
+                onSettingsChanged(false)
+            }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+
         // Advanced Mode Toggle
         root.findViewById<View>(R.id.container_advanced)?.apply {
             val sw = findViewById<SwitchCompat>(R.id.switch_advanced)

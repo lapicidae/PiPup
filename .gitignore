@@ -58,7 +58,7 @@ gradle-app.setting
 !.idea/compiler.xml
 !.idea/vcs.xml
 !.idea/runConfigurations/
-!.idea/modules.xml
+!.idea/inspectionProfiles/
 
 # Blacklist user-specific and temporary IDE files inside .idea
 .idea/workspace.xml
@@ -66,6 +66,7 @@ gradle-app.setting
 .idea/assetWizardSettings.xml
 .idea/caches/
 .idea/libraries/
+.idea/misc.xml
 
 # Project-specific IDE settings (individual preferences should not be tracked)
 *.iml

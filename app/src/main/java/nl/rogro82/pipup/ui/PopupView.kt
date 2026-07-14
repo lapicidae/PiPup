@@ -55,8 +55,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var targetMediaHeight = 0
     private var isReadyCalled = false
 
+    @Keep
+    @Suppress("unused")
     inner class JsBridge {
-        @Keep
         @JavascriptInterface
         fun onMediaPlaying() {
             mainHandler.post {
@@ -65,7 +66,6 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }
         }
 
-        @Keep
         @JavascriptInterface
         fun onMediaError(error: String) {
             mainHandler.post {
@@ -352,6 +352,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val settings = AppSettings(context)
         val timeoutSec = settings.mediaTimeout
         if (timeoutSec > 0) {
+            android.util.Log.d("PopupView", "Setting media loading timeout to $timeoutSec seconds")
             mainHandler.postDelayed(timeoutRunnable, timeoutSec * 1000L)
         }
 
@@ -592,9 +593,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 wv.webViewClient = WebViewClient()
                 wv.webChromeClient = WebChromeClient()
                 wv.removeJavascriptInterface("PiPup")
-                binding.popupMediaFrame.removeView(wv)
+                // Detach from parent before destroying
+                (wv.parent as? android.view.ViewGroup)?.removeView(wv)
                 wv.loadUrl("about:blank")
-                wv.destroy()
+                // Use post to destroy after current event loop to avoid "call on destroyed"
+                wv.post { try { wv.destroy() } catch (_: Exception) {} }
             } catch (_: Exception) {}
         }
         mWebView = null
@@ -607,15 +610,14 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         if (props.animationType == 0 || duration <= 0) return
 
         alpha = 0f
-        val metrics = resources.displayMetrics
         val pos = props.getPositionEnum()
 
         fun applySlide() {
-            val offset = (if (width > 0) width.toFloat() else context.dpToPx(400).toFloat()) + context.dpToPx(20).toFloat() + 100f
+            val offset = (if (width > 0) width.toFloat() else context.dpToPx(400).toFloat()) + context.dpToPx(20) + 100f
             when (pos) {
                 PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> translationX = offset
                 PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> translationX = -offset
-                PopupProps.Position.Center -> translationY = metrics.heightPixels.toFloat() / 2f
+                PopupProps.Position.Center -> translationY = resources.displayMetrics.heightPixels.toFloat() / 2f
             }
         }
 
@@ -631,6 +633,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             9 -> { alpha = 1f; applySlide(); animate().translationX(0f).translationY(0f).setDuration(duration).withEndAction { executeTaDa() }.start() }
             10 -> {
                 alpha = 0f; scaleX = 0f; scaleY = 0f
+                val metrics = resources.displayMetrics
                 when (pos) {
                     PopupProps.Position.TopRight -> { translationX = metrics.widthPixels.toFloat(); translationY = -500f }
                     PopupProps.Position.TopLeft -> { translationX = -metrics.widthPixels.toFloat(); translationY = -500f }
@@ -654,16 +657,17 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             return
         }
 
-        val metrics = resources.displayMetrics
         val pos = props.getPositionEnum()
-        val baseMargin = context.dpToPx(20).toFloat()
 
-        fun getSlideX() = when (pos) {
-            PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> width.toFloat() + baseMargin + 100f
-            PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> -(width.toFloat() + baseMargin + 100f)
-            else -> 0f
+        fun getSlideX(): Float {
+            val margin = context.dpToPx(20).toFloat()
+            return when (pos) {
+                PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> width + margin + 100f
+                PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> -(width + margin + 100f)
+                else -> 0f
+            }
         }
-        fun getSlideY() = if (pos == PopupProps.Position.Center) metrics.heightPixels.toFloat() / 2f else 0f
+        fun getSlideY() = if (pos == PopupProps.Position.Center) resources.displayMetrics.heightPixels.toFloat() / 2f else 0f
 
         when (props.animationType) {
             1 -> animate().alpha(0f).setDuration(duration).withEndAction(completion).start()
@@ -672,6 +676,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             7 -> animate().translationX(getSlideX()).translationY(getSlideY()).scaleX(0.5f).scaleY(0.5f).setDuration(duration).withEndAction(completion).start()
             8 -> animate().translationX(getSlideX()).translationY(getSlideY()).rotationY(-90f).setDuration(duration).withEndAction(completion).start()
             10 -> {
+                val metrics = resources.displayMetrics
                 val (tx, ty) = when (pos) {
                     PopupProps.Position.TopRight -> metrics.widthPixels.toFloat() to -500f
                     PopupProps.Position.TopLeft -> -metrics.widthPixels.toFloat() to -500f

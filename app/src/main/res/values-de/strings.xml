@@ -27,6 +27,8 @@
     <string name="settings_padding">Inhaltspolsterung</string>
     <string name="settings_media_position">Medienposition</string>
     <string name="settings_media_timeout">Lade-Timeout für Medien</string>
+    <string name="settings_pre_warm_webview">WebView vorwärmen</string>
+    <string name="settings_pre_warm_webview_desc">Initialisiert und hält die WebView-Engine dauerhaft im Hintergrund aktiv, um Timeouts bei der ersten Web/WHEP-Benachrichtigung zu vermeiden. Erhöht den RAM-Verbrauch (~50MB).</string>
     <plurals name="settings_media_timeout_seconds">
         <item quantity="one">%1$d Sekunde</item>
         <item quantity="other">%1$d Sekunden</item>

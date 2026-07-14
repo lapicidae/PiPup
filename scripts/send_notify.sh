@@ -335,6 +335,9 @@ send_cancel_request() {
 #   border_radius: Integer, layout corner rounding radius in pixels.
 #   media_pos: Integer, relative media alignment index (0-3).
 #   padding: Integer, inner layout padding in pixels (>= 16).
+#   anim_type: Integer, animation type index (0-10).
+#   anim_duration: Integer, animation duration in ms.
+#   overwrite: Boolean, true or false.
 # Outputs:
 #   Writes test parameters and server response codes to stdout.
 #######################################
@@ -354,6 +357,7 @@ send_json_notification() {
   local padding="${13}"
   local anim_type="${14}"
   local anim_duration="${15}"
+  local overwrite="${16:-false}"
 
   local endpoint="http://${target_ip}:${PORT}/notify"
 
@@ -385,6 +389,7 @@ send_json_notification() {
   "mediaPosition": ${media_pos},
   "animationType": ${anim_type},
   "animationDuration": ${anim_duration},
+  "overwrite": ${overwrite},
   "media": ${media_json}
 }
 EOF
@@ -406,6 +411,9 @@ EOF
 #   suffix: String, optional additional debug text to append to the layout body.
 #   media_pos: Integer, relative media alignment index (0-3), defaults to 0.
 #   padding: Integer, inner layout padding in pixels, defaults to 16.
+#   anim_type: Integer, animation type index (0-10).
+#   anim_duration: Integer, animation duration in ms.
+#   overwrite: Boolean, true or false.
 # Outputs:
 #   Writes processing status and server HTTP codes to stdout.
 # Returns:
@@ -419,11 +427,12 @@ send_multipart_test() {
   local padding="${5:-16}"
   local anim_type="${6:-0}"
   local anim_duration="${7:-500}"
+  local overwrite="${8:-false}"
   local endpoint="http://${target_ip}:${PORT}/notify"
   local temp_file="/dev/shm/pipup_test.png"
 
   local full_msg
-  full_msg=$(printf "Mode: Form-Data\nPos: %s\nMediaPos: %s\nPadding: %s%b" "${position}" "${media_pos}" "${padding}" "${suffix}")
+  full_msg=$(printf "Mode: Form-Data\nPos: %s\nMediaPos: %s\nPadding: %s\nOverwrite: %s%b" "${position}" "${media_pos}" "${padding}" "${overwrite}" "${suffix}")
 
   curl -s --fail "${PNG_URL}" -o "${temp_file}" || return 1
 
@@ -437,7 +446,8 @@ send_multipart_test() {
     -F "mediaPosition=${media_pos}" \
     -F "contentPadding=${padding}" \
     -F "animationType=${anim_type}" \
-    -F "animationDuration=${anim_duration}" || echo "000")
+    -F "animationDuration=${anim_duration}" \
+    -F "overwrite=${overwrite}" || echo "000")
 
   rm -f "${temp_file}"
 
@@ -462,13 +472,14 @@ send_multipart_test() {
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-h host] [-t type] [-u url] [-a] [-l] [-c] [-s] [-k]
+Usage: ${0##*/} [-h host] [-t type] [-u url] [-a] [-l] [-o] [-c] [-s] [-k]
 Options:
   -h    Target IP (default: ${DEFAULT_IP})
   -t    Test type: ${TEST_TYPES[*]}
   -u    Custom media URL (overrides default assets)
   -a    Run all standard tests in sequence
   -l    Add long text to messages
+  -o    Overwrite the current notification
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
   -k    Kill the background WHEP mock server
@@ -492,14 +503,16 @@ main() {
   local immediate_cancel="false"
   local run_stress="false"
   local kill_mock="false"
+  local overwrite="false"
 
-  while getopts "h:t:u:alcks" opt; do
+  while getopts "h:t:u:alocks" opt; do
     case "${opt}" in
       h) target_ip="${OPTARG}" ;;
       t) test_type="${OPTARG}" ;;
       u) custom_url="${OPTARG}" ;;
       a) run_all="true" ;;
       l) use_long_text="true" ;;
+      o) overwrite="true" ;;
       c) immediate_cancel="true" ;;
       k) kill_mock="true" ;;
       s) run_stress="true" ;;
@@ -579,15 +592,15 @@ main() {
     local info_msg
     local fit_label=""
     [[ -n "${fit}" ]] && fit_label=" | Fit: ${fit}"
-    info_msg=$(printf "Theme: %s\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)%b" \
+    info_msg=$(printf "Theme: %s\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)\nOverwrite: %s%b" \
       "${theme_name}" "${type}" "${fit_label}" "${rand_radius}" "${rand_border}" "${rand_media_pos}" "${rand_padding}" \
-      "${rand_anim_type}" "${rand_anim_duration}" "${suffix}")
+      "${rand_anim_type}" "${rand_anim_duration}" "${overwrite}" "${suffix}")
 
     # Fire the notification and catch the returned HTTP code
     local response
     response=$(send_json_notification "${target_ip}" "${title}" "${info_msg}" "${media}" \
       "${pos}" "${bg}" "${rand_border}" "${border}" "${title_c}" "${msg_c}" \
-      "${rand_radius}" "${rand_media_pos}" "${rand_padding}" "${rand_anim_type}" "${rand_anim_duration}")
+      "${rand_radius}" "${rand_media_pos}" "${rand_padding}" "${rand_anim_type}" "${rand_anim_duration}" "${overwrite}")
 
     # Colorize the HTTP status code
     local status_color="${CLR_SUCCESS}"
@@ -597,9 +610,9 @@ main() {
     local style_info
     local table_type="${type^^}"
     [[ -n "${fit}" ]] && table_type="${table_type}(${fit:0:1})"
-    style_info=$(printf "Pos:%s MedPos:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms)" \
+    style_info=$(printf "Pos:%s MedPos:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
       "${pos}" "${rand_media_pos}" "${rand_radius}" "${rand_border}" "${rand_padding}" \
-      "${rand_anim_type}" "${rand_anim_duration}")
+      "${rand_anim_type}" "${rand_anim_duration}" "${overwrite}")
 
     printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-60s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET}\n" \
       "${table_type}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
@@ -648,7 +661,7 @@ run_stress_test() {
       local mp_anim_duration=$((300 + RANDOM % 1201))
       send_multipart_test "${target_ip}" "$((RANDOM % 5))" "${suffix}" \
         "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" \
-        "${mp_anim_duration}" &
+        "${mp_anim_duration}" "${overwrite}" &
       continue
     fi
 
@@ -683,7 +696,7 @@ run_stress_test() {
         local mp_padding=$((MIN_PADDING + (RANDOM % 25)))
         local mp_anim_type=$((RANDOM % 11))
         local mp_anim_duration=$((300 + RANDOM % 1201))
-        send_multipart_test "${target_ip}" "${pos_list[idx]}" "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}"
+        send_multipart_test "${target_ip}" "${pos_list[idx]}" "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}" "${overwrite}"
       else
         local fit="cover"
         if [[ "${type}" == "whep" ]]; then
@@ -714,7 +727,7 @@ run_stress_test() {
     local mp_anim_type=$((RANDOM % 11))
     local mp_anim_duration=$((300 + RANDOM % 1201))
     print_table_header
-    send_multipart_test "${target_ip}" 0 "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}"
+    send_multipart_test "${target_ip}" 0 "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}" "${overwrite}"
   elif [[ "${test_type}" == "cancel" ]]; then
     local media
     media=$(get_media_payload "png")

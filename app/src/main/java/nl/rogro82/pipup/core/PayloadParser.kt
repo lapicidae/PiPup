@@ -86,6 +86,7 @@ class PayloadParser(private val objectMapper: ObjectMapper) {
             val animationType = getRawPart("animationType")?.toIntOrNull() ?: 0
             val animationDuration = getRawPart("animationDuration")?.toIntOrNull() ?: 500
             val animationExit = getRawPart("animationExit")?.toBoolean() ?: false
+            val overwrite = getRawPart("overwrite")?.toBoolean() ?: false
 
             var media: PopupProps.Media? = null
             getPartBytes("image")?.let { imageBytes ->
@@ -105,7 +106,7 @@ class PayloadParser(private val objectMapper: ObjectMapper) {
                 borderWidth = borderWidth, borderColor = borderColor, titleAlignment = titleAlignment,
                 messageAlignment = messageAlignment, mediaPosition = mediaPosition,
                 animationType = animationType, animationDuration = animationDuration,
-                animationExit = animationExit, scale = scale, media = media
+                animationExit = animationExit, overwrite = overwrite, scale = scale, media = media
             )
         }
 

@@ -86,3 +86,9 @@
 # Keep the embedded server logic intact
 -keep class fi.iki.elonen.NanoHTTPD* { *; }
 -keepclassmembers class fi.iki.elonen.NanoHTTPD* { *; }
+
+# --- WebView Pre-Warming ---
+# Ensure the WebView engine isn't stripped during release optimization
+-keepclassmembers class nl.rogro82.pipup.service.PipUpService {
+    android.webkit.WebView warmWebView;
+}

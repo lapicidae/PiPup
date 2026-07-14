@@ -28,7 +28,7 @@ class NotificationManager(
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val queue: Queue<PopupProps> = LinkedList()
+    private val queue = ArrayDeque<PopupProps>()
 
     private var overlay: FrameLayout? = null
     private var currentPopup: PopupView? = null
@@ -42,7 +42,21 @@ class NotificationManager(
 
     fun enqueue(props: PopupProps) {
         handler.post {
-            queue.add(props)
+            if (props.overwrite) {
+                Log.d(TAG, "Overwrite requested, prioritizing new popup and interrupting current")
+                handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
+
+                isPreparing = false
+                preparingView?.let { it.cleanup(); preparingView = null }
+
+                nextPopup?.let { it.cleanup(); nextPopup = null }
+                nextProps = null
+
+                removeCurrentPopup(immediate = true, triggerNext = false)
+                queue.addFirst(props)
+            } else {
+                queue.addLast(props)
+            }
             processNext()
         }
     }
@@ -139,7 +153,7 @@ class NotificationManager(
         }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
     }
 
-    private fun removeCurrentPopup(immediate: Boolean = false) {
+    private fun removeCurrentPopup(immediate: Boolean = false, triggerNext: Boolean = true) {
         val popup = currentPopup ?: return
         currentPopup = null
         handler.removeCallbacksAndMessages(durationToken)
@@ -147,12 +161,12 @@ class NotificationManager(
         if (immediate) {
             overlay?.removeView(popup)
             popup.cleanup()
-            checkNextAfterRemoval()
+            if (triggerNext) checkNextAfterRemoval()
         } else {
             popup.animateOut {
                 overlay?.removeView(popup)
                 popup.cleanup()
-                checkNextAfterRemoval()
+                if (triggerNext) checkNextAfterRemoval()
             }
         }
     }

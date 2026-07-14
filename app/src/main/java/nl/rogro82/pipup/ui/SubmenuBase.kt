@@ -66,7 +66,8 @@ abstract class SubmenuBase(
         val location = IntArray(2)
         v.getLocationOnScreen(location)
         val screenHeight = context.resources.displayMetrics.heightPixels
-        val shouldBeAtTop = location[1] > screenHeight * 0.4
+        // Only move to top if the focused item is in the lower 40% of the screen
+        val shouldBeAtTop = location[1] > screenHeight * 0.6
 
         val popup = previewArea.getChildAt(0) ?: return
         val params = popup.layoutParams as FrameLayout.LayoutParams
@@ -74,8 +75,17 @@ abstract class SubmenuBase(
 
         if (params.gravity != newGravity) {
             params.gravity = newGravity
-            val margin = (context.resources.displayMetrics.density * 10).toInt()
-            params.setMargins(0, margin, margin, margin)
+            val density = context.resources.displayMetrics.density
+            val marginSide = (density * 10).toInt()
+            // More margin at top to avoid covering the menu titles/values
+            val marginTop = (density * 40).toInt()
+            val marginBottom = (density * 10).toInt()
+
+            if (shouldBeAtTop) {
+                params.setMargins(0, marginTop, marginSide, 0)
+            } else {
+                params.setMargins(0, 0, marginSide, marginBottom)
+            }
             popup.layoutParams = params
         }
     }
@@ -154,7 +164,7 @@ abstract class SubmenuBase(
         }
         updateSeekBarAppearance(seekBar, false)
 
-        textView?.visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
+        textView?.visibility = if (settings.advancedMode || seekBar.id == R.id.seekbar_media_timeout) View.VISIBLE else View.GONE
     }
 
     protected fun updateSliderValueDisplay(bar: SeekBar, textView: TextView?) {

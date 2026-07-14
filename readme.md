@@ -78,6 +78,7 @@ You can send notifications either as an **application/json** payload (for extern
     "animationType": 0,
     "animationDuration": 500,
     "animationExit": false,
+    "overwrite": false,
     "mediaTimeout": 10,
     "media": {
         "image": {
@@ -107,23 +108,24 @@ All fields below are optional for both JSON properties (top-level keys) and Mult
 
 #### General & Text Settings
 
-| _Field_               | _Type_  | _Default_ | _Description_                                                     |
-| --------------------- | ------- | --------- | ----------------------------------------------------------------- |
-| **duration**          | Integer | 30        | Duration in seconds                                               |
-| **position**          | Integer | 0         | Position index on the screen (0..4)                               |
-| **contentPadding**    | Integer | 16        | Inner padding in pixels between the border and content            |
-| **title**             | String  |           | Title text                                                        |
-| **titleSize**         | Float   | 14        | Title font size                                                   |
-| **titleColor**        | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format                    |
-| **titleAlignment**    | Integer | 0         | Title alignment (0..2)                                            |
-| **message**           | String  |           | Message text                                                      |
-| **messageSize**       | Float   | 14        | Message font size                                                 |
-| **messageColor**      | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format                  |
-| **messageAlignment**  | Integer | 0         | Message alignment (0..2)                                          |
-| **animationType**     | Integer | 0         | Animation type index for popup entrance (0..10)                   |
-| **animationDuration** | Integer | 500       | Duration of the entrance animation in milliseconds                |
-| **animationExit**     | Boolean | false     | Toggles whether the entrance animation is inverted upon dismissal |
-| **mediaTimeout**      | Integer | 10        | Global timeout in seconds for loading external media (1..30)      |
+| _Field_               | _Type_  | _Default_ | _Description_                                                          |
+| --------------------- | ------- | --------- | ---------------------------------------------------------------------- |
+| **duration**          | Integer | 30        | Duration in seconds                                                    |
+| **position**          | Integer | 0         | Position index on the screen (0..4)                                    |
+| **contentPadding**    | Integer | 16        | Inner padding in pixels between the border and content                 |
+| **title**             | String  |           | Title text                                                             |
+| **titleSize**         | Float   | 14        | Title font size                                                        |
+| **titleColor**        | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format                         |
+| **titleAlignment**    | Integer | 0         | Title alignment (0..2)                                                 |
+| **message**           | String  |           | Message text                                                           |
+| **messageSize**       | Float   | 14        | Message font size                                                      |
+| **messageColor**      | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format                       |
+| **messageAlignment**  | Integer | 0         | Message alignment (0..2)                                               |
+| **animationType**     | Integer | 0         | Animation type index for popup entrance (0..10)                        |
+| **animationDuration** | Integer | 500       | Duration of the entrance animation in milliseconds                     |
+| **animationExit**     | Boolean | false     | Toggles whether the entrance animation is inverted upon dismissal      |
+| **overwrite**         | Boolean | false     | Toggles whether to interrupt the current popup and prioritize this one |
+| **mediaTimeout**      | Integer | 10        | Global timeout in seconds for loading external media (1..30)           |
 
 #### Background & Border Styling
 

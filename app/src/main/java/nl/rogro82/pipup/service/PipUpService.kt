@@ -1,5 +1,6 @@
 package nl.rogro82.pipup.service
 
+import android.annotation.SuppressLint
 import android.app.NotificationChannel
 import android.app.NotificationManager as AndroidNotificationManager
 import android.app.PendingIntent
@@ -44,6 +45,9 @@ class PipUpService : Service() {
     private lateinit var notificationManager: NotificationManager
     private lateinit var payloadParser: PayloadParser
 
+    @androidx.annotation.Keep
+    internal var warmWebView: android.webkit.WebView? = null
+
     override fun onCreate() {
         super.onCreate()
         initNotificationChannel()
@@ -65,6 +69,24 @@ class PipUpService : Service() {
         notificationManager = NotificationManager(this, wm)
         payloadParser = PayloadParser(mapper)
 
+        // Pre-warm WebView if enabled to avoid cold-start timeouts on first WHEP request
+        if (settings.preWarmWebView) {
+            handler.post {
+                try {
+                    @SuppressLint("SetJavaScriptEnabled")
+                    val wv = android.webkit.WebView(applicationContext).apply {
+                        settings.javaScriptEnabled = true
+                        webViewClient = android.webkit.WebViewClient()
+                        loadUrl("about:blank")
+                    }
+                    warmWebView = wv
+                    Log.d(TAG, "WebView engine pre-warmed and reference kept (ref: ${warmWebView?.hashCode()})")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to pre-warm WebView: ${e.message}")
+                }
+            }
+        }
+
         webServer = WebServer(
             SERVER_PORT,
             object : WebServer.Handler {
@@ -83,6 +105,9 @@ class PipUpService : Service() {
     }
 
     override fun onDestroy() {
+        warmWebView?.post {
+            try { warmWebView?.destroy(); warmWebView = null } catch (_: Exception) {}
+        }
         webServer.stop()
         notificationManager.cancelAll()
         super.onDestroy()
