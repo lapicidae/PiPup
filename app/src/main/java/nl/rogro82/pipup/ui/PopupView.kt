@@ -33,6 +33,7 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.isEmulator
 import nl.rogro82.pipup.databinding.PopupBinding
 import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.getScaledPixels
@@ -490,9 +491,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     private fun renderWhep(frame: FrameLayout, uri: String, width: Int, height: Int, scale: Boolean, videoFit: String) {
-        val finalUri = if (uri.contains("127.0.0.1")) uri.replace("127.0.0.1", "10.0.2.2")
-                      else if (uri.contains("localhost")) uri.replace("localhost", "10.0.2.2")
-                      else uri
+        val finalUri = if (isEmulator()) {
+            if (uri.contains("127.0.0.1")) uri.replace("127.0.0.1", "10.0.2.2")
+            else if (uri.contains("localhost")) uri.replace("localhost", "10.0.2.2")
+            else uri
+        } else uri
 
         try {
             val html = context.assets.open("whep.html").bufferedReader().use { it.readText() }

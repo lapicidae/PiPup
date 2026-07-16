@@ -24,7 +24,8 @@
             const startTime = Date.now();
 
             try {
-                const isLocal = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|localhost|10\.0\.2\.2)/.test(new URL(streamUrl).hostname);
+                const hostname = new URL(streamUrl).hostname;
+                const isLocal = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|localhost|10\.0\.2\.2)/.test(hostname) || hostname.endsWith('.local');
                 const config = {
                     iceServers: isLocal ? [] : [{ urls: 'stun:stun.l.google.com:19302' }],
                     iceTransportPolicy: 'all',
@@ -64,8 +65,12 @@
                     throw new Error('HTTP error ' + response.status);
                 }
 
-                const answerSdp = await response.text();
-                console.log('WHEP: Received answer, setting remote description...');
+                const answerSdpRaw = await response.text();
+                // Strip a=end-of-candidates as it causes parsing errors in some WebView versions
+                const answerSdp = answerSdpRaw.replace(/a=end-of-candidates\s?\r?\n/g, "");
+
+                console.log('WHEP: Received answer (length: ' + answerSdp.length + ')');
+                console.log('WHEP: Setting remote description...');
                 await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
                 console.log('WHEP: Setup complete, waiting for tracks...');
             } catch (e) {
