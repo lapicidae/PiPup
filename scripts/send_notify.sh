@@ -17,6 +17,10 @@ readonly MOCK_WHEP_DEFAULT_PORT='8889'
 readonly WHEP_STATE_FILE='/dev/shm/pipup_whep.state'
 readonly WHEP_TIMEOUT=600  # 10 minutes
 
+readonly MEDIAMTX_IMAGE='bluenviron/mediamtx'
+readonly MEDIAMTX_RTSP_PORT='8555'
+readonly MEDIAMTX_WHEP_PORT='8889'
+
 # Fully-formed mock SDP WebRTC Answer profile for response execution
 readonly MOCK_SDP_ANSWER=$'v=0\r\no=- 1719830000 1719830000 IN IP4 127.0.0.1\r\ns=-\r\nc=IN IP4 127.0.0.1\r\nt=0 0\r\na=group:BUNDLE 0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=mid:0\r\na=rtcp-mux\r\na=setup:active\r\na=sendonly\r\na=ice-ufrag:mockufrag\r\na=ice-pwd:mockpwd_at_least_22_chars_long\r\na=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\na=rtpmap:96 H264/90000\r\n'
 
@@ -128,15 +132,24 @@ print_table_header() {
 }
 
 #######################################
-# Starts a persistent background mock server serving the video in a loop.
-# The server remains active for 10 minutes to support multiple tests
-# and then terminates automatically.
+# Starts a persistent background WHEP service serving the video in a loop.
+# If docker and ffmpeg are available, it spawns a MediaMTX container and streams
+# the video via FFmpeg. Otherwise, it falls back to a simple netcat mock server.
 # Globals:
-#   MOCK_WHEP_DEFAULT_PORT: Preferred port.
-#   WHEP_STATE_FILE: Path to store PID and Port.
-#   WHEP_TIMEOUT: Seconds until self-destruction.
+#   MEDIAMTX_IMAGE
+#   MEDIAMTX_RTSP_PORT
+#   MEDIAMTX_WHEP_PORT
+#   MOCK_SDP_ANSWER
+#   MOCK_WHEP_DEFAULT_PORT
+#   VIDEO_URL
+#   WHEP_STATE_FILE
+#   WHEP_TIMEOUT
+# Arguments:
+#   None
+# Outputs:
+#   Writes status information to stdout.
 #######################################
-start_mock_whep_server() {
+start_whep_service() {
   if [[ -f "${WHEP_STATE_FILE}" ]]; then
     local state_data
     state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
@@ -144,18 +157,125 @@ start_mock_whep_server() {
       local state_pid="${state_data%:*}"
       local state_port="${state_data#*:}"
       if kill -0 "${state_pid}" 2>/dev/null; then
-        WHEP_URL="http://127.0.0.1:${state_port}/whep"
+        if [[ "${state_port}" == "${MEDIAMTX_WHEP_PORT}" ]]; then
+          local host_ip
+          host_ip=$(ip route get 1 2>/dev/null | awk '{print $7;exit}' || hostname -I | awk '{print $1}')
+          WHEP_URL="http://${host_ip}:${MEDIAMTX_WHEP_PORT}/mystream/whep"
+        else
+          WHEP_URL="http://127.0.0.1:${state_port}/whep"
+        fi
         return 0
       fi
     fi
     rm -f "${WHEP_STATE_FILE}"
   fi
 
+  # Resolve host IP dynamically
+  local host_ip
+  host_ip=$(ip route get 1 2>/dev/null | awk '{print $7;exit}' || hostname -I | awk '{print $1}')
+
+  # Check if both docker and ffmpeg are installed for the real stream pipeline
+  if command -v docker >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1; then
+    printf "[SYSTEM] Spawning MediaMTX container and FFmpeg streaming pipeline...\n"
+
+    (
+      set +e
+      local start_time
+      start_time=$(date +%s)
+
+      # Store state indicating docker mode with its WHEP port
+      printf "%s:%s" "$BASHPID" "${MEDIAMTX_WHEP_PORT}" > "${WHEP_STATE_FILE}"
+
+      local container_name="mediamtx_pipup_${BASHPID}"
+      local ffmpeg_pid=""
+
+      # shellcheck disable=SC2329
+      cleanup_pipeline() {
+        # Instantly clear traps to prevent loops
+        trap - SIGTERM SIGINT EXIT
+
+        # Remove state file immediately so the main script knows it is dead
+        rm -f "${WHEP_STATE_FILE}"
+
+        # Kill ffmpeg precisely and silently
+        if [[ -n "${ffmpeg_pid}" ]]; then
+          kill "${ffmpeg_pid}" >/dev/null 2>&1 || true
+        fi
+
+        # Force-kill the container instantly (with 0s timeout) in the background
+        # to ensure this cleanup function returns immediately.
+        docker kill "${container_name}" >/dev/null 2>&1 || \
+        docker rm -f --volumes "${container_name}" >/dev/null 2>&1 &
+
+        exit 0
+      }
+      trap cleanup_pipeline SIGTERM SIGINT EXIT
+
+      # Start MediaMTX instance with RTSP port mapped via host network
+      # Added API port mapping to allow the healthcheck to query API if needed
+      docker run --rm -d --name "${container_name}" --network=host \
+        -e "MTX_RTSPADDRESS=:${MEDIAMTX_RTSP_PORT}" \
+        "${MEDIAMTX_IMAGE}" >/dev/null 2>&1
+
+      # Allow the container a moment to bind ports
+      sleep 2
+
+      # Stream the global VIDEO_URL to the dynamic host IP
+      ffmpeg -loglevel error -re -stream_loop -1 -i "${VIDEO_URL}" \
+        -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -c:a aac \
+        -f flv "rtmp://${host_ip}:1935/mystream" >/dev/null 2>&1 &
+
+      # Capture the exact PID of the background ffmpeg process
+      ffmpeg_pid=$!
+
+      # Non-blocking sleep loop: allows immediate trap execution on SIGTERM
+      while true; do
+        local now
+        now=$(date +%s)
+        if (( now - start_time > WHEP_TIMEOUT )); then break; fi
+        sleep 1 & wait $!
+      done
+    ) &
+    disown
+
+    WHEP_URL="http://${host_ip}:${MEDIAMTX_WHEP_PORT}/mystream/whep"
+
+    # --- Robust WHEP Live Detection ---
+    printf "[SYSTEM] Waiting for stream endpoint to become live..."
+    local retry=0
+    while [ $retry -lt 15 ]; do
+      # MediaMTX's internal API is exposed at port 9997.
+      # Checking if the path 'mystream' has an active ready source is the safest check.
+      local api_check
+      api_check=$(curl -s "http://${host_ip}:9997/v3/paths/list" || echo "")
+
+      if [[ "${api_check}" == *"\"name\":\"mystream\""* && "${api_check}" == *"\"ready\":true"* ]]; then
+        break
+      fi
+
+      # Fallback check: test the actual HTTP WHEP endpoint via OPTIONS
+      local http_check
+      http_check=$(curl -s -o /dev/null -w "%{http_code}" -X OPTIONS "${WHEP_URL}" || echo "000")
+      if [[ "${http_check}" == "200" || "${http_check}" == "406" ]]; then
+        break
+      fi
+
+      printf "."
+      sleep 1
+      ((retry++))
+    done
+    printf " READY\n"
+
+    printf "[SYSTEM] Stream pipeline ready. Target WHEP URL: %s\n" "${WHEP_URL}"
+    return 0
+  fi
+
+  # --- Fallback: Original Netcat Mock Server ---
+  printf "[SYSTEM] Docker/FFmpeg missing. Falling back to basic netcat mock server...\n"
+
   local assigned_port="${MOCK_WHEP_DEFAULT_PORT}"
 
-  # Check if default port is free (connection fails if free)
   if (printf "" > "/dev/tcp/127.0.0.1/${assigned_port}") >/dev/null 2>&1; then
-    # Default busy, find another one
     local found=false
     local p
     for p in {8890..8990}; do
@@ -177,9 +297,8 @@ start_mock_whep_server() {
   (
     set +e
     local start_time
-	start_time=$(date +%s)
+    start_time=$(date +%s)
 
-    # Store state before starting loop
     printf "%s:%s" "$BASHPID" "${assigned_port}" > "${WHEP_STATE_FILE}"
 
     trap 'rm -f "${WHEP_STATE_FILE}"; exit 0' SIGTERM SIGINT
@@ -189,8 +308,6 @@ start_mock_whep_server() {
       now=$(date +%s)
       if (( now - start_time > WHEP_TIMEOUT )); then break; fi
 
-      # Read request (discarded) and send response
-      # Use a simplified response to avoid complex logic in background
       {
         printf "HTTP/1.1 200 OK\r\n"
         printf "Content-Type: application/sdp\r\n"
@@ -206,23 +323,13 @@ start_mock_whep_server() {
   ) &
   disown
 
-  # Allow server a moment to bind and update global URL
   local wait_count=0
   while [[ ! -f "${WHEP_STATE_FILE}" && $wait_count -lt 10 ]]; do
     sleep 0.1
     ((wait_count++))
   done
 
-  if [[ -f "${WHEP_STATE_FILE}" ]]; then
-    local state_data
-    state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
-    if [[ "${state_data}" == *":"* ]]; then
-       local state_port="${state_data#*:}"
-       local host_ip
-       host_ip=$(ip route get 1 2>/dev/null | awk '{print $7;exit}' || hostname -I | awk '{print $1}')
-       WHEP_URL="http://${host_ip}:${state_port}/whep"
-    fi
-  fi
+  WHEP_URL="http://${host_ip}:${assigned_port}/whep"
 }
 
 #######################################
@@ -526,13 +633,22 @@ main() {
       state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
       if [[ "${state_data}" == *":"* ]]; then
         local state_pid="${state_data%:*}"
-        local state_port="${state_data#*:}"
-        printf "[SYSTEM] Killing WHEP mock server (PID: %s, Port: %s)... " "${state_pid}" "${state_port}"
-        kill "${state_pid}" 2>/dev/null && printf "OK\n" || printf "FAILED (already dead?)\n"
+        local state_mode="${state_data#*:}"
+
+        printf "[SYSTEM] Stopping active WHEP pipeline (PID: %s, Mode: %s)... " \
+          "${state_pid}" "${state_mode}"
+
+        # Killing the parent subshell triggers its trap,
+        # which cleanly stops Docker and kills FFmpeg.
+        if kill "${state_pid}" 2>/dev/null; then
+          printf "OK\n"
+        else
+          printf "FAILED (already dead?)\n"
+          rm -f "${WHEP_STATE_FILE}"
+        fi
       fi
-      rm -f "${WHEP_STATE_FILE}"
     else
-      printf "[SYSTEM] No WHEP mock server state file found.\n"
+      printf "[SYSTEM] No active WHEP server or pipeline state file found.\n"
     fi
     return 0
   fi
@@ -556,9 +672,9 @@ main() {
     setup_adb_forwarding || true
   fi
 
-  # Start the background mock server for WebRTC/WHEP testing only if needed
+  # Start the background WHEP service for WebRTC/WHEP testing only if needed
   if [[ "${test_type}" == "whep" && -z "${custom_url}" ]] || [[ "${run_all}" == "true" ]] || [[ "${run_stress}" == "true" ]]; then
-    start_mock_whep_server || true
+    start_whep_service || true
   fi
 
   #######################################

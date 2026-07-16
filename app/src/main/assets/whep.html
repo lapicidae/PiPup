@@ -26,6 +26,9 @@
             try {
                 const hostname = new URL(streamUrl).hostname;
                 const isLocal = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|localhost|10\.0\.2\.2)/.test(hostname) || hostname.endsWith('.local');
+
+                console.log('WHEP: ' + (isLocal ? 'Local' : 'Remote') + ' connection detected');
+
                 const config = {
                     iceServers: isLocal ? [] : [{ urls: 'stun:stun.l.google.com:19302' }],
                     iceTransportPolicy: 'all',
@@ -33,6 +36,18 @@
                 };
 
                 const pc = new RTCPeerConnection(config);
+
+                pc.oniceconnectionstatechange = () => {
+                    console.log('WHEP: ICE Connection State: ' + pc.iceConnectionState);
+                };
+
+                pc.onicegatheringstatechange = () => {
+                    console.log('WHEP: ICE Gathering State: ' + pc.iceGatheringState);
+                };
+
+                pc.onsignalingstatechange = () => {
+                    console.log('WHEP: Signaling State: ' + pc.signalingState);
+                };
 
                 video.onplaying = () => {
                     const elapsed = Date.now() - startTime;
@@ -54,10 +69,30 @@
                 const offer = await pc.createOffer();
                 await pc.setLocalDescription(offer);
 
+                // Wait for ICE gathering to start (Non-trickle WHEP)
+                // On local networks, sending as soon as we have the first candidate is much faster
+                console.log('WHEP: Waiting for initial ICE candidates...');
+                await new Promise(resolve => {
+                    if (pc.iceGatheringState === 'complete') {
+                        resolve();
+                    } else {
+                        const checkState = () => {
+                            // If we have at least one candidate or gathering is complete, proceed
+                            if (pc.iceGatheringState === 'complete' || pc.localDescription.sdp.includes('a=candidate')) {
+                                pc.removeEventListener('icegatheringstatechange', checkState);
+                                resolve();
+                            }
+                        };
+                        pc.addEventListener('icegatheringstatechange', checkState);
+                        // Hard timeout after 1.5 seconds to avoid hanging
+                        setTimeout(resolve, 1500);
+                    }
+                });
+
                 console.log('WHEP: Fetching SDP answer...');
                 const response = await fetch(streamUrl, {
                     method: 'POST',
-                    body: offer.sdp,
+                    body: pc.localDescription.sdp,
                     headers: { 'Content-Type': 'application/sdp' }
                 });
 
