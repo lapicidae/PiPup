@@ -97,14 +97,25 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('HTTP error ' + response.status);
+                    const errorText = await response.text().catch(() => '');
+                    throw new Error('HTTP error ' + response.status + (errorText ? ': ' + errorText.substring(0, 100) : ''));
                 }
+
+                const contentType = response.headers.get('content-type');
+                console.log('WHEP: Response Content-Type: ' + contentType);
 
                 const answerSdpRaw = await response.text();
                 // Strip a=end-of-candidates as it causes parsing errors in some WebView versions
-                const answerSdp = answerSdpRaw.replace(/a=end-of-candidates\s?\r?\n/g, "");
+                const answerSdp = answerSdpRaw.replace(/a=end-of-candidates\s?\r?\n?/g, "");
 
                 console.log('WHEP: Received answer (length: ' + answerSdp.length + ')');
+
+                if (!answerSdp.trim().startsWith('v=')) {
+                    console.error('WHEP: Invalid SDP content received:', answerSdp);
+                    const preview = answerSdp.trim().substring(0, 100).replace(/[\r\n]+/g, ' ');
+                    throw new Error('Invalid SDP response (does not start with v=): ' + preview + '...');
+                }
+
                 console.log('WHEP: Setting remote description...');
                 await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
                 console.log('WHEP: Setup complete, waiting for tracks...');

@@ -13,13 +13,23 @@ readonly PORT='7979'
 readonly DURATION=10
 readonly STRESS_ITERATIONS=50
 
-readonly MOCK_WHEP_DEFAULT_PORT='8889'
 readonly WHEP_STATE_FILE='/dev/shm/pipup_whep.state'
 readonly WHEP_TIMEOUT=600  # 10 minutes
 
-readonly MEDIAMTX_IMAGE='bluenviron/mediamtx'
-readonly MEDIAMTX_RTSP_PORT='8555'
-readonly MEDIAMTX_WHEP_PORT='8889'
+readonly MEDIAMTX_IMAGE='bluenviron/mediamtx:latest'
+readonly MEDIAMTX_API_PORT='9997'
+
+# Set to "true" to use Go2RTC instead of MediaMTX
+readonly USE_GO2RTC='true'
+readonly GO2RTC_IMAGE='alexxit/go2rtc:latest'
+
+# RTC Proxy Ports
+readonly STREAM_RTSP_PORT='8555'
+readonly STREAM_WHEP_PORT='8889'
+readonly STREAM_WEBRTC_PORT='8556'
+
+# Fallback Configuration
+readonly WHEP_FALLBACK_PORT="${STREAM_WHEP_PORT}"
 
 # Fully-formed mock SDP WebRTC Answer profile for response execution
 readonly MOCK_SDP_ANSWER=$'v=0\r\no=- 1719830000 1719830000 IN IP4 127.0.0.1\r\ns=-\r\nc=IN IP4 127.0.0.1\r\nt=0 0\r\na=group:BUNDLE 0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=mid:0\r\na=rtcp-mux\r\na=setup:active\r\na=sendonly\r\na=ice-ufrag:mockufrag\r\na=ice-pwd:mockpwd_at_least_22_chars_long\r\na=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\na=rtpmap:96 H264/90000\r\n'
@@ -61,7 +71,7 @@ readonly VIDEO_URL="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big
 readonly WEB_URL="https://opensource.org"
 
 # Dynamic Mock WHEP URL (will be updated if server starts)
-WHEP_URL="http://127.0.0.1:${MOCK_WHEP_DEFAULT_PORT}/whep"
+WHEP_URL="http://127.0.0.1:${WHEP_FALLBACK_PORT}/whep"
 
 # Combined UTF-8 and Lorem Ipsum Stress Test (Ensures encoding stability)
 readonly TEXT_UTF8="🚀 UTF-8 Test: Ää Öö Üü ß | € | 漢字 (Kanji) | עִבְรִית (Hebrew) | Special: \"Quoted Text\", 'Single Quotes', {Braces}, [Brackets], /Slashes/ & \Backslashes\. Symbols: ☢☣⚡🔥🌈 | 100% | 180°C."
@@ -94,13 +104,13 @@ get_media_payload() {
   local url="${2:-}"
   local fit="${3:-cover}"
   case "${type}" in
-    png)   echo "{\"image\": {\"uri\": \"${url:-$PNG_URL}\", \"width\": 480}}" ;;
-    jpg)   echo "{\"image\": {\"uri\": \"${url:-$JPG_URL}\", \"width\": 480}}" ;;
-    svg)   echo "{\"image\": {\"uri\": \"${url:-$SVG_URL}\", \"width\": 480}}" ;;
-    video) echo "{\"video\": {\"uri\": \"${url:-$VIDEO_URL}\", \"width\": 480}}" ;;
-    whep)  echo "{\"whep\": {\"uri\": \"${url:-$WHEP_URL}\", \"width\": 640, \"videoFit\": \"${fit}\"}}" ;;
-    web)   echo "{\"web\": {\"uri\": \"${url:-$WEB_URL}\", \"width\": 640, \"height\": 480}}" ;;
-    *)     printf "null" ;;
+    png)   printf '%s' "{\"image\": {\"uri\": \"${url:-$PNG_URL}\", \"width\": 480}}" ;;
+    jpg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$JPG_URL}\", \"width\": 480}}" ;;
+    svg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$SVG_URL}\", \"width\": 480}}" ;;
+    video) printf '%s' "{\"video\": {\"uri\": \"${url:-$VIDEO_URL}\", \"width\": 480}}" ;;
+    whep)  printf '%s' "{\"whep\": {\"uri\": \"${url:-$WHEP_URL}\", \"width\": 640, \"videoFit\": \"${fit}\"}}" ;;
+    web)   printf '%s' "{\"web\": {\"uri\": \"${url:-$WEB_URL}\", \"width\": 640, \"height\": 480}}" ;;
+    *)     printf 'null' ;;
   esac
 }
 
@@ -125,23 +135,100 @@ get_random_theme_colors() {
 #   Writes the table header and separator line to stdout.
 #######################################
 print_table_header() {
-  printf "${CLR_HEADER}%-12s | %-15s | %-60s | %-15s | %-6s${CLR_RESET}\n" \
+  printf "${CLR_HEADER}%-12s | %-15s | %-76s | %-15s | %-6s${CLR_RESET}\n" \
     "TEST TYPE" "THEME" "STYLE PARAMETERS" "ENDPOINT" "HTTP"
   printf "${CLR_PARAM}%s${CLR_RESET}\n" \
-    "-------------------------------------------------------------------------------------------------------------------------------"
+    "--------------------------------------------------------------------------------------------------------------------------------------"
+}
+
+#######################################
+# Parses the active WHEP background process state file.
+# Globals:
+#   WHEP_STATE_FILE
+# Arguments:
+#   None
+# Outputs:
+#   Writes space-separated PID and Port/Mode to stdout if valid.
+#######################################
+parse_whep_state() {
+  if [[ -f "${WHEP_STATE_FILE}" ]]; then
+    local state_data
+    state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || printf '')
+    if [[ "${state_data}" == *":"* ]]; then
+      printf '%s %s' "${state_data%:*}" "${state_data#*:}"
+    fi
+  fi
+}
+
+#######################################
+# Generates randomized layout configuration styling parameters.
+# Globals:
+#   MIN_PADDING
+# Arguments:
+#   type: String, metadata category identifier (e.g., "png", "whep").
+# Outputs:
+#   Prints space-separated values: radius border padding anim_type anim_dur fit
+#######################################
+get_random_style() {
+  local type="${1}"
+  local rand_radius=$(( RANDOM % 50 ))
+  local rand_border=$(( RANDOM % 10 + 1 ))
+  local rand_padding=$(( MIN_PADDING + (RANDOM % 25) ))
+  local rand_anim_type=$(( RANDOM % 11 ))
+  local rand_anim_duration=$(( 300 + RANDOM % 1201 ))
+
+  local fit="cover"
+  if [[ "${type}" == "whep" ]]; then
+    local fits=("cover" "contain" "fill")
+    fit="${fits[$(( RANDOM % 3 ))]}"
+  fi
+
+  printf '%s %s %s %s %s %s' "${rand_radius}" "${rand_border}" "${rand_padding}" "${rand_anim_type}" "${rand_anim_duration}" "${fit}"
+}
+
+#######################################
+# Prints a unified structural execution row to standard output.
+# Globals:
+#   CLR_TEST
+#   CLR_RESET
+#   CLR_THEME
+#   CLR_PARAM
+#   CLR_SUCCESS
+#   CLR_ERROR
+# Arguments:
+#   type: String, capitalized identifier.
+#   theme: String, theme identification profile name.
+#   style: String, layout metric information line.
+#   target: String, IP routing endpoint address.
+#   code: Integer, HTTP response status value.
+# Outputs:
+#   Writes colorized terminal row representation to stdout.
+#######################################
+print_result_row() {
+  local type="${1}"
+  local theme="${2}"
+  local style="${3}"
+  local target="${4}"
+  local code="${5}"
+
+  local status_color="${CLR_SUCCESS}"
+  [[ "${code}" != "200" ]] && status_color="${CLR_ERROR}"
+
+  printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-76s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET}\n" \
+    "${type}" "${theme}" "${style}" "${target}" "${code}"
 }
 
 #######################################
 # Starts a persistent background WHEP service serving the video in a loop.
-# If docker and ffmpeg are available, it spawns a MediaMTX container and streams
-# the video via FFmpeg. Otherwise, it falls back to a simple netcat mock server.
+# Spawns MediaMTX or Go2RTC via Docker, or falls back to a netcat mock server.
 # Globals:
+#   GO2RTC_IMAGE
 #   MEDIAMTX_IMAGE
-#   MEDIAMTX_RTSP_PORT
-#   MEDIAMTX_WHEP_PORT
-#   MOCK_SDP_ANSWER
-#   MOCK_WHEP_DEFAULT_PORT
+#   STREAM_RTSP_PORT
+#   STREAM_WHEP_PORT
+#   USE_GO2RTC
 #   VIDEO_URL
+#   WHEP_FALLBACK_PORT
 #   WHEP_STATE_FILE
 #   WHEP_TIMEOUT
 # Arguments:
@@ -150,130 +237,193 @@ print_table_header() {
 #   Writes status information to stdout.
 #######################################
 start_whep_service() {
-  if [[ -f "${WHEP_STATE_FILE}" ]]; then
-    local state_data
-    state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
-    if [[ "${state_data}" == *":"* ]]; then
-      local state_pid="${state_data%:*}"
-      local state_port="${state_data#*:}"
-      if kill -0 "${state_pid}" 2>/dev/null; then
-        if [[ "${state_port}" == "${MEDIAMTX_WHEP_PORT}" ]]; then
-          local host_ip
-          host_ip=$(ip route get 1 2>/dev/null | awk '{print $7;exit}' || hostname -I | awk '{print $1}')
-          WHEP_URL="http://${host_ip}:${MEDIAMTX_WHEP_PORT}/mystream/whep"
-        else
-          WHEP_URL="http://127.0.0.1:${state_port}/whep"
-        fi
+  local host_ip
+  host_ip=$(ip route get 1 2>/dev/null | awk '{print $7;exit}' || hostname -I | awk '{print $1}')
+
+  local state_info
+  state_info=$(parse_whep_state)
+  if [[ -n "${state_info}" ]]; then
+    local state_pid state_port
+    read -r state_pid state_port <<< "${state_info}"
+    if kill -0 "${state_pid}" 2>/dev/null; then
+      if [[ "${USE_GO2RTC}" == "true" && "${state_port}" == "${STREAM_WHEP_PORT}" ]]; then
+        WHEP_URL="http://${host_ip}:${STREAM_WHEP_PORT}/api/webrtc?src=mystream"
+        return 0
+      elif [[ "${USE_GO2RTC}" == "false" && "${state_port}" == "${STREAM_WHEP_PORT}" ]]; then
+        WHEP_URL="http://${host_ip}:${STREAM_WHEP_PORT}/mystream/whep"
+        return 0
+      elif [[ "${state_port}" != "${STREAM_WHEP_PORT}" ]]; then
+        WHEP_URL="http://${host_ip}:${state_port}/whep"
         return 0
       fi
     fi
     rm -f "${WHEP_STATE_FILE}"
   fi
 
-  # Resolve host IP dynamically
-  local host_ip
-  host_ip=$(ip route get 1 2>/dev/null | awk '{print $7;exit}' || hostname -I | awk '{print $1}')
-
   # Check if both docker and ffmpeg are installed for the real stream pipeline
   if command -v docker >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1; then
-    printf "[SYSTEM] Spawning MediaMTX container and FFmpeg streaming pipeline...\n"
+    printf "[SYSTEM] Spawning WebRTC/WHEP container and FFmpeg streaming pipeline...\n"
+
+    # Define dynamic properties
+    local container_image="${MEDIAMTX_IMAGE}"
+    # Default mappings for MediaMTX
+    local docker_opts=(
+      "-p" "${STREAM_WHEP_PORT}:8889"
+      "-p" "${STREAM_RTSP_PORT}:8554"
+      "-p" "${MEDIAMTX_API_PORT}:9997"
+      "-p" "1935:1935"
+    )
+    local container_args=()
+    local stream_url="rtmp://${host_ip}:1935/mystream"
+    local stream_format="flv"
+    WHEP_URL="http://${host_ip}:${STREAM_WHEP_PORT}/mystream/whep"
+    if [[ "${USE_GO2RTC}" == "true" ]]; then
+      WHEP_URL="http://${host_ip}:${STREAM_WHEP_PORT}/api/webrtc?src=mystream"
+    fi
+
+    # Override properties if Go2RTC is selected
+    if [[ "${USE_GO2RTC}" == "true" ]]; then
+      container_image="${GO2RTC_IMAGE}"
+
+      # For go2rtc:
+      # - Map Host WHEP port to internal API port 1984
+      # - Map Host RTSP port to internal 8554
+      # - Map Host WebRTC port (8556) to internal 8555 (default)
+      docker_opts=(
+        "-p" "${STREAM_WHEP_PORT}:1984"
+        "-p" "${STREAM_RTSP_PORT}:8554"
+        "-p" "${STREAM_WEBRTC_PORT}:8555/tcp"
+        "-p" "${STREAM_WEBRTC_PORT}:8555/udp"
+      )
+    fi
 
     (
       set +e
-      local start_time
-      start_time=$(date +%s)
 
-      # Store state indicating docker mode with its WHEP port
-      printf "%s:%s" "$BASHPID" "${MEDIAMTX_WHEP_PORT}" > "${WHEP_STATE_FILE}"
+      # Store state indicating docker mode with the active HOST port
+      printf "%s:%s" "$BASHPID" "${STREAM_WHEP_PORT}" > "${WHEP_STATE_FILE}"
 
-      local container_name="mediamtx_pipup_${BASHPID}"
+      local container_name="webrtc_pipup_${BASHPID}"
       local ffmpeg_pid=""
+      local config_file="/dev/shm/go2rtc_${BASHPID}.yaml"
 
       # shellcheck disable=SC2329
       cleanup_pipeline() {
-        # Instantly clear traps to prevent loops
         trap - SIGTERM SIGINT EXIT
-
-        # Remove state file immediately so the main script knows it is dead
         rm -f "${WHEP_STATE_FILE}"
+        rm -f "${config_file}"
 
-        # Kill ffmpeg precisely and silently
         if [[ -n "${ffmpeg_pid}" ]]; then
           kill "${ffmpeg_pid}" >/dev/null 2>&1 || true
         fi
 
-        # Force-kill the container instantly (with 0s timeout) in the background
-        # to ensure this cleanup function returns immediately.
-        docker kill "${container_name}" >/dev/null 2>&1 || \
-        docker rm -f --volumes "${container_name}" >/dev/null 2>&1 &
-
+        docker rm -f "${container_name}" >/dev/null 2>&1 &
         exit 0
       }
       trap cleanup_pipeline SIGTERM SIGINT EXIT
 
-      # Start MediaMTX instance with RTSP port mapped via host network
-      # Added API port mapping to allow the healthcheck to query API if needed
-      docker run --rm -d --name "${container_name}" --network=host \
-        -e "MTX_RTSPADDRESS=:${MEDIAMTX_RTSP_PORT}" \
-        "${MEDIAMTX_IMAGE}" >/dev/null 2>&1
+      # --- Robust Zombie Cleanup ---
+      # Cleanly pipe container IDs to xargs to avoid running docker rm on empty arguments
+      docker ps -qa --filter "name=webrtc_pipup_" | xargs -r docker rm -f >/dev/null 2>&1 || true
+      pkill -f "nc -lp ${STREAM_WHEP_PORT}" >/dev/null 2>&1 || true
+      sleep 0.5
 
-      # Allow the container a moment to bind ports
+      # Create Go2RTC config file to avoid CLI flag parsing issues with complex strings
+      if [[ "${USE_GO2RTC}" == "true" ]]; then
+        cat <<EOF > "${config_file}"
+api:
+  origin: "*"
+webrtc:
+  candidates:
+    - "${host_ip}:${STREAM_WEBRTC_PORT}"
+ffmpeg:
+  reinput: "-re -i {input}"
+streams:
+  mystream: "ffmpeg:${VIDEO_URL}#video=h264#audio=aac#input=reinput"
+log:
+  level: debug
+EOF
+        docker_opts+=("-v" "${config_file}:/config/go2rtc.yaml")
+        container_args=("-config" "/config/go2rtc.yaml")
+      fi
+
+      # Start container
+      local run_cmd=("docker" "run" "--rm" "-d" "--name" "${container_name}" "${docker_opts[@]}" "${container_image}")
+      if [[ "${USE_GO2RTC}" == "true" ]]; then
+        run_cmd+=("/usr/local/bin/go2rtc" "${container_args[@]}")
+      fi
+
+      "${run_cmd[@]}" >/dev/null
+
+      if ! docker ps --filter "name=^/${container_name}$" --format '{{.Names}}' | grep -qx "${container_name}"; then
+        printf '[SYSTEM] Failed to start container (%s).\n' "${container_image}" >&2
+        docker logs "${container_name}" 2>&1 || true
+        return 1
+      fi
+
       sleep 2
 
-      # Stream the global VIDEO_URL to the dynamic host IP
-      ffmpeg -loglevel error -re -stream_loop -1 -i "${VIDEO_URL}" \
-        -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -c:a aac \
-        -f flv "rtmp://${host_ip}:1935/mystream" >/dev/null 2>&1 &
+      # Stream dynamically ONLY if MediaMTX is used. Go2RTC handles it on-demand!
+      if [[ "${USE_GO2RTC}" == "false" ]]; then
+        ffmpeg -loglevel error -re -stream_loop -1 -i "${VIDEO_URL}" \
+          -c:v libx264 -preset ultrafast -tune zerolatency -bf 0 -c:a aac \
+          -f "${stream_format}" "${stream_url}" >/dev/null 2>&1 &
+        ffmpeg_pid=$!
+      fi
 
-      # Capture the exact PID of the background ffmpeg process
-      ffmpeg_pid=$!
-
-      # Non-blocking sleep loop: allows immediate trap execution on SIGTERM
-      while true; do
-        local now
-        now=$(date +%s)
-        if (( now - start_time > WHEP_TIMEOUT )); then break; fi
-        sleep 1 & wait $!
-      done
+      sleep "${WHEP_TIMEOUT}" &
+      wait $!
     ) &
     disown
-
-    WHEP_URL="http://${host_ip}:${MEDIAMTX_WHEP_PORT}/mystream/whep"
 
     # --- Robust WHEP Live Detection ---
     printf "[SYSTEM] Waiting for stream endpoint to become live..."
     local retry=0
-    while [ $retry -lt 15 ]; do
-      # MediaMTX's internal API is exposed at port 9997.
-      # Checking if the path 'mystream' has an active ready source is the safest check.
-      local api_check
-      api_check=$(curl -s "http://${host_ip}:9997/v3/paths/list" || echo "")
-
-      if [[ "${api_check}" == *"\"name\":\"mystream\""* && "${api_check}" == *"\"ready\":true"* ]]; then
-        break
-      fi
-
-      # Fallback check: test the actual HTTP WHEP endpoint via OPTIONS
-      local http_check
-      http_check=$(curl -s -o /dev/null -w "%{http_code}" -X OPTIONS "${WHEP_URL}" || echo "000")
-      if [[ "${http_check}" == "200" || "${http_check}" == "406" ]]; then
-        break
+    local live=false
+    while [ $retry -lt 30 ]; do
+      sleep 1
+      if [[ "${USE_GO2RTC}" == "true" ]]; then
+        # Check if the stream name exists in the API output. Use -L for go2rtc redirects.
+        local api_check
+        api_check=$(curl -sL "http://${host_ip}:${STREAM_WHEP_PORT}/api/streams" || printf '000')
+        if [[ "${api_check}" == *"mystream"* ]]; then
+          live=true
+          break
+        fi
+      else
+        # For MediaMTX, we check the container logs for the "online" message.
+        # Derive the container name using the subshell PID from the state file.
+        local state_data
+        state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || printf '')
+        local c_pid="${state_data%:*}"
+        if [[ -n "${c_pid}" ]]; then
+          if docker logs "webrtc_pipup_${c_pid}" 2>&1 | grep -q "stream is available and online"; then
+            live=true
+            break
+          fi
+        fi
       fi
 
       printf "."
-      sleep 1
-      ((retry++))
+      ((retry += 1))
     done
-    printf " READY\n"
+
+    if [[ "${live}" == "true" ]]; then
+      printf " READY\n"
+    else
+      printf " TIMEOUT\n"
+      printf "[ERROR] Stream failed to become live within 30 seconds.\n" >&2
+      return 1
+    fi
 
     printf "[SYSTEM] Stream pipeline ready. Target WHEP URL: %s\n" "${WHEP_URL}"
     return 0
   fi
 
   # --- Fallback: Original Netcat Mock Server ---
-  printf "[SYSTEM] Docker/FFmpeg missing. Falling back to basic netcat mock server...\n"
+  printf "[SYSTEM] Docker/FFmpeg missing. Falling back to basic netcat server...\n"
 
-  local assigned_port="${MOCK_WHEP_DEFAULT_PORT}"
+  local assigned_port="${WHEP_FALLBACK_PORT}"
 
   if (printf "" > "/dev/tcp/127.0.0.1/${assigned_port}") >/dev/null 2>&1; then
     local found=false
@@ -348,7 +498,7 @@ start_whep_service() {
 #   1 if adb tool binary is missing or routing generation fails.
 #######################################
 setup_adb_forwarding() {
-  if (echo > "/dev/tcp/127.0.0.1/${PORT}") >/dev/null 2>&1; then
+  if (printf '' > "/dev/tcp/127.0.0.1/${PORT}") >/dev/null 2>&1; then
     return 0
   fi
   if ! command -v adb >/dev/null 2>&1; then
@@ -422,7 +572,7 @@ send_cancel_request() {
 
   printf "[SYSTEM] Sending CANCEL request to %s\n" "${target_ip}"
   local response
-  response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${endpoint}" || echo "000")
+  response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${endpoint}" || printf '000')
   printf "[RESULT] Cancel HTTP %s\n" "${response}"
 }
 
@@ -554,20 +704,15 @@ send_multipart_test() {
     -F "contentPadding=${padding}" \
     -F "animationType=${anim_type}" \
     -F "animationDuration=${anim_duration}" \
-    -F "overwrite=${overwrite}" || echo "000")
+    -F "overwrite=${overwrite}" || printf '000')
 
   rm -f "${temp_file}"
 
-  # Colorize the HTTP status code
-  local status_color="${CLR_SUCCESS}"
-  [[ "${response}" != "200" ]] && status_color="${CLR_ERROR}"
-
   local style_info
-  style_info=$(printf "Pos:%s MedPos:%s Rad:-- Bdr:-- Pad:%sdp Anim:%s (%sms)" \
-    "${position}" "${media_pos}" "${padding}" "${anim_type}" "${anim_duration}")
+  style_info=$(printf "Pos:%s MedPos:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+    "${position}" "${media_pos}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
 
-  printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-60s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET}\n" \
-    "MULTIPART" "N/A (Form-Data)" "${style_info}" "${target_ip}" "${response}"
+  print_result_row "MULTIPART" "N/A (Form-Data)" "${style_info}" "${target_ip}" "${response}"
 }
 
 #######################################
@@ -579,7 +724,7 @@ send_multipart_test() {
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-h host] [-t type] [-u url] [-a] [-l] [-o] [-c] [-s] [-k]
+Usage: ${0##*/} [-h host] [-t type] [-u url] [-a] [-l] [-o] [-c] [-s] [-k] [--help]
 Options:
   -h    Target IP (default: ${DEFAULT_IP})
   -t    Test type: ${TEST_TYPES[*]}
@@ -589,7 +734,8 @@ Options:
   -o    Overwrite the current notification
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
-  -k    Kill the background WHEP mock server
+  -k    Stop the active WHEP pipeline and server
+  --help, -?  Show this help message and exit
 EOF
   exit 1
 }
@@ -602,6 +748,10 @@ EOF
 #   Passes standard logs and structural test suite sequences to stdout.
 #######################################
 main() {
+  if [[ "${1:-}" == "--help" || "${1:-}" == "-help" || "${1:-}" == "-?" ]]; then
+    usage
+  fi
+
   local target_ip="${DEFAULT_IP}"
   local test_type=""
   local custom_url=""
@@ -609,7 +759,7 @@ main() {
   local use_long_text="false"
   local immediate_cancel="false"
   local run_stress="false"
-  local kill_mock="false"
+  local kill_whep_pipeline="false"
   local overwrite="false"
 
   while getopts "h:t:u:alocks" opt; do
@@ -621,34 +771,32 @@ main() {
       l) use_long_text="true" ;;
       o) overwrite="true" ;;
       c) immediate_cancel="true" ;;
-      k) kill_mock="true" ;;
+      k) kill_whep_pipeline="true" ;;
       s) run_stress="true" ;;
       *) usage ;;
     esac
   done
 
-  if [[ "${kill_mock}" == "true" ]]; then
-    if [[ -f "${WHEP_STATE_FILE}" ]]; then
-      local state_data
-      state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
-      if [[ "${state_data}" == *":"* ]]; then
-        local state_pid="${state_data%:*}"
-        local state_mode="${state_data#*:}"
+  # Handle Pipeline Termination (-k) Cleanly
+  if [[ "${kill_whep_pipeline}" == "true" ]]; then
+    local state_info
+    state_info=$(parse_whep_state)
+    if [[ -n "${state_info}" ]]; then
+      local state_pid state_mode
+      read -r state_pid state_mode <<< "${state_info}"
+      printf "[SYSTEM] Stopping active WHEP pipeline (PID: %s, Port/Mode: %s)... " "${state_pid}" "${state_mode}"
 
-        printf "[SYSTEM] Stopping active WHEP pipeline (PID: %s, Mode: %s)... " \
-          "${state_pid}" "${state_mode}"
+      kill "${state_pid}" 2>/dev/null || true
 
-        # Killing the parent subshell triggers its trap,
-        # which cleanly stops Docker and kills FFmpeg.
-        if kill "${state_pid}" 2>/dev/null; then
-          printf "OK\n"
-        else
-          printf "FAILED (already dead?)\n"
-          rm -f "${WHEP_STATE_FILE}"
-        fi
+      if command -v docker >/dev/null 2>&1; then
+        docker ps -qa --filter "name=webrtc_pipup_" | xargs -r docker rm -f >/dev/null 2>&1 || true
       fi
+
+      pkill -f "nc -lp ${state_mode}" >/dev/null 2>&1 || true
+      rm -f "${WHEP_STATE_FILE}"
+      printf "OK\n"
     else
-      printf "[SYSTEM] No active WHEP server or pipeline state file found.\n"
+      printf "[SYSTEM] No active WHEP pipeline or state file found.\n"
     fi
     return 0
   fi
@@ -674,7 +822,7 @@ main() {
 
   # Start the background WHEP service for WebRTC/WHEP testing only if needed
   if [[ "${test_type}" == "whep" && -z "${custom_url}" ]] || [[ "${run_all}" == "true" ]] || [[ "${run_stress}" == "true" ]]; then
-    start_whep_service || true
+    start_whep_service
   fi
 
   #######################################
@@ -692,108 +840,94 @@ main() {
     local media="${4}"
     local fit="${5:-}"
 
-    local theme_name="${THEME_KEYS[$((RANDOM % ${#THEME_KEYS[@]}))]}"
+    local theme_name="${THEME_KEYS[$(( RANDOM % ${#THEME_KEYS[@]} ))]}"
     local theme_str="${THEMES[$theme_name]}"
 
     local bg border title_c msg_c
     IFS=';' read -r bg border title_c msg_c <<< "${theme_str}"
 
-    local rand_radius=$((RANDOM % 50))
-    local rand_border=$((RANDOM % 10 + 1))
-    local rand_media_pos=$((RANDOM % 4))
-    local rand_padding=$((MIN_PADDING + (RANDOM % 25)))
-	local rand_anim_type=$((RANDOM % 11))
-    local rand_anim_duration=$((300 + RANDOM % 1201))
+    local radius border_w padding anim_type anim_dur target_fit
+    local style_data
+    style_data=$(get_random_style "${type}")
+    read -r radius border_w padding anim_type anim_dur target_fit <<< "${style_data}"
+    [[ -z "${fit}" ]] && fit="${target_fit}"
 
-    local info_msg
-    local fit_label=""
+    local rand_media_pos=$(( RANDOM % 4 ))
+
+    local info_msg fit_label=""
     [[ -n "${fit}" ]] && fit_label=" | Fit: ${fit}"
     info_msg=$(printf "Theme: %s\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)\nOverwrite: %s%b" \
-      "${theme_name}" "${type}" "${fit_label}" "${rand_radius}" "${rand_border}" "${rand_media_pos}" "${rand_padding}" \
-      "${rand_anim_type}" "${rand_anim_duration}" "${overwrite}" "${suffix}")
+      "${theme_name}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${rand_media_pos}" "${padding}" \
+      "${anim_type}" "${anim_dur}" "${overwrite}" "${suffix}")
 
-    # Fire the notification and catch the returned HTTP code
     local response
     response=$(send_json_notification "${target_ip}" "${title}" "${info_msg}" "${media}" \
-      "${pos}" "${bg}" "${rand_border}" "${border}" "${title_c}" "${msg_c}" \
-      "${rand_radius}" "${rand_media_pos}" "${rand_padding}" "${rand_anim_type}" "${rand_anim_duration}" "${overwrite}")
+      "${pos}" "${bg}" "${border_w}" "${border}" "${title_c}" "${msg_c}" \
+      "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}")
 
-    # Colorize the HTTP status code
-    local status_color="${CLR_SUCCESS}"
-    [[ "${response}" != "200" ]] && status_color="${CLR_ERROR}"
-
-    # Print the beautiful, single-line table row
-    local style_info
     local table_type="${type^^}"
     [[ -n "${fit}" ]] && table_type="${table_type}(${fit:0:1})"
-    style_info=$(printf "Pos:%s MedPos:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-      "${pos}" "${rand_media_pos}" "${rand_radius}" "${rand_border}" "${rand_padding}" \
-      "${rand_anim_type}" "${rand_anim_duration}" "${overwrite}")
 
-    printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-60s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET}\n" \
-      "${table_type}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
+    local style_info
+    style_info=$(printf "Pos:%s MedPos:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+      "${pos}" "${rand_media_pos}" "${radius}" "${border_w}" "${padding}" \
+      "${anim_type}" "${anim_dur}" "${overwrite}")
+
+    print_result_row "${table_type}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
   }
 
   #######################################
-# Executes a rapid concurrent background stress test against the endpoint.
-# Globals:
-#   STRESS_ITERATIONS: Integer, total parallel payloads to dispatch.
-#   TEST_TYPES: Array, available test configurations.
-#   MIN_PADDING: Integer, minimum inner layout padding.
-# Arguments:
-#   target_ip: String, IP address of the target server.
-#   suffix: String, payload text modifiers.
-# Outputs:
-#   Writes stress initialization metrics and test results to stdout.
-#######################################
-run_stress_test() {
-  local target_ip="${1}"
-  local suffix="${2}"
+  # Executes a rapid concurrent background stress test against the endpoint.
+  # Globals:
+  #   STRESS_ITERATIONS: Integer, total parallel payloads to dispatch.
+  #   TEST_TYPES: Array, available test configurations.
+  # Arguments:
+  #   target_ip: String, IP address of the target server.
+  #   suffix: String, payload text modifiers.
+  # Outputs:
+  #   Writes stress initialization metrics and test results to stdout.
+  #######################################
+  run_stress_test() {
+    local target_ip="${1}"
+    local suffix="${2}"
 
-  printf "[STRESS] Initiating parallel bombardment of %d requests...\n" "${STRESS_ITERATIONS}"
-  printf "[STRESS] Spawning background jobs... "
+    printf "[STRESS] Initiating parallel bombardment of %d requests...\n" "${STRESS_ITERATIONS}"
+    printf "[STRESS] Spawning background jobs... "
 
-  printf "DONE\n"
-  printf "[STRESS] Awaiting incoming responses from server...\n\n"
-  print_table_header
+    printf "DONE\n"
+    printf "[STRESS] Awaiting incoming responses from server...\n\n"
+    print_table_header
 
-  local num_types=${#TEST_TYPES[@]}
-  local i
-  for ((i = 0; i < STRESS_ITERATIONS; i++)); do
-    # Reseed the random generator using system nanoseconds to prevent subshell
-    # token collisions when background jobs are spawned simultaneously.
-    local seed
-    seed=$(date +%N | sed 's/^0*//')
-    local rand_idx=$(((seed + i) % num_types))
-    local type="${TEST_TYPES[rand_idx]}"
+    local num_types=${#TEST_TYPES[@]}
+    local i
+    for ((i = 0; i < STRESS_ITERATIONS; i++)); do
+      local seed
+      seed=$(date +%N | sed 's/^0*//')
+      local rand_idx=$(((seed + i) % num_types))
+      local type="${TEST_TYPES[rand_idx]}"
 
-    if [[ "${type}" == "cancel" ]]; then
-      continue
-    fi
+      [[ "${type}" == "cancel" ]] && continue
 
-    if [[ "${type}" == "multipart" ]]; then
-      local mp_padding=$((MIN_PADDING + (RANDOM % 25)))
-      local mp_anim_type=$((RANDOM % 11))
-      local mp_anim_duration=$((300 + RANDOM % 1201))
-      send_multipart_test "${target_ip}" "$((RANDOM % 5))" "${suffix}" \
-        "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" \
-        "${mp_anim_duration}" "${overwrite}" &
-      continue
-    fi
+      local radius border_w padding anim_type anim_dur fit
+      local style_data
+      style_data=$(get_random_style "${type}")
+      read -r radius border_w padding anim_type anim_dur fit <<< "${style_data}"
 
-    local media
-    local fit="cover"
-    if [[ "${type}" == "whep" ]]; then
-      local fits=("cover" "contain" "fill")
-      fit="${fits[$((RANDOM % 3))]}"
-    fi
-    media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
-    dispatch_test "${type}" "Stress #${i}" "$((RANDOM % 5))" "${media}" "${fit}" &
-  done
+      if [[ "${type}" == "multipart" ]]; then
+        send_multipart_test "${target_ip}" "$(( RANDOM % 5 ))" "${suffix}" \
+          "$(( RANDOM % 4 ))" "${padding}" "${anim_type}" \
+          "${anim_dur}" "${overwrite}" &
+        continue
+      fi
 
-  wait
-  printf "\n[STRESS] Execution wave completed successfully.\n"
-}
+      local media
+      media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
+      dispatch_test "${type}" "Stress #${i}" "$(( RANDOM % 5 ))" "${media}" "${fit}" &
+    done
+
+    wait
+    printf "\n[STRESS] Execution wave completed successfully.\n"
+  }
 
   # --- Execution Flows ---
 
@@ -809,16 +943,14 @@ run_stress_test() {
       [[ "${type}" == "cancel" ]] && continue
 
       if [[ "${type}" == "multipart" ]]; then
-        local mp_padding=$((MIN_PADDING + (RANDOM % 25)))
-        local mp_anim_type=$((RANDOM % 11))
-        local mp_anim_duration=$((300 + RANDOM % 1201))
-        send_multipart_test "${target_ip}" "${pos_list[idx]}" "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}" "${overwrite}"
+        local radius border_w padding anim_type anim_dur fit
+        read -r radius border_w padding anim_type anim_dur fit <<< "$(get_random_style "${type}")"
+
+        send_multipart_test "${target_ip}" "${pos_list[idx]}" "${suffix}" "$((RANDOM % 4))" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}"
       else
-        local fit="cover"
-        if [[ "${type}" == "whep" ]]; then
-          local fits=("cover" "contain" "fill")
-          fit="${fits[$((RANDOM % 3))]}"
-        fi
+        local radius border_w padding anim_type anim_dur fit
+        read -r radius border_w padding anim_type anim_dur fit <<< "$(get_random_style "${type}")"
+
         local media
         media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
         dispatch_test "${type}" "${type^^} Test" "${pos_list[idx]}" "${media}" "${fit}"
@@ -838,12 +970,12 @@ run_stress_test() {
   # Single Test Case Execution
   [[ -z "${test_type}" ]] && test_type="message"
 
+  local radius border_w padding anim_type anim_dur fit
+  read -r radius border_w padding anim_type anim_dur fit <<< "$(get_random_style "${test_type}")"
+
   if [[ "${test_type}" == "multipart" ]]; then
-    local mp_padding=$((MIN_PADDING + (RANDOM % 25)))
-    local mp_anim_type=$((RANDOM % 11))
-    local mp_anim_duration=$((300 + RANDOM % 1201))
     print_table_header
-    send_multipart_test "${target_ip}" 0 "${suffix}" "$((RANDOM % 4))" "${mp_padding}" "${mp_anim_type}" "${mp_anim_duration}" "${overwrite}"
+    send_multipart_test "${target_ip}" 0 "${suffix}" "$((RANDOM % 4))" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}"
   elif [[ "${test_type}" == "cancel" ]]; then
     local media
     media=$(get_media_payload "png")
@@ -857,23 +989,19 @@ run_stress_test() {
       usage
     fi
 
-    local fit="cover"
-    if [[ "${test_type}" == "whep" ]]; then
-      local fits=("cover" "contain" "fill")
-      fit="${fits[$((RANDOM % 3))]}"
-    fi
-
     local media
     media=$(get_media_payload "${test_type}" "${custom_url}" "${fit}")
 
     if [[ "${test_type}" == "whep" && -z "${custom_url}" ]]; then
-      if [[ -f "${WHEP_STATE_FILE}" ]]; then
-        local state_data
-        state_data=$(cat "${WHEP_STATE_FILE}" 2>/dev/null || echo "")
-        if [[ "${state_data}" == *":"* ]]; then
-          local state_pid="${state_data%:*}"
-          local state_port="${state_data#*:}"
-          printf "[SYSTEM] Mock WHEP server is active in background (PID: %s, Port: %s)\n\n" "${state_pid}" "${state_port}"
+      local state_info
+      state_info=$(parse_whep_state)
+      if [[ -n "${state_info}" ]]; then
+        local state_pid state_port
+        read -r state_pid state_port <<< "${state_info}"
+        if docker ps -q --filter "name=webrtc_pipup_" >/dev/null 2>&1; then
+          printf "[SYSTEM] WebRTC Pipeline container is active (Engine Port: %s)\n\n" "${state_port}"
+        else
+          printf "[SYSTEM] Fallback WHEP server is active in background (PID: %s, Port: %s)\n\n" "${state_pid}" "${state_port}"
         fi
       fi
     fi

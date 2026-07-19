@@ -26,6 +26,9 @@ obj/
 *.ap_
 *.aab
 
+### AI & Local Development Artifacts ###
+.artifacts/
+
 ### Signing & Security ###
 # Private keystores and signing configurations must stay local
 *.jks
