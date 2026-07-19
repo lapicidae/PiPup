@@ -1,0 +1,8 @@
+<resources>
+    <string name="settings_alignment_start">Right</string>
+    <string name="settings_alignment_end">Left</string>
+    <string name="settings_pos_top_start">Top Right</string>
+    <string name="settings_pos_top_end">Top Left</string>
+    <string name="settings_pos_bottom_start">Bottom Right</string>
+    <string name="settings_pos_bottom_end">Bottom Left</string>
+</resources>

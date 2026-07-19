@@ -21,8 +21,10 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.MainActivity
 import nl.rogro82.pipup.R
 
 @UnstableApi
@@ -123,10 +125,24 @@ class AdvancedSubmenu(
             .setTitle(R.string.settings_reset_confirm_title)
             .setMessage(R.string.settings_reset_confirm_msg)
             .setPositiveButton(R.string.settings_yes) { _, _ ->
+                val oldLang = settings.language
                 settings.resetToDefaults()
-                val mode = if (settings.appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-                AppCompatDelegate.setDefaultNightMode(mode)
-                settingsActivity?.recreate()
+
+                // Ensure theme is reset immediately for the restart
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
+
+                if (oldLang != "default") {
+                    // Reset to system default locale if it was overridden
+                    AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+                }
+
+                // Perform a clean restart to apply system locale and default settings
+                (context as? SettingsActivity)?.let { activity ->
+                    val intent = Intent(activity, MainActivity::class.java)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    activity.startActivity(intent)
+                    Runtime.getRuntime().exit(0)
+                }
             }
             .setNegativeButton(R.string.settings_no, null)
             .create()

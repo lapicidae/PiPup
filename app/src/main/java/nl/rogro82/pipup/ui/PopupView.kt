@@ -9,6 +9,7 @@ import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.TextureView
+import android.view.View
 import android.view.animation.OvershootInterpolator
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -34,6 +35,7 @@ import com.bumptech.glide.load.engine.DiskCacheStrategy
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.isEmulator
+import nl.rogro82.pipup.isRtl
 import nl.rogro82.pipup.databinding.PopupBinding
 import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.getScaledPixels
@@ -50,7 +52,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     var readyListener: ReadyListener? = null
 
     private var mPlayer: ExoPlayer? = null
-    private var mVideoView: android.view.View? = null
+    private var mVideoView: View? = null
     private var mWebView: WebView? = null
     private var isScrolling = false
     private var targetMediaHeight = 0
@@ -124,6 +126,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             } else {
                 context.getString(nl.rogro82.pipup.R.string.media_error_with_message, mainMessage, errorDetails)
             }
+            binding.popupMessage.textAlignment = TEXT_ALIGNMENT_VIEW_START
             binding.popupMessage.isVisible = true
             binding.popupScrollView.isVisible = true
         }
@@ -138,6 +141,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     init {
         clipChildren = false
         clipToPadding = false
+        isFocusable = false
+        isClickable = false
+        layoutDirection = LAYOUT_DIRECTION_LOCALE
     }
 
     fun create(): PopupView {
@@ -172,6 +178,12 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         setPadding(0, 0, 0, 0)
 
         val settings = AppSettings(context)
+        val isRtl = context.isRtl()
+        val dir = if (isRtl) LAYOUT_DIRECTION_RTL else LAYOUT_DIRECTION_LTR
+
+        layoutDirection = dir
+        binding.popupContainer.layoutDirection = dir
+        binding.textContainer.layoutDirection = dir
 
         // 1. Padding
         val paddingVal = props.contentPadding ?: settings.contentPadding
@@ -190,7 +202,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
 
         // 3. Constraints
-        val maxTextWidth = if (props.scale) context.getScaledPixels(500) else context.dpToPx(500)
+        val maxTextWidth = if (props.scale) context.getScaledPixels(700) else context.dpToPx(700)
         binding.popupTitle.maxWidth = maxTextWidth
         binding.popupMessage.maxWidth = maxTextWidth
 
@@ -203,6 +215,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             binding.popupTitle.textSize = props.titleSize
             val gravity = props.getTitleGravity()
             binding.popupTitle.gravity = gravity
+            binding.popupTitle.textAlignment = props.getTitleTextAlignment()
             binding.popupTitle.isVisible = true
             (binding.popupTitle.layoutParams as? LinearLayout.LayoutParams)?.gravity = gravity
         } ?: run { binding.popupTitle.isVisible = false }
@@ -213,14 +226,26 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             binding.popupMessage.textSize = props.messageSize
             val gravity = props.getMessageGravity()
             binding.popupMessage.gravity = gravity
+            binding.popupMessage.textAlignment = props.getMessageTextAlignment()
             binding.popupMessage.isVisible = true
             binding.popupScrollView.isVisible = true
             (binding.popupScrollView.layoutParams as? LinearLayout.LayoutParams)?.gravity = gravity
+
+            // Also align the text container itself within the popup
+            (binding.textContainer.layoutParams as? LinearLayout.LayoutParams)?.gravity = gravity
+
+            // Disable focus on dynamic components to prevent DPAD jumping into popup
+            binding.popupScrollView.isFocusable = false
+            binding.popupScrollView.isClickable = false
+            binding.popupMessage.isFocusable = false
+            binding.popupMessage.isClickable = false
 
             binding.popupContainer.post { adjustHeights() }
         } ?: run {
             binding.popupMessage.isVisible = false
             binding.popupScrollView.isVisible = false
+            // Fallback: align container to title gravity if message is missing
+            (binding.textContainer.layoutParams as? LinearLayout.LayoutParams)?.gravity = props.getTitleGravity()
         }
     }
 
@@ -247,34 +272,48 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
-    private fun setupVertical(container: LinearLayout, first: android.view.View, second: android.view.View, mediaFirst: Boolean) {
+    private fun setupVertical(container: LinearLayout, first: View, second: View, mediaFirst: Boolean) {
         container.orientation = LinearLayout.VERTICAL
         val margin = context.dpToPx(8)
 
         val firstParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-            if (mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
-            setMargins(0, 0, 0, if (mediaFirst) margin else 0)
+            // Only force center if it's the media frame
+            if (mediaFirst && first !== binding.textContainer) gravity = Gravity.CENTER_HORIZONTAL
+            leftMargin = 0
+            topMargin = 0
+            rightMargin = 0
+            bottomMargin = if (mediaFirst) margin else 0
         }
+
         val secondParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-            if (!mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
-            setMargins(0, if (!mediaFirst) margin else 0, 0, 0)
+            if (!mediaFirst && second !== binding.textContainer) gravity = Gravity.CENTER_HORIZONTAL
+            leftMargin = 0
+            topMargin = if (!mediaFirst) margin else 0
+            rightMargin = 0
+            bottomMargin = 0
         }
 
         container.addView(first, firstParams)
         container.addView(second, secondParams)
     }
 
-    private fun setupHorizontal(container: LinearLayout, first: android.view.View, second: android.view.View, mediaFirst: Boolean) {
+    private fun setupHorizontal(container: LinearLayout, first: View, second: View, mediaFirst: Boolean) {
         container.orientation = LinearLayout.HORIZONTAL
         val margin = context.dpToPx(12)
 
         val firstParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.CENTER_VERTICAL
-            setMargins(0, 0, if (mediaFirst) margin else 0, 0)
+            leftMargin = 0
+            topMargin = 0
+            rightMargin = if (mediaFirst) margin else 0
+            bottomMargin = 0
         }
         val secondParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.CENTER_VERTICAL
-            setMargins(if (!mediaFirst) margin else 0, 0, 0, 0)
+            leftMargin = if (!mediaFirst) margin else 0
+            topMargin = 0
+            rightMargin = 0
+            bottomMargin = 0
         }
 
         container.addView(first, firstParams)
@@ -615,11 +654,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         alpha = 0f
         val pos = props.getPositionEnum()
 
+        val isRtl = context.isRtl()
+
         fun applySlide() {
             val offset = (if (width > 0) width.toFloat() else context.dpToPx(400).toFloat()) + context.dpToPx(20) + 100f
             when (pos) {
-                PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> translationX = offset
-                PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> translationX = -offset
+                PopupProps.Position.TopEnd, PopupProps.Position.BottomEnd -> translationX = if (isRtl) -offset else offset
+                PopupProps.Position.TopStart, PopupProps.Position.BottomStart -> translationX = if (isRtl) offset else -offset
                 PopupProps.Position.Center -> translationY = resources.displayMetrics.heightPixels.toFloat() / 2f
             }
         }
@@ -638,10 +679,22 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 alpha = 0f; scaleX = 0f; scaleY = 0f
                 val metrics = resources.displayMetrics
                 when (pos) {
-                    PopupProps.Position.TopRight -> { translationX = metrics.widthPixels.toFloat(); translationY = -500f }
-                    PopupProps.Position.TopLeft -> { translationX = -metrics.widthPixels.toFloat(); translationY = -500f }
-                    PopupProps.Position.BottomRight -> { translationX = metrics.widthPixels.toFloat(); translationY = metrics.heightPixels.toFloat() }
-                    PopupProps.Position.BottomLeft -> { translationX = -metrics.widthPixels.toFloat(); translationY = metrics.heightPixels.toFloat() }
+                    PopupProps.Position.TopEnd -> {
+                        translationX = if (isRtl) -metrics.widthPixels.toFloat() else metrics.widthPixels.toFloat()
+                        translationY = -500f
+                    }
+                    PopupProps.Position.TopStart -> {
+                        translationX = if (isRtl) metrics.widthPixels.toFloat() else -metrics.widthPixels.toFloat()
+                        translationY = -500f
+                    }
+                    PopupProps.Position.BottomEnd -> {
+                        translationX = if (isRtl) -metrics.widthPixels.toFloat() else metrics.widthPixels.toFloat()
+                        translationY = metrics.heightPixels.toFloat()
+                    }
+                    PopupProps.Position.BottomStart -> {
+                        translationX = if (isRtl) metrics.widthPixels.toFloat() else -metrics.widthPixels.toFloat()
+                        translationY = metrics.heightPixels.toFloat()
+                    }
                     PopupProps.Position.Center -> { translationY = metrics.heightPixels.toFloat() }
                 }
                 animate().alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(duration).start()
@@ -655,6 +708,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     fun animateOut(completion: () -> Unit) {
         val duration = props.animationDuration.toLong()
+        val isRtl = context.isRtl()
         if (props.animationType == 0 || duration <= 0 || !props.animationExit) {
             animate().alpha(0f).setDuration(if (duration > 0) duration else 300).withEndAction(completion).start()
             return
@@ -664,9 +718,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         fun getSlideX(): Float {
             val margin = context.dpToPx(20).toFloat()
+            val offset = width + margin + 100f
             return when (pos) {
-                PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> width + margin + 100f
-                PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> -(width + margin + 100f)
+                PopupProps.Position.TopEnd, PopupProps.Position.BottomEnd -> if (isRtl) -offset else offset
+                PopupProps.Position.TopStart, PopupProps.Position.BottomStart -> if (isRtl) offset else -offset
                 else -> 0f
             }
         }
@@ -681,10 +736,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             10 -> {
                 val metrics = resources.displayMetrics
                 val (tx, ty) = when (pos) {
-                    PopupProps.Position.TopRight -> metrics.widthPixels.toFloat() to -500f
-                    PopupProps.Position.TopLeft -> -metrics.widthPixels.toFloat() to -500f
-                    PopupProps.Position.BottomRight -> metrics.widthPixels.toFloat() to metrics.heightPixels.toFloat()
-                    PopupProps.Position.BottomLeft -> -metrics.widthPixels.toFloat() to metrics.heightPixels.toFloat()
+                    PopupProps.Position.TopEnd -> (if (isRtl) -metrics.widthPixels.toFloat() else metrics.widthPixels.toFloat()) to -500f
+                    PopupProps.Position.TopStart -> (if (isRtl) metrics.widthPixels.toFloat() else -metrics.widthPixels.toFloat()) to -500f
+                    PopupProps.Position.BottomEnd -> (if (isRtl) -metrics.widthPixels.toFloat() else metrics.widthPixels.toFloat()) to metrics.heightPixels.toFloat()
+                    PopupProps.Position.BottomStart -> (if (isRtl) metrics.widthPixels.toFloat() else -metrics.widthPixels.toFloat()) to metrics.heightPixels.toFloat()
                     PopupProps.Position.Center -> 0f to metrics.heightPixels.toFloat()
                 }
                 animate().alpha(0f).translationX(tx).translationY(ty).scaleX(0f).scaleY(0f).setDuration(duration).withEndAction(completion).start()

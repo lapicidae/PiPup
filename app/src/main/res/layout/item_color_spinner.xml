@@ -23,8 +23,11 @@
 
     <TextView
         android:id="@+id/color_name"
-        android:layout_width="wrap_content"
+        android:layout_width="0dp"
+        android:layout_weight="1"
         android:layout_height="wrap_content"
         android:textColor="@color/colorOnSurface"
-        android:textSize="18sp" />
+        android:textSize="18sp"
+        android:textAlignment="viewStart"
+        android:gravity="start"/>
 </LinearLayout>

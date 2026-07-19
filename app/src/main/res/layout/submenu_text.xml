@@ -12,11 +12,13 @@
         android:textColor="@color/colorOnSurface"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp"/>
+        android:layout_marginBottom="32dp"
+        android:textAlignment="viewStart"
+        android:gravity="start"/>
 
     <!-- Title -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_title_color" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_title_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_title_color" android:textColor="@color/colorOnSurfaceVariant" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_title_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
     <Button android:id="@+id/btn_edit_title_hex"
         android:layout_width="match_parent"
         android:layout_height="48dp"
@@ -43,7 +45,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/settings_title_size"
-            android:textColor="@color/colorOnSurfaceVariant" />
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:textAlignment="viewStart"
+            android:gravity="start"/>
         <TextView
             android:id="@+id/text_title_size_value"
             android:layout_width="wrap_content"
@@ -54,12 +58,12 @@
     </LinearLayout>
     <SeekBar android:id="@+id/seekbar_title_size" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="64" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
 
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_title_alignment" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
-    <Spinner android:id="@+id/spinner_title_alignment" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_title_alignment" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_title_alignment" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
     <!-- Message -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_message_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
-    <Spinner android:id="@+id/spinner_message_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_message_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_message_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
     <Button android:id="@+id/btn_edit_message_hex"
         android:layout_width="match_parent"
         android:layout_height="48dp"
@@ -86,7 +90,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/settings_message_size"
-            android:textColor="@color/colorOnSurfaceVariant" />
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:textAlignment="viewStart"
+            android:gravity="start"/>
         <TextView
             android:id="@+id/text_message_size_value"
             android:layout_width="wrap_content"
@@ -97,7 +103,7 @@
     </LinearLayout>
     <SeekBar android:id="@+id/seekbar_message_size" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="48" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
 
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_message_alignment" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
-    <Spinner android:id="@+id/spinner_message_alignment" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_message_alignment" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_message_alignment" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
 </LinearLayout>

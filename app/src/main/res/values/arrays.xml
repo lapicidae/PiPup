@@ -1,9 +1,9 @@
 <resources>
     <string-array name="position_options">
-        <item>@string/settings_pos_top_right</item>
-        <item>@string/settings_pos_top_left</item>
-        <item>@string/settings_pos_bottom_right</item>
-        <item>@string/settings_pos_bottom_left</item>
+        <item>@string/settings_pos_top_end</item>
+        <item>@string/settings_pos_top_start</item>
+        <item>@string/settings_pos_bottom_end</item>
+        <item>@string/settings_pos_bottom_start</item>
         <item>@string/settings_pos_center</item>
     </string-array>
 
@@ -29,9 +29,9 @@
     </string-array>
 
     <string-array name="alignment_options">
-        <item>@string/settings_alignment_left</item>
+        <item>@string/settings_alignment_start</item>
         <item>@string/settings_alignment_center</item>
-        <item>@string/settings_alignment_right</item>
+        <item>@string/settings_alignment_end</item>
     </string-array>
 
     <string-array name="language_options">

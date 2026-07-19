@@ -142,17 +142,17 @@
     <string name="settings_preview_message">Das Overlay wird in Echtzeit aktualisiert.</string>
     <string name="settings_slider_value_format">%1$d / %2$d</string>
     <string name="settings_default_suffix">(Standard)</string>
-    <string name="settings_alignment_left">Links</string>
+    <string name="settings_alignment_start">Links</string>
     <string name="settings_alignment_center">Zentriert</string>
-    <string name="settings_alignment_right">Rechts</string>
+    <string name="settings_alignment_end">Rechts</string>
     <string name="settings_media_pos_top">Oben</string>
     <string name="settings_media_pos_bottom">Unten</string>
     <string name="settings_media_pos_left">Links</string>
     <string name="settings_media_pos_right">Rechts</string>
-    <string name="settings_pos_top_right">Oben Rechts</string>
-    <string name="settings_pos_top_left">Oben Links</string>
-    <string name="settings_pos_bottom_right">Unten Rechts</string>
-    <string name="settings_pos_bottom_left">Unten Links</string>
+    <string name="settings_pos_top_end">Oben Rechts</string>
+    <string name="settings_pos_top_start">Oben Links</string>
+    <string name="settings_pos_bottom_end">Unten Rechts</string>
+    <string name="settings_pos_bottom_start">Unten Links</string>
     <string name="settings_pos_center">Zentriert</string>
 
     <!-- Sprachnamen -->

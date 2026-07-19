@@ -27,6 +27,7 @@ import androidx.core.graphics.toColorInt
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.isRtl
 
 /**
  * Base class for common submenu logic.
@@ -81,11 +82,11 @@ abstract class SubmenuBase(
             val marginTop = (density * 40).toInt()
             val marginBottom = (density * 10).toInt()
 
-            if (shouldBeAtTop) {
-                params.setMargins(0, marginTop, marginSide, 0)
-            } else {
-                params.setMargins(0, 0, marginSide, marginBottom)
-            }
+            params.marginStart = 0
+            params.topMargin = if (shouldBeAtTop) marginTop else 0
+            params.marginEnd = marginSide
+            params.bottomMargin = if (shouldBeAtTop) 0 else marginBottom
+
             popup.layoutParams = params
         }
     }
@@ -146,6 +147,7 @@ abstract class SubmenuBase(
             val bar = view as SeekBar
             val isActive = activeSeekBars.contains(bar.id)
             if (event.action == KeyEvent.ACTION_DOWN) {
+                val isRtl = context.isRtl()
                 when (keyCode) {
                     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
                         val becomingActive = !isActive
@@ -153,11 +155,24 @@ abstract class SubmenuBase(
                         updateSeekBarAppearance(bar, becomingActive)
                         true
                     }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> if (isActive) { bar.progress -= 1; true } else {
-                        settingsActivity?.focusRail()
-                        true
+                    KeyEvent.KEYCODE_DPAD_LEFT -> {
+                        if (isActive) {
+                            if (isRtl) bar.progress += 1 else bar.progress -= 1
+                            true
+                        } else if (!isRtl) {
+                            settingsActivity?.focusRail()
+                            true
+                        } else false
                     }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> if (isActive) { bar.progress += 1; true } else true
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                        if (isActive) {
+                            if (isRtl) bar.progress -= 1 else bar.progress += 1
+                            true
+                        } else if (isRtl) {
+                            settingsActivity?.focusRail()
+                            true
+                        } else false
+                    }
                     else -> false
                 }
             } else isActive

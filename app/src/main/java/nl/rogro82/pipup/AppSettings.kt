@@ -9,7 +9,7 @@ import kotlin.reflect.KProperty
 /**
  * Manages application-wide settings using [SharedPreferences].
  */
-class AppSettings(context: Context) {
+class AppSettings(private val context: Context) {
 
     private val prefs = context.getSharedPreferences("pipup_settings", Context.MODE_PRIVATE)
 
@@ -65,6 +65,11 @@ class AppSettings(context: Context) {
     init {
         if (updateChannel == -1) {
             updateChannel = if (isBetaBuild) 1 else 0
+        }
+
+        // Set logical default for new installations (Top-End corner)
+        if (!prefs.contains("position_index")) {
+            positionIndex = 0
         }
     }
 
@@ -149,11 +154,18 @@ class AppSettings(context: Context) {
         return "#$alphaHex$clean"
     }
 
+    /**
+     * Sets the language synchronously to ensure it persists across immediate process restarts.
+     */
+    fun setLanguageSync(lang: String) {
+        prefs.edit(commit = true) {
+            putString("language", lang)
+        }
+    }
+
     fun resetToDefaults() {
-        prefs.edit {
+        prefs.edit(commit = true) {
             clear()
-            // Explicitly reset non-styling flag for parity and clarity
-            putBoolean("dismiss_battery_optimization", false)
         }
     }
 

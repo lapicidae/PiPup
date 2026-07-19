@@ -1,7 +1,9 @@
 package nl.rogro82.pipup.ui
 
 import android.content.Context
+import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup.LayoutParams
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.FrameLayout
@@ -39,7 +41,7 @@ class UpdatesSubmenu(
         // Update Channel
         val defaultChannelIndex = if (settings.isBetaBuild) 1 else 0
         val channelItems = listOf(context.getString(R.string.settings_update_stable), context.getString(R.string.settings_update_beta)).mapIndexed { i, s -> if (i == defaultChannelIndex) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_update_channel, ArrayAdapter(context, android.R.layout.simple_spinner_item, channelItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateChannel) {
+        setupSpinner(root, R.id.spinner_update_channel, ArrayAdapter(context, R.layout.spinner_item, channelItems).apply { setDropDownViewResource(R.layout.spinner_dropdown_item) }, settings.updateChannel) {
             settings.updateChannel = it
         }
 
@@ -51,7 +53,7 @@ class UpdatesSubmenu(
             context.getString(R.string.settings_update_weekly),
             context.getString(R.string.settings_update_monthly)
         ).mapIndexed { i, s -> if (i == 4) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_update_interval, ArrayAdapter(context, android.R.layout.simple_spinner_item, intervalItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateInterval) {
+        setupSpinner(root, R.id.spinner_update_interval, ArrayAdapter(context, R.layout.spinner_item, intervalItems).apply { setDropDownViewResource(R.layout.spinner_dropdown_item) }, settings.updateInterval) {
             settings.updateInterval = it
             UpdateWorker.schedule(context, it)
         }
@@ -62,7 +64,7 @@ class UpdatesSubmenu(
             context.getString(R.string.settings_update_style_pipup),
             context.getString(R.string.settings_update_style_toast)
         ).mapIndexed { i, s -> if (i == 1) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_update_notification_style, ArrayAdapter(context, android.R.layout.simple_spinner_item, styleItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateNotificationStyle) {
+        setupSpinner(root, R.id.spinner_update_notification_style, ArrayAdapter(context, R.layout.spinner_item, styleItems).apply { setDropDownViewResource(R.layout.spinner_dropdown_item) }, settings.updateNotificationStyle) {
             settings.updateNotificationStyle = it
         }
 
@@ -95,8 +97,32 @@ class UpdatesSubmenu(
 
         val btn = (context as? SettingsActivity)?.findViewById<Button>(R.id.btn_check_update)
 
+        val isRtl = context.isRtl()
+        val dir = if (isRtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+
+        val messageView = TextView(context).apply {
+            setText(R.string.settings_checking_update)
+            layoutParams = FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.START
+            }
+            val p = context.dpToPx(24)
+            setPadding(p, p, p, 0)
+            textSize = 18f
+            setTextColor(ContextCompat.getColor(context, R.color.colorOnSurface))
+            gravity = Gravity.START
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+            layoutDirection = dir
+        }
+
+        val container = FrameLayout(context).apply {
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            addView(messageView)
+            layoutDirection = dir
+        }
+
         val progress = AlertDialog.Builder(context)
-            .setMessage(R.string.settings_checking_update)
+            .setView(container)
             .setCancelable(true)
             .show()
 
@@ -131,16 +157,28 @@ class UpdatesSubmenu(
     }
 
     private fun showUpdateDialog(targetRelease: GitHubRelease) {
+        val isRtl = context.isRtl()
+        val dir = if (isRtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+
         val container = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             val p = context.dpToPx(20)
             setPadding(p, p, p, 0)
+            layoutDirection = dir
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         }
 
         val introView = TextView(context).apply {
             text = context.getString(R.string.settings_update_dialog_msg, targetRelease.tagName)
+            layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                gravity = Gravity.START
+            }
             textSize = 16f
             setTextColor(ContextCompat.getColor(context, R.color.colorOnSurface))
+            gravity = Gravity.START
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+            layoutDirection = dir
         }
         container.addView(introView)
 
@@ -148,7 +186,7 @@ class UpdatesSubmenu(
         if (body.isNotEmpty()) {
             val scrollView = ScrollView(context).apply {
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LayoutParams.MATCH_PARENT,
                     context.dpToPx(250)
                 ).apply { topMargin = context.dpToPx(16) }
                 isFocusable = true
@@ -158,8 +196,15 @@ class UpdatesSubmenu(
             }
             val bodyView = TextView(context).apply {
                 text = body
+                layoutParams = LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                    gravity = Gravity.START
+                }
                 textSize = 14f
                 setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
+                gravity = Gravity.START
+                textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+                textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+                layoutDirection = dir
             }
             scrollView.addView(bodyView)
             container.addView(scrollView)

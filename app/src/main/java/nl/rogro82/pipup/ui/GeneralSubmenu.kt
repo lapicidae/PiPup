@@ -25,12 +25,12 @@ class GeneralSubmenu(
         val suffix = context.getString(R.string.settings_default_suffix)
 
         val posItems = context.resources.getStringArray(R.array.position_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_position, ArrayAdapter(context, android.R.layout.simple_spinner_item, posItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.positionIndex) {
+        setupSpinner(root, R.id.spinner_position, ArrayAdapter(context, R.layout.spinner_item, posItems).apply { setDropDownViewResource(R.layout.spinner_dropdown_item) }, settings.positionIndex) {
             settings.positionIndex = it
         }
 
         val mediaPosItems = context.resources.getStringArray(R.array.media_position_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_media_position, ArrayAdapter(context, android.R.layout.simple_spinner_item, mediaPosItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.mediaPosition) {
+        setupSpinner(root, R.id.spinner_media_position, ArrayAdapter(context, R.layout.spinner_item, mediaPosItems).apply { setDropDownViewResource(R.layout.spinner_dropdown_item) }, settings.mediaPosition) {
             settings.mediaPosition = it
         }
 
@@ -42,10 +42,11 @@ class GeneralSubmenu(
         val langItems = context.resources.getStringArray(R.array.language_options)
         val currentLangIndex = langCodes.indexOf(settings.language).coerceAtLeast(0)
 
-        setupSpinner(root, R.id.spinner_language, ArrayAdapter(context, android.R.layout.simple_spinner_item, langItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, currentLangIndex) {
+        setupSpinner(root, R.id.spinner_language, ArrayAdapter(context, R.layout.spinner_item, langItems).apply { setDropDownViewResource(R.layout.spinner_dropdown_item) }, currentLangIndex) {
             val newLang = langCodes[it]
             if (settings.language != newLang) {
-                settings.language = newLang
+                // Save synchronously before killing the process
+                settings.setLanguageSync(newLang)
 
                 // Use official AppCompat API for language switching
                 val appLocale: LocaleListCompat = if (newLang == "default") {
@@ -58,16 +59,16 @@ class GeneralSubmenu(
                 // The above might already recreate activities, but we ensure a clean state
                 (context as? SettingsActivity)?.let { activity ->
                     val intent = Intent(activity, MainActivity::class.java)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
                     activity.startActivity(intent)
-                    activity.finish()
+                    Runtime.getRuntime().exit(0) // Aggressive but reliable for total locale refresh
                 }
             }
         }
 
         // App Theme
         val themeItems = listOf(context.getString(R.string.settings_theme_dark), context.getString(R.string.settings_theme_light)).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_app_theme, ArrayAdapter(context, android.R.layout.simple_spinner_item, themeItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.appTheme) {
+        setupSpinner(root, R.id.spinner_app_theme, ArrayAdapter(context, R.layout.spinner_item, themeItems).apply { setDropDownViewResource(R.layout.spinner_dropdown_item) }, settings.appTheme) {
             if (settings.appTheme != it) {
                 settings.appTheme = it
                 val mode = if (it == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO

@@ -12,7 +12,9 @@
         android:textColor="@color/colorOnSurface"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp"/>
+        android:layout_marginBottom="32dp"
+        android:textAlignment="viewStart"
+        android:gravity="start"/>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -23,7 +25,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/settings_border_radius"
-            android:textColor="@color/colorOnSurfaceVariant" />
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:textAlignment="viewStart"
+            android:gravity="start"/>
         <TextView
             android:id="@+id/text_radius_value"
             android:layout_width="wrap_content"
@@ -44,7 +48,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/settings_border_width"
-            android:textColor="@color/colorOnSurfaceVariant" />
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:textAlignment="viewStart"
+            android:gravity="start"/>
         <TextView
             android:id="@+id/text_border_width_value"
             android:layout_width="wrap_content"
@@ -55,8 +61,8 @@
     </LinearLayout>
     <SeekBar android:id="@+id/seekbar_border_width" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="20" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
 
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_border_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
-    <Spinner android:id="@+id/spinner_border_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_border_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_border_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
     <Button android:id="@+id/btn_edit_border_hex"
         android:layout_width="match_parent"
         android:layout_height="48dp"

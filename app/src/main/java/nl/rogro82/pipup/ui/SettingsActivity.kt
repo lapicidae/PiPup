@@ -28,6 +28,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.isRtl
 import nl.rogro82.pipup.databinding.ActivitySettingsBinding
 
 @UnstableApi
@@ -74,6 +75,7 @@ class SettingsActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
+        binding.root.layoutDirection = View.LAYOUT_DIRECTION_LOCALE
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
@@ -102,12 +104,18 @@ class SettingsActivity : AppCompatActivity() {
         configureNavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, R.layout.submenu_updates)
         configureNavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, R.layout.submenu_advanced)
 
+        val isRtl = isRtl()
         railIds.forEachIndexed { i, id ->
             findViewById<View>(id)?.apply {
                 nextFocusUpId = if (i > 0) railIds[i - 1] else id
                 nextFocusDownId = if (i < (railIds.size - 1)) railIds[i + 1] else id
-                nextFocusLeftId = id
-                nextFocusRightId = R.id.settings_scroll
+                if (isRtl) {
+                    nextFocusRightId = id
+                    nextFocusLeftId = R.id.settings_scroll
+                } else {
+                    nextFocusLeftId = id
+                    nextFocusRightId = R.id.settings_scroll
+                }
             }
         }
     }
@@ -134,9 +142,13 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         root.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                focusFirstInSubmenu()
-                true
+            if (event.action == KeyEvent.ACTION_DOWN) {
+                val isRtl = isRtl()
+                val enterKey = if (isRtl) KeyEvent.KEYCODE_DPAD_LEFT else KeyEvent.KEYCODE_DPAD_RIGHT
+                if (keyCode == enterKey) {
+                    focusFirstInSubmenu()
+                    true
+                } else false
             } else false
         }
     }
@@ -210,12 +222,22 @@ class SettingsActivity : AppCompatActivity() {
             .filter { it.isFocusable && it.isVisible }
             .toList()
 
+        val isRtl = isRtl()
         if (focusableChildren.isNotEmpty()) {
-            findViewById<View>(navId)?.nextFocusRightId = focusableChildren[0].id
+            val navView = findViewById<View>(navId)
+            if (isRtl) {
+                navView?.nextFocusLeftId = focusableChildren[0].id
+            } else {
+                navView?.nextFocusRightId = focusableChildren[0].id
+            }
         }
 
         focusableChildren.forEachIndexed { i, child ->
-            child.nextFocusLeftId = navId
+            if (isRtl) {
+                child.nextFocusRightId = navId
+            } else {
+                child.nextFocusLeftId = navId
+            }
             child.nextFocusUpId = if (i > 0) focusableChildren[i - 1].id else child.id
             child.nextFocusDownId = if (i < focusableChildren.size - 1) focusableChildren[i + 1].id else child.id
 
@@ -302,7 +324,10 @@ class SettingsActivity : AppCompatActivity() {
                     if (params.gravity != defaultGravity) {
                         params.gravity = defaultGravity
                         val m = (resources.displayMetrics.density * 10).toInt()
-                        params.setMargins(0, m, m, m)
+                        params.marginStart = 0
+                        params.topMargin = m
+                        params.marginEnd = m
+                        params.bottomMargin = m
                         existingPreview.layoutParams = params
                     }
                 }
@@ -326,7 +351,10 @@ class SettingsActivity : AppCompatActivity() {
                     FrameLayout.LayoutParams(-2, -2).apply {
                         gravity = initialGravity
                         val m = (resources.displayMetrics.density * 10).toInt()
-                        setMargins(0, m, m, m)
+                        marginStart = 0
+                        topMargin = m
+                        marginEnd = m
+                        bottomMargin = m
                     }
                 )
 

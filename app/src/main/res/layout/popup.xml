@@ -22,7 +22,10 @@
                 android:textStyle="bold"
                 android:textColor="#FFFFFF"
                 android:textSize="20sp"
-                android:visibility="gone"/>
+                android:textDirection="firstStrong"
+                android:visibility="gone"
+                android:focusable="false"
+                android:clickable="false"/>
 
             <ScrollView
                 android:id="@+id/popup_scroll_view"
@@ -32,14 +35,19 @@
                 android:scrollbars="none"
                 android:fillViewport="true"
                 android:overScrollMode="never"
-                android:visibility="gone">
+                android:visibility="gone"
+                android:focusable="false"
+                android:clickable="false">
 
                 <TextView
                     android:id="@+id/popup_message"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:textColor="#FFFFFF"
-                    android:textSize="14sp"/>
+                    android:textSize="14sp"
+                    android:textDirection="firstStrong"
+                    android:focusable="false"
+                    android:clickable="false"/>
             </ScrollView>
         </LinearLayout>
 

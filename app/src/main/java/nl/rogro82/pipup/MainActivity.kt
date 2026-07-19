@@ -7,6 +7,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.View
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
@@ -45,6 +46,8 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        findViewById<View>(R.id.mainLayout)?.layoutDirection = View.LAYOUT_DIRECTION_LOCALE
+
         appSettings = AppSettings(this)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.mainLayout)) { v, insets ->
@@ -64,7 +67,7 @@ class MainActivity : AppCompatActivity() {
             runOnUiThread {
                 if (ip != null) {
                     statusLabel.text = getString(R.string.server_running)
-                    addressLabel.text = getString(R.string.server_address, ip, PipUpService.SERVER_PORT)
+                    addressLabel.text = String.format(java.util.Locale.US, "%s:%d", ip, PipUpService.SERVER_PORT)
                 } else {
                     statusLabel.text = getString(R.string.no_network_connection)
                     addressLabel.text = getString(R.string.address_placeholder)
@@ -104,11 +107,8 @@ class MainActivity : AppCompatActivity() {
         try {
             val pInfo = packageManager.getPackageInfo(packageName, 0)
             val version = pInfo.versionName
-            versionText.text = if (BuildConfig.DEBUG) {
-                getString(R.string.version_number_debug, version)
-            } else {
-                getString(R.string.version_number, version)
-            }
+            val pattern = if (BuildConfig.DEBUG) getString(R.string.version_number_debug) else getString(R.string.version_number)
+            versionText.text = String.format(java.util.Locale.US, pattern, version)
 
             // Show update indicator if a newer version was found by background worker
             val hasUpdateTag = appSettings.updateAvailableTag.isNotEmpty()
@@ -185,9 +185,35 @@ class MainActivity : AppCompatActivity() {
         if (isIgnoring || appSettings.dismissBatteryOptimization) return
 
         isEnergyDialogOpen = true
+
+        val isRtl = isRtl()
+        val dir = if (isRtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+
+        val messageText = getString(R.string.energy_optimization_message) + "\n\n" + getString(R.string.energy_optimization_instructions)
+        val messageView = TextView(this).apply {
+            text = messageText
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = android.view.Gravity.START
+            }
+            val p = dpToPx(24)
+            setPadding(p, p, p, 0)
+            textSize = 18f
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.colorOnSurface))
+            gravity = android.view.Gravity.START
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+            layoutDirection = dir
+        }
+
+        val container = FrameLayout(this).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            addView(messageView)
+            layoutDirection = dir
+        }
+
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.energy_optimization_title)
-            .setMessage(getString(R.string.energy_optimization_message) + "\n\n" + getString(R.string.energy_optimization_instructions))
+            .setView(container)
             .setPositiveButton(R.string.settings_yes) { _, _ ->
                 appSettings.dismissBatteryOptimization = true
 
@@ -219,11 +245,37 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showEnergyInstructionsDialog() {
-        AlertDialog.Builder(this)
+        val isRtl = isRtl()
+        val dir = if (isRtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
+
+        val messageView = TextView(this).apply {
+            setText(R.string.energy_optimization_manual)
+            layoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
+                gravity = android.view.Gravity.START
+            }
+            val p = dpToPx(24)
+            setPadding(p, p, p, 0)
+            textSize = 18f
+            setTextColor(androidx.core.content.ContextCompat.getColor(this@MainActivity, R.color.colorOnSurface))
+            gravity = android.view.Gravity.START
+            textAlignment = View.TEXT_ALIGNMENT_VIEW_START
+            textDirection = View.TEXT_DIRECTION_FIRST_STRONG
+            layoutDirection = dir
+        }
+
+        val container = FrameLayout(this).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.WRAP_CONTENT)
+            addView(messageView)
+            layoutDirection = dir
+        }
+
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.energy_optimization_title)
-            .setMessage(R.string.energy_optimization_manual)
+            .setView(container)
             .setPositiveButton(android.R.string.ok, null)
-            .show()
+            .create()
+
+        dialog.show()
     }
 
     private fun askPermission() {

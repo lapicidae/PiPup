@@ -42,7 +42,7 @@ data class PopupProps(
 
     // Internal/Extra
     val contentPadding: Int? = null,
-    val titleAlignment: Int = 0, // 0: Left, 1: Center, 2: Right
+    val titleAlignment: Int = 0, // 0: Start, 1: Center, 2: End
     val messageAlignment: Int = 0,
     val image: String? = null,
     val imageWidth: Int? = null,
@@ -92,24 +92,35 @@ data class PopupProps(
     }
 
     /**
-     * Enum defining supported screen positions.
+     * Enum defining supported screen positions using logical corners.
      */
     enum class Position(val index: Int) {
-        TopRight(0), TopLeft(1), BottomRight(2), BottomLeft(3), Center(4)
+        TopEnd(0), TopStart(1), BottomEnd(2), BottomStart(3), Center(4)
     }
 
     fun getPositionEnum(): Position {
-        return Position.entries.find { it.index == position } ?: Position.TopRight
+        return Position.entries.find { it.index == position } ?: Position.TopEnd
     }
 
     fun getTitleGravity(): Int = mapAlignmentToGravity(titleAlignment)
     fun getMessageGravity(): Int = mapAlignmentToGravity(messageAlignment)
+
+    fun getTitleTextAlignment(): Int = mapAlignmentToViewAlignment(titleAlignment)
+    fun getMessageTextAlignment(): Int = mapAlignmentToViewAlignment(messageAlignment)
 
     private fun mapAlignmentToGravity(alignment: Int): Int {
         return when (alignment) {
             1 -> android.view.Gravity.CENTER_HORIZONTAL
             2 -> android.view.Gravity.END
             else -> android.view.Gravity.START
+        }
+    }
+
+    private fun mapAlignmentToViewAlignment(alignment: Int): Int {
+        return when (alignment) {
+            1 -> android.view.View.TEXT_ALIGNMENT_CENTER
+            2 -> android.view.View.TEXT_ALIGNMENT_VIEW_END
+            else -> android.view.View.TEXT_ALIGNMENT_VIEW_START
         }
     }
 

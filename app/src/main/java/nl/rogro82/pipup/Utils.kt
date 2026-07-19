@@ -64,6 +64,13 @@ fun Context.getScaledPixels(pixels: Int): Int {
 }
 
 /**
+ * Checks if the current layout direction is Right-to-Left.
+ */
+fun Context.isRtl(): Boolean {
+    return resources.configuration.layoutDirection == android.view.View.LAYOUT_DIRECTION_RTL
+}
+
+/**
  * Calculates the sample size for bitmap decoding based on target dimensions.
  */
 fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {

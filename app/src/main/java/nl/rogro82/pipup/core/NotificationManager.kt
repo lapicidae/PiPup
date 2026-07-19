@@ -135,10 +135,26 @@ class NotificationManager(
         ).apply {
             val margin = context.dpToPx(20)
             when (props.getPositionEnum()) {
-                PopupProps.Position.TopRight -> { gravity = Gravity.TOP or Gravity.END; setMargins(0, margin, margin, 0) }
-                PopupProps.Position.TopLeft -> { gravity = Gravity.TOP or Gravity.START; setMargins(margin, margin, 0, 0) }
-                PopupProps.Position.BottomRight -> { gravity = Gravity.BOTTOM or Gravity.END; setMargins(0, 0, margin, margin) }
-                PopupProps.Position.BottomLeft -> { gravity = Gravity.BOTTOM or Gravity.START; setMargins(margin, 0, 0, margin) }
+                PopupProps.Position.TopEnd -> {
+                    gravity = Gravity.TOP or Gravity.END
+                    topMargin = margin
+                    marginEnd = margin
+                }
+                PopupProps.Position.TopStart -> {
+                    gravity = Gravity.TOP or Gravity.START
+                    topMargin = margin
+                    marginStart = margin
+                }
+                PopupProps.Position.BottomEnd -> {
+                    gravity = Gravity.BOTTOM or Gravity.END
+                    bottomMargin = margin
+                    marginEnd = margin
+                }
+                PopupProps.Position.BottomStart -> {
+                    gravity = Gravity.BOTTOM or Gravity.START
+                    bottomMargin = margin
+                    marginStart = margin
+                }
                 PopupProps.Position.Center -> { gravity = Gravity.CENTER }
             }
         }

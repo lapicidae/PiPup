@@ -62,7 +62,8 @@
             app:layout_constraintStart_toStartOf="@+id/textViewConnection"
             android:textColor="@color/main_on_background"
             android:textSize="19sp"
-            android:textStyle="bold"/>
+            android:textStyle="bold"
+            android:textDirection="ltr"/>
 
     <TextView
         android:alpha="0.7"
@@ -73,6 +74,7 @@
         android:text="@string/version_number"
         android:textColor="@color/main_on_background"
         android:textStyle="italic"
+        android:textDirection="ltr"
         app:layout_constraintEnd_toEndOf="@+id/textViewServerAddress"
         app:layout_constraintStart_toStartOf="@+id/textViewServerAddress"
         app:layout_constraintTop_toBottomOf="@+id/textViewServerAddress" />

@@ -11,7 +11,9 @@
         android:textColor="@color/colorOnSurface"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp"/>
+        android:layout_marginBottom="32dp"
+        android:textAlignment="viewStart"
+        android:gravity="start"/>
 
     <!-- Action -->
     <Button
@@ -24,20 +26,21 @@
         android:background="@drawable/focus_background"
         android:padding="12dp"
         android:gravity="start|center_vertical"
+        android:textAlignment="viewStart"
         android:textAllCaps="false"
         android:textColor="@color/colorOnSurface"/>
 
     <!-- Update Channel -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_channel" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_update_channel" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_channel" android:textColor="@color/colorOnSurfaceVariant" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_update_channel" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
     <!-- Update Interval -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_interval" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_update_interval" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:id="@+id/text_update_interval" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_interval" android:textColor="@color/colorOnSurfaceVariant" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_update_interval" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
     <!-- Notification Style -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_notification_style" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_update_notification_style" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_update_notification_style" android:textColor="@color/colorOnSurfaceVariant" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_update_notification_style" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
     <!-- Repeat Notification -->
     <LinearLayout
@@ -61,13 +64,17 @@
                 android:layout_height="wrap_content"
                 android:text="@string/settings_update_repeat"
                 android:textColor="@color/colorOnSurface"
-                android:textSize="18sp"/>
+                android:textSize="18sp"
+                android:textAlignment="viewStart"
+                android:gravity="start"/>
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_update_repeat_desc"
                 android:textColor="@color/colorOnSurfaceVariant"
-                android:textSize="14sp"/>
+                android:textSize="14sp"
+                android:textAlignment="viewStart"
+                android:gravity="start"/>
         </LinearLayout>
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switch_update_repeat"

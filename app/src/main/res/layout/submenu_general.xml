@@ -12,13 +12,15 @@
         android:textColor="@color/colorOnSurface"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp"/>
+        android:layout_marginBottom="32dp"
+        android:textAlignment="viewStart"
+        android:gravity="start"/>
 
-    <TextView android:id="@+id/text_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_position" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:id="@+id/text_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_position" android:textColor="@color/colorOnSurfaceVariant" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
-    <TextView android:id="@+id/text_media_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_media_position" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_media_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:id="@+id/text_media_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_media_position" android:textColor="@color/colorOnSurfaceVariant" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_media_position" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -29,7 +31,9 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="@string/settings_padding"
-            android:textColor="@color/colorOnSurfaceVariant" />
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:textAlignment="viewStart"
+            android:gravity="start"/>
         <TextView
             android:id="@+id/text_padding_value"
             android:layout_width="wrap_content"
@@ -40,10 +44,10 @@
     </LinearLayout>
     <SeekBar android:id="@+id/seekbar_padding" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector" android:layout_marginBottom="24dp"/>
 
-    <TextView android:id="@+id/text_language" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_language" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_language" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:id="@+id/text_language" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_language" android:textColor="@color/colorOnSurfaceVariant" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_language" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
-    <TextView android:id="@+id/text_app_theme" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_app_theme" android:textColor="@color/colorOnSurfaceVariant"/>
-    <Spinner android:id="@+id/spinner_app_theme" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <TextView android:id="@+id/text_app_theme" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_app_theme" android:textColor="@color/colorOnSurfaceVariant" android:textAlignment="viewStart" android:gravity="start"/>
+    <Spinner android:id="@+id/spinner_app_theme" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="24dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp" android:gravity="start"/>
 
 </LinearLayout>

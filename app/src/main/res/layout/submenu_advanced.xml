@@ -12,10 +12,12 @@
         android:textColor="@color/colorOnSurface"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp"/>
+        android:layout_marginBottom="32dp"
+        android:textAlignment="viewStart"
+        android:gravity="start"/>
 
     <!-- Stability -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_stability" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="20dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_stability" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="20dp" android:textAlignment="viewStart" android:gravity="start"/>
     <LinearLayout
         android:id="@+id/container_energy_status"
         android:layout_width="match_parent"
@@ -37,7 +39,9 @@
                 android:layout_height="wrap_content"
                 android:text="@string/energy_optimization_title"
                 android:textColor="@color/colorOnSurface"
-                android:textSize="16sp"/>
+                android:textSize="16sp"
+                android:textAlignment="viewStart"
+                android:gravity="start"/>
             <TextView
                 android:id="@+id/text_energy_status"
                 android:layout_width="match_parent"
@@ -45,7 +49,9 @@
                 android:text="@string/energy_status_optimized"
                 android:textColor="@color/colorOnSurfaceVariant"
                 android:textSize="12sp"
-                android:layout_marginTop="2dp"/>
+                android:layout_marginTop="2dp"
+                android:textAlignment="viewStart"
+                android:gravity="start"/>
         </LinearLayout>
         <View
             android:id="@+id/view_energy_indicator"
@@ -56,7 +62,7 @@
     </LinearLayout>
 
     <!-- Migration -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_migration" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="32dp"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_migration" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="32dp" android:textAlignment="viewStart" android:gravity="start"/>
     <Button
         android:id="@+id/btn_import_network"
         android:layout_width="match_parent"
@@ -67,6 +73,7 @@
         android:background="@drawable/focus_background"
         android:padding="12dp"
         android:gravity="start|center_vertical"
+        android:textAlignment="viewStart"
         android:textAllCaps="false"
         android:textColor="@color/colorOnSurface"/>
 
@@ -77,7 +84,9 @@
         android:text="@string/settings_tools"
         android:textColor="@color/colorOnSurfaceVariant"
         android:layout_marginTop="32dp"
-        android:layout_marginBottom="15dp" />
+        android:layout_marginBottom="15dp"
+        android:textAlignment="viewStart"
+        android:gravity="start" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -135,14 +144,18 @@
                 android:layout_height="wrap_content"
                 android:text="@string/settings_pre_warm_webview"
                 android:textColor="@color/colorOnSurface"
-                android:textSize="16sp"/>
+                android:textSize="16sp"
+                android:textAlignment="viewStart"
+                android:gravity="start"/>
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_pre_warm_webview_desc"
                 android:textColor="@color/colorOnSurfaceVariant"
                 android:textSize="12sp"
-                android:layout_marginTop="2dp"/>
+                android:layout_marginTop="2dp"
+                android:textAlignment="viewStart"
+                android:gravity="start"/>
         </LinearLayout>
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switch_pre_warm"
@@ -172,14 +185,18 @@
                 android:layout_height="wrap_content"
                 android:text="@string/settings_advanced_mode"
                 android:textColor="@color/colorOnSurface"
-                android:textSize="16sp"/>
+                android:textSize="16sp"
+                android:textAlignment="viewStart"
+                android:gravity="start"/>
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_advanced_mode_desc"
                 android:textColor="@color/colorOnSurfaceVariant"
                 android:textSize="12sp"
-                android:layout_marginTop="2dp"/>
+                android:layout_marginTop="2dp"
+                android:textAlignment="viewStart"
+                android:gravity="start"/>
         </LinearLayout>
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/switch_advanced"
@@ -190,7 +207,7 @@
     </LinearLayout>
 
     <!-- Danger Zone -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_danger_zone" android:textColor="@color/status_red" android:layout_marginTop="48dp" android:textStyle="bold"/>
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_danger_zone" android:textColor="@color/status_red" android:layout_marginTop="48dp" android:textStyle="bold" android:textAlignment="viewStart" android:gravity="start"/>
     <Button
         android:id="@+id/btn_reset"
         android:layout_width="match_parent"
@@ -202,6 +219,7 @@
         android:background="@drawable/focus_background"
         android:padding="12dp"
         android:gravity="start|center_vertical"
+        android:textAlignment="viewStart"
         android:textAllCaps="false"/>
 
 </LinearLayout>

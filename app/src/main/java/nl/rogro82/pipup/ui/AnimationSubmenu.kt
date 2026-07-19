@@ -20,7 +20,7 @@ class AnimationSubmenu(
     override fun onBind(root: View) {
         val suffix = context.getString(R.string.settings_default_suffix)
         val animItems = context.resources.getStringArray(R.array.animation_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_animation_type, ArrayAdapter(context, android.R.layout.simple_spinner_item, animItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.animationType) {
+        setupSpinner(root, R.id.spinner_animation_type, ArrayAdapter(context, R.layout.spinner_item, animItems).apply { setDropDownViewResource(R.layout.spinner_dropdown_item) }, settings.animationType) {
             settings.animationType = it
         }
 
