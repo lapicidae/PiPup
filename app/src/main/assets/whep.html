@@ -63,10 +63,13 @@
                     }
                 };
 
-                pc.addTransceiver('video', { direction: 'recvonly' });
+                if (pc.addTransceiver) {
+                    pc.addTransceiver('video', { direction: 'recvonly' });
+                }
 
                 console.log('WHEP: Creating offer...');
-                const offer = await pc.createOffer();
+                const offerOptions = pc.addTransceiver ? {} : { offerToReceiveVideo: true };
+                const offer = await pc.createOffer(offerOptions);
                 await pc.setLocalDescription(offer);
 
                 // Wait for ICE gathering to start (Non-trickle WHEP)
