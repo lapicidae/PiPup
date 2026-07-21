@@ -1,4 +1,6 @@
-# PiPup
+<h1>
+  <img src="graphics/ic_launcher-web.svg" alt="PiPup Icon" width="64" style="vertical-align: middle;"> PiPup
+</h1>
 
 PiPup is an application that allows displaying user-defined custom notifications on Android TV.
 
@@ -15,7 +17,7 @@ The most common use-case for this application is for sending notifications, from
 
 ---
 
-:warning: **Disclaimer:** The recent feature updates and UI enhancements were completely vibe-coded with the assistance of AI. The new additions flow on pure vibes, but they get the job done.
+:warning: **Disclaimer:** Recent features and UI updates were completely vibe-coded via AI. They get the job done, but expect pure AI logic under the hood.
 
 ### Key Features
 
