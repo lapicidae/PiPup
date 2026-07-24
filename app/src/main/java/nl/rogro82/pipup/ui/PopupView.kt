@@ -96,7 +96,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val frame = binding.popupMediaFrame
         frame.removeAllViews()
         val iv = ImageView(context).apply {
-            setImageResource(nl.rogro82.pipup.R.drawable.ic_banner)
+            setImageResource(nl.rogro82.pipup.R.mipmap.ic_banner)
             alpha = 0.5f
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
