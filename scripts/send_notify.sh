@@ -14,7 +14,7 @@ readonly DURATION=10
 readonly STRESS_ITERATIONS=50
 
 readonly WHEP_STATE_FILE='/dev/shm/pipup_whep.state'
-readonly WHEP_TIMEOUT=600  # 10 minutes
+WHEP_TIMEOUT=600  # 10 minutes
 
 readonly MEDIAMTX_IMAGE='bluenviron/mediamtx:latest'
 readonly MEDIAMTX_API_PORT='9997'
@@ -22,6 +22,15 @@ readonly MEDIAMTX_API_PORT='9997'
 # Set to "true" to use Go2RTC instead of MediaMTX
 readonly USE_GO2RTC='true'
 readonly GO2RTC_IMAGE='alexxit/go2rtc:latest'
+
+if [[ "${USE_GO2RTC}" == "true" ]]; then
+  ENGINE_NAME="Go2RTC"
+  ENGINE_IMAGE="${GO2RTC_IMAGE}"
+else
+  ENGINE_NAME="MediaMTX"
+  ENGINE_IMAGE="${MEDIAMTX_IMAGE}"
+fi
+readonly ENGINE_NAME ENGINE_IMAGE
 
 # RTC Proxy Ports
 readonly STREAM_RTSP_PORT='8555'
@@ -91,6 +100,23 @@ readonly CLR_ERROR='\033[1;31m'   # Bold Red
 #######################################
 # Helpers
 #######################################
+
+#######################################
+# Formats the current WHEP_TIMEOUT for display.
+# Globals:
+#   WHEP_TIMEOUT
+# Arguments:
+#   None
+# Outputs:
+#   Echoes "infinite/24h" or "X min".
+#######################################
+get_timeout_display() {
+  if [[ "${WHEP_TIMEOUT}" -ge 86400 ]]; then
+    printf "infinite/24h"
+  else
+    printf "%d min" "$((WHEP_TIMEOUT / 60))"
+  fi
+}
 
 #######################################
 # Resolves the corresponding JSON media payload string for a given test type.
@@ -219,11 +245,45 @@ print_result_row() {
 }
 
 #######################################
+# Stops the active background WHEP service.
+# Cleans up Docker containers, netcat processes, and state files.
+# Arguments:
+#   silent: Boolean, if true, suppresses "No active pipeline" messages.
+# Outputs:
+#   Writes status information to stdout.
+#######################################
+stop_whep_service() {
+  local silent="${1:-false}"
+  local state_info
+  state_info=$(parse_whep_state)
+
+  if [[ -n "${state_info}" ]]; then
+    local state_pid state_mode
+    read -r state_pid state_mode <<< "${state_info}"
+
+    [[ "${silent}" == "false" ]] && printf "[SYSTEM] Stopping active WHEP pipeline (PID: %s, Port/Mode: %s)... " "${state_pid}" "${state_mode}"
+
+    kill "${state_pid}" 2>/dev/null || true
+
+    if command -v docker >/dev/null 2>&1; then
+      docker ps -qa --filter "name=webrtc_pipup_" | xargs -r docker rm -f >/dev/null 2>&1 || true
+    fi
+
+    pkill -f "nc -lp ${state_mode}" >/dev/null 2>&1 || true
+    rm -f "${WHEP_STATE_FILE}"
+
+    [[ "${silent}" == "false" ]] && printf "OK\n"
+  else
+    [[ "${silent}" == "false" ]] && printf "[SYSTEM] No active WHEP pipeline or state file found.\n"
+  fi
+}
+
+#######################################
 # Starts a persistent background WHEP service serving the video in a loop.
 # Spawns MediaMTX or Go2RTC via Docker, or falls back to a netcat mock server.
 # Globals:
-#   GO2RTC_IMAGE
-#   MEDIAMTX_IMAGE
+#   ENGINE_IMAGE
+#   ENGINE_NAME
 #   STREAM_RTSP_PORT
 #   STREAM_WHEP_PORT
 #   USE_GO2RTC
@@ -232,40 +292,45 @@ print_result_row() {
 #   WHEP_STATE_FILE
 #   WHEP_TIMEOUT
 # Arguments:
-#   None
+#   force_restart: Boolean, if true, kills existing service before starting.
 # Outputs:
 #   Writes status information to stdout.
 #######################################
 start_whep_service() {
+  local force_restart="${1:-false}"
   local host_ip
   host_ip=$(ip route get 1 2>/dev/null | awk '{print $7;exit}' || hostname -I | awk '{print $1}')
 
   local state_info
   state_info=$(parse_whep_state)
   if [[ -n "${state_info}" ]]; then
-    local state_pid state_port
-    read -r state_pid state_port <<< "${state_info}"
-    if kill -0 "${state_pid}" 2>/dev/null; then
-      if [[ "${USE_GO2RTC}" == "true" && "${state_port}" == "${STREAM_WHEP_PORT}" ]]; then
-        WHEP_URL="http://${host_ip}:${STREAM_WHEP_PORT}/api/webrtc?src=mystream"
-        return 0
-      elif [[ "${USE_GO2RTC}" == "false" && "${state_port}" == "${STREAM_WHEP_PORT}" ]]; then
-        WHEP_URL="http://${host_ip}:${STREAM_WHEP_PORT}/mystream/whep"
-        return 0
-      elif [[ "${state_port}" != "${STREAM_WHEP_PORT}" ]]; then
-        WHEP_URL="http://${host_ip}:${state_port}/whep"
-        return 0
+    if [[ "${force_restart}" == "true" ]]; then
+      stop_whep_service false
+      printf "[SYSTEM] Restarting %s server with new configuration...\n" "${ENGINE_NAME}"
+    else
+      local state_pid state_port
+      read -r state_pid state_port <<< "${state_info}"
+      if kill -0 "${state_pid}" 2>/dev/null; then
+        if [[ "${USE_GO2RTC}" == "true" && "${state_port}" == "${STREAM_WHEP_PORT}" ]]; then
+          WHEP_URL="http://${host_ip}:${STREAM_WHEP_PORT}/api/webrtc?src=mystream"
+          printf "[SYSTEM] Reusing existing %s WebRTC server (Port: %s)\n" "${ENGINE_NAME}" "${state_port}"
+          return 0
+        elif [[ "${USE_GO2RTC}" == "false" && "${state_port}" == "${STREAM_WHEP_PORT}" ]]; then
+          WHEP_URL="http://${host_ip}:${STREAM_WHEP_PORT}/mystream/whep"
+          printf "[SYSTEM] Reusing existing %s WebRTC server (Port: %s)\n" "${ENGINE_NAME}" "${state_port}"
+          return 0
+        elif [[ "${state_port}" != "${STREAM_WHEP_PORT}" ]]; then
+          WHEP_URL="http://${host_ip}:${state_port}/whep"
+          printf "[SYSTEM] Reusing existing fallback WebRTC server (Port: %s)\n" "${state_port}"
+          return 0
+        fi
       fi
+      rm -f "${WHEP_STATE_FILE}"
     fi
-    rm -f "${WHEP_STATE_FILE}"
   fi
 
   # Check if both docker and ffmpeg are installed for the real stream pipeline
   if command -v docker >/dev/null 2>&1 && command -v ffmpeg >/dev/null 2>&1; then
-    printf "[SYSTEM] Spawning WebRTC/WHEP container and FFmpeg streaming pipeline...\n"
-
-    # Define dynamic properties
-    local container_image="${MEDIAMTX_IMAGE}"
     # Default mappings for MediaMTX
     local docker_opts=(
       "-p" "${STREAM_WHEP_PORT}:8889"
@@ -283,8 +348,6 @@ start_whep_service() {
 
     # Override properties if Go2RTC is selected
     if [[ "${USE_GO2RTC}" == "true" ]]; then
-      container_image="${GO2RTC_IMAGE}"
-
       # For go2rtc:
       # - Map Host WHEP port to internal API port 1984
       # - Map Host RTSP port to internal 8554
@@ -296,6 +359,12 @@ start_whep_service() {
         "-p" "${STREAM_WEBRTC_PORT}:8555/udp"
       )
     fi
+
+    local extra_msg=""
+    [[ "${USE_GO2RTC}" == "false" ]] && extra_msg=" and FFmpeg streaming pipeline"
+
+    printf "[SYSTEM] Spawning WebRTC/WHEP container (using %s, timeout: %s)%s...\n" \
+      "${ENGINE_NAME}" "$(get_timeout_display)" "${extra_msg}"
 
     (
       set +e
@@ -348,7 +417,7 @@ EOF
       fi
 
       # Start container
-      local run_cmd=("docker" "run" "--rm" "-d" "--name" "${container_name}" "${docker_opts[@]}" "${container_image}")
+      local run_cmd=("docker" "run" "--rm" "-d" "--name" "${container_name}" "${docker_opts[@]}" "${ENGINE_IMAGE}")
       if [[ "${USE_GO2RTC}" == "true" ]]; then
         run_cmd+=("/usr/local/bin/go2rtc" "${container_args[@]}")
       fi
@@ -356,7 +425,7 @@ EOF
       "${run_cmd[@]}" >/dev/null
 
       if ! docker ps --filter "name=^/${container_name}$" --format '{{.Names}}' | grep -qx "${container_name}"; then
-        printf '[SYSTEM] Failed to start container (%s).\n' "${container_image}" >&2
+        printf '[SYSTEM] Failed to start container (%s).\n' "${ENGINE_IMAGE}" >&2
         docker logs "${container_name}" 2>&1 || true
         return 1
       fi
@@ -441,8 +510,8 @@ EOF
     fi
   fi
 
-  printf "[SYSTEM] Spawning persistent WHEP mock server on port %s (timeout: %dm)...\n" \
-    "${assigned_port}" $((WHEP_TIMEOUT / 60))
+  printf "[SYSTEM] Spawning persistent WHEP mock server on port %s (timeout: %s)...\n" \
+    "${assigned_port}" "$(get_timeout_display)"
 
   (
     set +e
@@ -724,9 +793,10 @@ send_multipart_test() {
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-h host] [-t type] [-u url] [-a] [-l] [-o] [-c] [-s] [-k] [--help]
+Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-a] [-l] [-o] [-c] [-s] [-k] [-h]
 Options:
-  -h    Target IP (default: ${DEFAULT_IP})
+  -d    Target IP (default: ${DEFAULT_IP})
+  -w    Start WebRTC server only. Optional: minutes (0 = infinite/24h)
   -t    Test type: ${TEST_TYPES[*]}
   -u    Custom media URL (overrides default assets)
   -a    Run all standard tests in sequence
@@ -735,7 +805,7 @@ Options:
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
   -k    Stop the active WHEP pipeline and server
-  --help, -?  Show this help message and exit
+  -h, --help, -?  Show this help message and exit
 EOF
   exit 1
 }
@@ -760,11 +830,13 @@ main() {
   local immediate_cancel="false"
   local run_stress="false"
   local kill_whep_pipeline="false"
+  local force_start_webrtc="false"
+  local server_only="false"
   local overwrite="false"
 
-  while getopts "h:t:u:alocks" opt; do
+  while getopts "d:t:u:alockswh?" opt; do
     case "${opt}" in
-      h) target_ip="${OPTARG}" ;;
+      d) target_ip="${OPTARG}" ;;
       t) test_type="${OPTARG}" ;;
       u) custom_url="${OPTARG}" ;;
       a) run_all="true" ;;
@@ -773,31 +845,28 @@ main() {
       c) immediate_cancel="true" ;;
       k) kill_whep_pipeline="true" ;;
       s) run_stress="true" ;;
+      w)
+        force_start_webrtc="true"
+        server_only="true"
+        # Peek at next argument for optional timeout
+        local next_arg="${!OPTIND:-}"
+        if [[ -n "${next_arg}" && "${next_arg}" =~ ^[0-9]+$ ]]; then
+          if [[ "${next_arg}" -eq 0 ]]; then
+            WHEP_TIMEOUT=86400 # 24 hours
+          else
+            WHEP_TIMEOUT=$((next_arg * 60))
+          fi
+          OPTIND=$((OPTIND + 1))
+        fi
+        ;;
+      h|\?) usage ;;
       *) usage ;;
     esac
   done
 
   # Handle Pipeline Termination (-k) Cleanly
   if [[ "${kill_whep_pipeline}" == "true" ]]; then
-    local state_info
-    state_info=$(parse_whep_state)
-    if [[ -n "${state_info}" ]]; then
-      local state_pid state_mode
-      read -r state_pid state_mode <<< "${state_info}"
-      printf "[SYSTEM] Stopping active WHEP pipeline (PID: %s, Port/Mode: %s)... " "${state_pid}" "${state_mode}"
-
-      kill "${state_pid}" 2>/dev/null || true
-
-      if command -v docker >/dev/null 2>&1; then
-        docker ps -qa --filter "name=webrtc_pipup_" | xargs -r docker rm -f >/dev/null 2>&1 || true
-      fi
-
-      pkill -f "nc -lp ${state_mode}" >/dev/null 2>&1 || true
-      rm -f "${WHEP_STATE_FILE}"
-      printf "OK\n"
-    else
-      printf "[SYSTEM] No active WHEP pipeline or state file found.\n"
-    fi
+    stop_whep_service
     return 0
   fi
 
@@ -821,8 +890,12 @@ main() {
   fi
 
   # Start the background WHEP service for WebRTC/WHEP testing only if needed
-  if [[ "${test_type}" == "whep" && -z "${custom_url}" ]] || [[ "${run_all}" == "true" ]] || [[ "${run_stress}" == "true" ]]; then
-    start_whep_service
+  if [[ "${test_type}" == "whep" && -z "${custom_url}" ]] || [[ "${run_all}" == "true" ]] || [[ "${run_stress}" == "true" ]] || [[ "${force_start_webrtc}" == "true" ]]; then
+    start_whep_service "${force_start_webrtc}"
+    # If server-only mode was requested and no explicit test was specified, exit now
+    if [[ "${server_only}" == "true" && -z "${test_type}" && "${run_all}" == "false" && "${run_stress}" == "false" ]]; then
+      return 0
+    fi
   fi
 
   #######################################
@@ -999,7 +1072,7 @@ main() {
         local state_pid state_port
         read -r state_pid state_port <<< "${state_info}"
         if docker ps -q --filter "name=webrtc_pipup_" >/dev/null 2>&1; then
-          printf "[SYSTEM] WebRTC Pipeline container is active (Engine Port: %s)\n\n" "${state_port}"
+          printf "[SYSTEM] %s Pipeline container is active (Port: %s)\n\n" "${ENGINE_NAME}" "${state_port}"
         else
           printf "[SYSTEM] Fallback WHEP server is active in background (PID: %s, Port: %s)\n\n" "${state_pid}" "${state_port}"
         fi
