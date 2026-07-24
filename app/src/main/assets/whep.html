@@ -108,6 +108,22 @@
                 console.log('WHEP: Response Content-Type: ' + contentType);
 
                 const answerSdpRaw = await response.text();
+
+                // DEBUG: Log the first few bytes as Hex to help diagnose invisible characters
+                const hexStart = Array.from(answerSdpRaw.substring(0, 10))
+                    .map(c => c.charCodeAt(0).toString(16).padStart(2, '0'))
+                    .join(' ');
+                console.log('WHEP: SDP Start (Hex): ' + hexStart);
+
+                if (!answerSdpRaw.trim()) {
+                    throw new Error('No SDP answer: Received empty response from server.');
+                }
+
+                if (answerSdpRaw.trim().startsWith('<')) {
+                    const preview = answerSdpRaw.trim().substring(0, 50).replace(/[\r\n]+/g, ' ');
+                    throw new Error('No SDP answer: Received HTML instead of WebRTC stream. Preview: ' + preview);
+                }
+
                 // Strip a=end-of-candidates as it causes parsing errors in some WebView versions
                 const answerSdp = answerSdpRaw.replace(/a=end-of-candidates\s?\r?\n?/g, "");
 
@@ -116,7 +132,7 @@
                 if (!answerSdp.trim().startsWith('v=')) {
                     console.error('WHEP: Invalid SDP content received:', answerSdp);
                     const preview = answerSdp.trim().substring(0, 100).replace(/[\r\n]+/g, ' ');
-                    throw new Error('Invalid SDP response (does not start with v=): ' + preview + '...');
+                    throw new Error('No SDP answer: Response does not start with v=0. Preview: ' + preview + '...');
                 }
 
                 console.log('WHEP: Setting remote description...');
