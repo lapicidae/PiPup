@@ -89,6 +89,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         refreshVersionAndUpdates()
+
+        // Check for finished update downloads that might have been missed
+        if (appSettings.pendingUpdateId != -1L) {
+            UpdateManager(this).resumePendingUpdate()
+        }
+
         // Only request battery exemption if overlay permission is granted
         // to avoid double dialogs during the onboarding flow.
         if (Settings.canDrawOverlays(this)) {

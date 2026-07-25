@@ -49,13 +49,18 @@ class AppSettings(context: Context) {
     var updateRepeat by BooleanPref("update_repeat", false)
     var lastNotifiedTag by StringPref("last_notified_tag", "")
 
+    // Pending Update State
+    var pendingUpdateId by LongPref("pending_update_id", -1L)
+    var pendingUpdateDigest by StringPref("pending_update_digest", "")
+    var pendingUpdateTagName by StringPref("pending_update_tag_name", "")
+
     val isBetaBuild: Boolean by lazy {
         val versionName = try {
             context.packageManager.getPackageInfo(context.packageName, 0).versionName
         } catch (_: Exception) { null }
 
         versionName?.let { v ->
-            listOf("prerelease", "beta", "rc").any { v.contains(it, true) }
+            listOf("prerelease", "beta", "rc").any { v.contains(it, true) } || v.contains("-")
         } == true ||
                 BuildConfig.APP_STATUS.contains("beta", true) ||
                 BuildConfig.APP_STATUS.contains("prerelease", true) ||
@@ -97,6 +102,9 @@ class AppSettings(context: Context) {
         val updateAvailableTag: String,
         val updateRepeat: Boolean,
         val lastNotifiedTag: String,
+        val pendingUpdateId: Long,
+        val pendingUpdateDigest: String,
+        val pendingUpdateTagName: String,
         val language: String
     )
 
@@ -106,7 +114,9 @@ class AppSettings(context: Context) {
         contentPadding, titleAlignment, messageAlignment, mediaPosition,
         animationType, animationDuration, animationExit, mediaTimeout, preWarmWebView, appTheme, advancedMode,
         updateChannel, updateInterval, updateNotificationStyle, lastUpdateCheck,
-        updateAvailableTag, updateRepeat, lastNotifiedTag, language
+        updateAvailableTag, updateRepeat, lastNotifiedTag,
+        pendingUpdateId, pendingUpdateDigest, pendingUpdateTagName,
+        language
     )
 
     fun apply(data: SettingsData) {
@@ -139,6 +149,9 @@ class AppSettings(context: Context) {
             putString("update_available_tag", data.updateAvailableTag)
             putBoolean("update_repeat", data.updateRepeat)
             putString("last_notified_tag", data.lastNotifiedTag)
+            putLong("pending_update_id", data.pendingUpdateId)
+            putString("pending_update_digest", data.pendingUpdateDigest)
+            putString("pending_update_tag_name", data.pendingUpdateTagName)
             putString("language", data.language)
         }
     }

@@ -1,11 +1,8 @@
 package nl.rogro82.pipup
 
 import android.app.DownloadManager
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
-import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -43,9 +40,6 @@ data class GitHubAsset(
 
 class UpdateManager(private val context: Context) {
 
-    private val mapper = jacksonObjectMapper()
-    private val repoUrl = "https://api.github.com/repos/lapicidae/PiPup/releases"
-
     interface UpdateCallback {
         fun onUpdateAvailable(release: GitHubRelease)
         fun onNoUpdate()
@@ -55,7 +49,7 @@ class UpdateManager(private val context: Context) {
     fun checkForUpdates(includeBeta: Boolean, callback: UpdateCallback) {
         thread {
             try {
-                val connection = URL(repoUrl).openConnection() as HttpURLConnection
+                val connection = URL(REPO_URL).openConnection() as HttpURLConnection
                 connection.requestMethod = "GET"
                 connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
                 connection.setRequestProperty("User-Agent", "PiPup-App")
@@ -257,49 +251,76 @@ class UpdateManager(private val context: Context) {
             .setAllowedOverRoaming(true)
 
         val downloadId = downloadManager.enqueue(request)
-        val appContext = context.applicationContext
 
-        val onComplete = object : BroadcastReceiver() {
-            override fun onReceive(recvContext: Context, intent: Intent) {
-                if (intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1L) == downloadId) {
-                    appContext.unregisterReceiver(this)
+        // Persist state for recovery
+        appSettings.pendingUpdateId = downloadId
+        appSettings.pendingUpdateDigest = asset.digest ?: ""
+        appSettings.pendingUpdateTagName = release.tagName
 
-                    val query = DownloadManager.Query().setFilterById(downloadId)
-                    val cursor = downloadManager.query(query)
+        Log.i("UpdateManager", "Update download enqueued. ID: $downloadId, Asset: ${asset.name}")
+    }
 
-                    if (cursor.moveToFirst()) {
-                        val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
-                        val status = if (statusIdx != -1) cursor.getInt(statusIdx) else -1
+    /**
+     * Resumes a pending update if a download was previously enqueued.
+     * This checks the status and proceeds to installation if successful.
+     */
+    fun resumePendingUpdate() {
+        val appSettings = AppSettings(context)
+        val downloadId = appSettings.pendingUpdateId
+        if (downloadId == -1L) return
 
-                        if (status == DownloadManager.STATUS_SUCCESSFUL) {
-                            Log.i("UpdateManager", "Download successful for release ${release.tagName}")
-                            if (!asset.digest.isNullOrEmpty()) {
-                                verifyAndInstall(asset.digest)
-                            } else {
-                                val checksumAsset = release.assets.find { it.name == "checksums.txt" }
-                                if (checksumAsset != null) {
-                                    verifyAndInstallLegacy(checksumAsset.browserDownloadUrl, asset.name)
-                                } else {
-                                    Log.w("UpdateManager", "No checksum found, skipping verification")
-                                    installApk(appContext)
-                                }
-                            }
-                        } else {
-                            val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
-                            val reason = if (reasonIdx != -1) cursor.getInt(reasonIdx) else -1
-                            Log.e("UpdateManager", "Download failed. Status: $status, Reason: $reason")
-                            Handler(Looper.getMainLooper()).post {
-                                Toast.makeText(appContext, appContext.getString(R.string.update_download_failed, reason), Toast.LENGTH_LONG).show()
-                            }
-                        }
+        Log.d("UpdateManager", "Checking pending update status for ID: $downloadId")
+        handleDownloadComplete(downloadId)
+    }
+
+    /**
+     * Handles the completion of a download, verifying and installing if successful.
+     */
+    fun handleDownloadComplete(downloadId: Long) {
+        val appSettings = AppSettings(context)
+        if (appSettings.pendingUpdateId != downloadId) {
+            Log.d("UpdateManager", "Download ID mismatch (got $downloadId, expected ${appSettings.pendingUpdateId}). Ignoring.")
+            return
+        }
+
+        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val query = DownloadManager.Query().setFilterById(downloadId)
+        val cursor = downloadManager.query(query)
+
+        if (cursor.moveToFirst()) {
+            val statusIdx = cursor.getColumnIndex(DownloadManager.COLUMN_STATUS)
+            val status = if (statusIdx != -1) cursor.getInt(statusIdx) else -1
+
+            when (status) {
+                DownloadManager.STATUS_SUCCESSFUL -> {
+                    Log.i("UpdateManager", "Download $downloadId successful.")
+                    val digest = appSettings.pendingUpdateDigest
+                    if (digest.isNotEmpty()) {
+                        verifyAndInstall(digest)
+                    } else {
+                        Log.w("UpdateManager", "No digest stored for verification, proceeding with installation.")
+                        installApk(context)
                     }
-                    cursor.close()
+                    // Clear pending state after processing
+                    appSettings.pendingUpdateId = -1L
+                    appSettings.pendingUpdateDigest = ""
+                    appSettings.pendingUpdateTagName = ""
+                }
+                DownloadManager.STATUS_FAILED -> {
+                    val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
+                    val reason = if (reasonIdx != -1) cursor.getInt(reasonIdx) else -1
+                    Log.e("UpdateManager", "Download failed. Reason: $reason")
+                    // Clear pending state on failure
+                    appSettings.pendingUpdateId = -1L
+                    appSettings.pendingUpdateDigest = ""
+                    appSettings.pendingUpdateTagName = ""
+                }
+                else -> {
+                    Log.d("UpdateManager", "Download $downloadId still in progress. Status: $status")
                 }
             }
         }
-
-        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) Context.RECEIVER_EXPORTED else 0
-        appContext.registerReceiver(onComplete, IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE), flags)
+        cursor.close()
     }
 
     private fun verifyAndInstall(digest: String) {
@@ -322,42 +343,6 @@ class UpdateManager(private val context: Context) {
                 }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "Error during checksum verification", e)
-                Handler(Looper.getMainLooper()).post { installApk(context) }
-            }
-        }
-    }
-
-    private fun verifyAndInstallLegacy(checksumUrl: String, apkName: String) {
-        thread {
-            try {
-                val connection = URL(checksumUrl).openConnection() as HttpURLConnection
-                val checksums = connection.inputStream.bufferedReader().use { it.readText() }
-
-                val expectedHash = checksums.lines()
-                    .map { it.trim() }
-                    .find { it.endsWith(apkName) }
-                    ?.split(Regex("\\s+"))
-                    ?.firstOrNull()
-
-                if (expectedHash == null) {
-                    Log.w("UpdateManager", "No legacy checksum found for $apkName")
-                    Handler(Looper.getMainLooper()).post { installApk(context) }
-                    return@thread
-                }
-
-                val apkFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
-                val actualHash = calculateSha256(apkFile)
-
-                if (expectedHash.equals(actualHash, ignoreCase = true)) {
-                    Handler(Looper.getMainLooper()).post { installApk(context) }
-                } else {
-                    Log.e("UpdateManager", "Legacy SHA-256 mismatch!")
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, context.getString(R.string.update_verification_failed), Toast.LENGTH_LONG).show()
-                    }
-                }
-            } catch (e: Exception) {
-                Log.e("UpdateManager", "Error during legacy verification", e)
                 Handler(Looper.getMainLooper()).post { installApk(context) }
             }
         }
@@ -409,5 +394,10 @@ class UpdateManager(private val context: Context) {
                 Toast.makeText(installContext, installContext.getString(R.string.update_installer_failed, e.message), Toast.LENGTH_LONG).show()
             }
         }
+    }
+
+    companion object {
+        private val mapper = jacksonObjectMapper()
+        private const val REPO_URL = "https://api.github.com/repos/lapicidae/PiPup/releases"
     }
 }

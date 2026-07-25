@@ -87,7 +87,7 @@
     <string name="settings_update_error">Update-Prüfung fehlgeschlagen: %1$s</string>
     <string name="settings_update_dialog_msg">Eine neue Version (%1$s) ist verfügbar. Möchten Sie diese jetzt herunterladen und installieren?</string>
     <string name="settings_update_downloading">Update wird heruntergeladen…</string>
-    <string name="settings_update_verifying">Update wird online verifiziert…</string>
+    <string name="settings_update_verifying">Download wird vorbereitet…</string>
     <string name="settings_update_no_longer_available">Dieses Update ist online nicht mehr verfügbar. Bitte erneut prüfen.</string>
     <string name="settings_update_install">Installieren</string>
     <string name="settings_update_to">Update auf %1$s</string>
