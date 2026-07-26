@@ -29,6 +29,9 @@ obj/
 ### AI & Local Development Artifacts ###
 .artifacts/
 
+### Kotlin Artifacts ###
+.kotlin/
+
 ### Signing & Security ###
 # Private keystores and signing configurations must stay local
 *.jks
