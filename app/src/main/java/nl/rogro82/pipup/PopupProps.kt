@@ -84,6 +84,11 @@ data class PopupProps(
             val scale: Boolean = true,
             val videoFit: String = "cover" // cover, contain, fill
         ) : Media()
+        data class LocalFile(
+            val path: String,
+            val width: Int = 480,
+            val scale: Boolean = true
+        ) : Media()
         data class Bitmap(
             val bitmap: android.graphics.Bitmap,
             val width: Int = 480,

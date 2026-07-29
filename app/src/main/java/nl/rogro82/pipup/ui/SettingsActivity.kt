@@ -25,7 +25,7 @@ import androidx.core.graphics.toColorInt
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
-import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.databinding.ActivitySettingsBinding
@@ -34,7 +34,7 @@ import nl.rogro82.pipup.databinding.ActivitySettingsBinding
 class SettingsActivity : AppCompatActivity() {
 
     lateinit var binding: ActivitySettingsBinding
-    private val settings by lazy { AppSettings(this) }
+    private val settings = PiPupApp.settings
     private val handler = Handler(Looper.getMainLooper())
     val mapper = jacksonObjectMapper()
 

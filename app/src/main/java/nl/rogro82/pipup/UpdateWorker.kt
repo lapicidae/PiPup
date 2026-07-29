@@ -15,7 +15,7 @@ import kotlin.coroutines.resume
 class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val appSettings = AppSettings(applicationContext)
+        val appSettings = PiPupApp.settings
         val includeBeta = appSettings.updateChannel == 1
         val updateManager = UpdateManager(applicationContext)
 

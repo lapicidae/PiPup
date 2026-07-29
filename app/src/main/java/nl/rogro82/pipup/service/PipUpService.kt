@@ -15,8 +15,6 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.module.kotlin.registerKotlinModule
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.*
 import nl.rogro82.pipup.core.NotificationManager
@@ -38,12 +36,13 @@ class PipUpService : Service() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
-    private val mapper = ObjectMapper().registerKotlinModule()
-    private val settings by lazy { AppSettings(this) }
+    private val settings = PiPupApp.settings
 
     private lateinit var webServer: WebServer
     private lateinit var notificationManager: NotificationManager
     private lateinit var payloadParser: PayloadParser
+
+    private var cachedLandingPage: String? = null
 
     @androidx.annotation.Keep
     internal var warmWebView: android.webkit.WebView? = null
@@ -67,7 +66,7 @@ class PipUpService : Service() {
 
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         notificationManager = NotificationManager(this, wm)
-        payloadParser = PayloadParser(mapper)
+        payloadParser = PayloadParser(applicationContext)
 
         // Pre-warm WebView if enabled to avoid cold-start timeouts on first WHEP request
         if (settings.preWarmWebView) {
@@ -96,9 +95,14 @@ class PipUpService : Service() {
             },
         )
 
+        // Set temp directory for NanoHTTPD to app's cache to avoid permission issues
         try {
-            webServer.start()
-            Log.i(TAG, "WebServer started on port $SERVER_PORT")
+            System.setProperty("java.io.tmpdir", applicationContext.cacheDir.absolutePath)
+        } catch (_: Exception) {}
+
+        try {
+            webServer.start(30000)
+            Log.i(TAG, "WebServer started on port $SERVER_PORT (timeout: 30s)")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start WebServer", e)
         }
@@ -154,6 +158,8 @@ class PipUpService : Service() {
     }
 
     private fun handleLandingPage(): NanoHTTPD.Response {
+        cachedLandingPage?.let { return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/html", it) }
+
         val versionName = try {
             packageManager.getPackageInfo(packageName, 0).versionName
         } catch (_: Exception) { "Unknown" }
@@ -202,20 +208,24 @@ class PipUpService : Service() {
             </html>
         """.trimIndent()
 
+        cachedLandingPage = html
         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/html", html)
     }
 
     private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         return when (session.method) {
             NanoHTTPD.Method.GET -> {
-                val json = mapper.writeValueAsString(settings.getAll())
+                val json = Json.mapper.writeValueAsString(settings.getAll())
                 NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json)
             }
             NanoHTTPD.Method.POST -> {
                 val length = session.headers["content-length"]?.toIntOrNull() ?: 0
                 if (length > 0) {
-                    val data = mapper.readValue(session.inputStream, AppSettings.SettingsData::class.java)
-                    handler.post { settings.apply(data) }
+                    val data = Json.mapper.readValue(session.inputStream, AppSettings.SettingsData::class.java)
+                    handler.post {
+                        settings.apply(data)
+                        cachedLandingPage = null // Invalidate cache on settings change
+                    }
                     ok("Settings updated")
                 } else invalidRequest("Empty")
             }

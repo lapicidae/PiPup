@@ -13,7 +13,6 @@ import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import java.io.File
 import java.io.FileInputStream
 import java.net.HttpURLConnection
@@ -38,7 +37,9 @@ data class GitHubAsset(
     val digest: String? = null
 )
 
-class UpdateManager(private val context: Context) {
+class UpdateManager(context: Context) {
+
+    private val appContext = context.applicationContext
 
     interface UpdateCallback {
         fun onUpdateAvailable(release: GitHubRelease)
@@ -58,9 +59,9 @@ class UpdateManager(private val context: Context) {
 
                 if (connection.responseCode == 200) {
                     val json = connection.inputStream.bufferedReader().use { it.readText() }
-                    val rootNode = mapper.readTree(json)
+                    val rootNode = Json.mapper.readTree(json)
                     if (!rootNode.isArray) {
-                        callback.onError(context.getString(R.string.update_error_invalid_api))
+                        callback.onError(appContext.getString(R.string.update_error_invalid_api))
                         return@thread
                     }
 
@@ -109,13 +110,13 @@ class UpdateManager(private val context: Context) {
                 }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "Error checking for updates", e)
-                callback.onError(e.localizedMessage ?: context.getString(R.string.update_error_network))
+                callback.onError(e.localizedMessage ?: appContext.getString(R.string.update_error_network))
             }
         }
     }
 
     fun showUpdateNotification(release: GitHubRelease) {
-        val appSettings = AppSettings(context)
+        val appSettings = PiPupApp.settings
         when (appSettings.updateNotificationStyle) {
             1 -> showPiPupPopup(release)
             2 -> showToastNotification(release)
@@ -126,10 +127,10 @@ class UpdateManager(private val context: Context) {
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun showPiPupPopup(release: GitHubRelease) {
-        val appSettings = AppSettings(context)
+        val appSettings = PiPupApp.settings
         val props = PopupProps(
-            title = context.getString(R.string.notification_update_title),
-            message = context.getString(R.string.notification_update_msg, release.tagName),
+            title = appContext.getString(R.string.notification_update_title),
+            message = appContext.getString(R.string.notification_update_msg, release.tagName),
             duration = 10,
             position = appSettings.positionIndex,
             backgroundColor = appSettings.getFullBackgroundColor(),
@@ -148,19 +149,19 @@ class UpdateManager(private val context: Context) {
             animationExit = appSettings.animationExit
         )
 
-        val serviceIntent = Intent(context, PipUpService::class.java).apply {
+        val serviceIntent = Intent(appContext, PipUpService::class.java).apply {
             action = "DISPLAY_NOTIFICATION"
-            putExtra("props", mapper.writeValueAsString(props))
+            putExtra("props", Json.mapper.writeValueAsString(props))
         }
-        context.startService(serviceIntent)
+        appContext.startService(serviceIntent)
     }
 
     private fun showToastNotification(release: GitHubRelease) {
         val handler = Handler(Looper.getMainLooper())
         handler.post {
             Toast.makeText(
-                context,
-                context.getString(R.string.notification_update_msg, release.tagName),
+                appContext,
+                appContext.getString(R.string.notification_update_msg, release.tagName),
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -168,7 +169,7 @@ class UpdateManager(private val context: Context) {
 
     fun isNewer(remoteTag: String): Boolean {
         val currentVersion = try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
         } catch (_: Exception) {
             "0.0.0"
         }
@@ -210,7 +211,7 @@ class UpdateManager(private val context: Context) {
     }
 
     fun downloadAndInstall(release: GitHubRelease) {
-        val appSettings = AppSettings(context)
+        val appSettings = PiPupApp.settings
         val isBetaChannel = appSettings.updateChannel == 1
         val isCurrentDebug = BuildConfig.DEBUG
 
@@ -236,17 +237,17 @@ class UpdateManager(private val context: Context) {
         }
 
         // Clean up old download if it exists
-        val oldFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
+        val oldFile = File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
         if (oldFile.exists()) {
             oldFile.delete()
         }
 
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val downloadManager = appContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val request = DownloadManager.Request(asset.browserDownloadUrl.toUri())
-            .setTitle(context.getString(R.string.update_download_title, release.tagName))
-            .setDescription(context.getString(R.string.update_download_desc))
+            .setTitle(appContext.getString(R.string.update_download_title, release.tagName))
+            .setDescription(appContext.getString(R.string.update_download_desc))
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(context, Environment.DIRECTORY_DOWNLOADS, "pipup-update.apk")
+            .setDestinationInExternalFilesDir(appContext, Environment.DIRECTORY_DOWNLOADS, "pipup-update.apk")
             .setAllowedOverMetered(true)
             .setAllowedOverRoaming(true)
 
@@ -265,7 +266,7 @@ class UpdateManager(private val context: Context) {
      * This checks the status and proceeds to installation if successful.
      */
     fun resumePendingUpdate() {
-        val appSettings = AppSettings(context)
+        val appSettings = PiPupApp.settings
         val downloadId = appSettings.pendingUpdateId
         if (downloadId == -1L) return
 
@@ -277,13 +278,13 @@ class UpdateManager(private val context: Context) {
      * Handles the completion of a download, verifying and installing if successful.
      */
     fun handleDownloadComplete(downloadId: Long) {
-        val appSettings = AppSettings(context)
+        val appSettings = PiPupApp.settings
         if (appSettings.pendingUpdateId != downloadId) {
             Log.d("UpdateManager", "Download ID mismatch (got $downloadId, expected ${appSettings.pendingUpdateId}). Ignoring.")
             return
         }
 
-        val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val downloadManager = appContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val query = DownloadManager.Query().setFilterById(downloadId)
         val cursor = downloadManager.query(query)
 
@@ -299,7 +300,7 @@ class UpdateManager(private val context: Context) {
                         verifyAndInstall(digest)
                     } else {
                         Log.w("UpdateManager", "No digest stored for verification, proceeding with installation.")
-                        installApk(context)
+                        installApk(appContext)
                     }
                     // Clear pending state after processing
                     appSettings.pendingUpdateId = -1L
@@ -310,6 +311,9 @@ class UpdateManager(private val context: Context) {
                     val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
                     val reason = if (reasonIdx != -1) cursor.getInt(reasonIdx) else -1
                     Log.e("UpdateManager", "Download failed. Reason: $reason")
+                    Handler(Looper.getMainLooper()).post {
+                        Toast.makeText(appContext, appContext.getString(R.string.update_download_failed, reason), Toast.LENGTH_LONG).show()
+                    }
                     // Clear pending state on failure
                     appSettings.pendingUpdateId = -1L
                     appSettings.pendingUpdateDigest = ""
@@ -327,23 +331,23 @@ class UpdateManager(private val context: Context) {
         thread {
             try {
                 val expectedHash = digest.substringAfter("sha256:").trim()
-                val apkFile = File(context.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
+                val apkFile = File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
                 val actualHash = calculateSha256(apkFile)
 
                 Log.d("UpdateManager", "Verification: expected=$expectedHash, actual=$actualHash")
 
                 if (expectedHash.equals(actualHash, ignoreCase = true)) {
                     Log.i("UpdateManager", "SHA-256 verification successful.")
-                    Handler(Looper.getMainLooper()).post { installApk(context) }
+                    Handler(Looper.getMainLooper()).post { installApk(appContext) }
                 } else {
                     Log.e("UpdateManager", "SHA-256 mismatch!")
                     Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(context, context.getString(R.string.update_verification_failed), Toast.LENGTH_LONG).show()
+                        Toast.makeText(appContext, appContext.getString(R.string.update_verification_failed), Toast.LENGTH_LONG).show()
                     }
                 }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "Error during checksum verification", e)
-                Handler(Looper.getMainLooper()).post { installApk(context) }
+                Handler(Looper.getMainLooper()).post { installApk(appContext) }
             }
         }
     }
@@ -376,7 +380,8 @@ class UpdateManager(private val context: Context) {
         }
 
         try {
-            val uri = FileProvider.getUriForFile(installContext, "${installContext.packageName}.fileprovider", file)
+            val ctx = installContext.applicationContext
+            val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
             Log.d("UpdateManager", "Generated FileProvider URI: $uri")
 
             val intent = Intent(Intent.ACTION_VIEW).apply {
@@ -386,18 +391,18 @@ class UpdateManager(private val context: Context) {
                 addCategory(Intent.CATEGORY_DEFAULT)
             }
 
-            installContext.startActivity(intent)
+            ctx.startActivity(intent)
             Log.i("UpdateManager", "Installer intent started successfully.")
         } catch (e: Exception) {
             Log.e("UpdateManager", "Error launching APK installer", e)
+            val ctx = installContext.applicationContext
             Handler(Looper.getMainLooper()).post {
-                Toast.makeText(installContext, installContext.getString(R.string.update_installer_failed, e.message), Toast.LENGTH_LONG).show()
+                Toast.makeText(ctx, ctx.getString(R.string.update_installer_failed, e.message), Toast.LENGTH_LONG).show()
             }
         }
     }
 
     companion object {
-        private val mapper = jacksonObjectMapper()
         private const val REPO_URL = "https://api.github.com/repos/lapicidae/PiPup/releases"
     }
 }

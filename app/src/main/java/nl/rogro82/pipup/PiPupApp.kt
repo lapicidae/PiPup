@@ -6,12 +6,18 @@ import androidx.core.os.LocaleListCompat
 import com.bumptech.glide.Glide
 
 class PiPupApp : Application() {
+
+    companion object {
+        lateinit var settings: AppSettings
+            private set
+    }
+
     override fun onCreate() {
         super.onCreate()
+        settings = AppSettings(this)
 
         // Apply language as early as possible using AppCompat API
-        val prefs = getSharedPreferences("pipup_settings", MODE_PRIVATE)
-        val lang = prefs.getString("language", "default") ?: "default"
+        val lang = settings.language
         val appLocale: LocaleListCompat = if (lang == "default") {
             LocaleListCompat.getEmptyLocaleList()
         } else {
@@ -20,7 +26,7 @@ class PiPupApp : Application() {
         AppCompatDelegate.setApplicationLocales(appLocale)
 
         // Apply theme as early as possible
-        val appTheme = prefs.getInt("app_theme", 0)
+        val appTheme = settings.appTheme
         val mode = if (appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
         AppCompatDelegate.setDefaultNightMode(mode)
     }

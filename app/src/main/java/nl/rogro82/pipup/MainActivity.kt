@@ -30,7 +30,7 @@ import nl.rogro82.pipup.ui.SettingsActivity
 @OptIn(UnstableApi::class)
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var appSettings: AppSettings
+    private val appSettings = PiPupApp.settings
     private var isEnergyDialogOpen = false
 
     private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
@@ -44,8 +44,6 @@ class MainActivity : AppCompatActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-
-        appSettings = AppSettings(this)
 
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.mainLayout)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())

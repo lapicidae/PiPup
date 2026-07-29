@@ -11,12 +11,13 @@ import kotlin.reflect.KProperty
  */
 class AppSettings(context: Context) {
 
-    private val prefs = context.getSharedPreferences("pipup_settings", Context.MODE_PRIVATE)
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences("pipup_settings", Context.MODE_PRIVATE)
 
     // Styling
     var positionIndex by IntPref("position_index", 0)
-    var backgroundColor by StringPref("background_color", DEFAULT_BG_COLOR)
-    var backgroundAlpha by IntPref("background_alpha", DEFAULT_BG_ALPHA)
+    var backgroundColor by StringPref("background_color", DEFAULT_BG_COLOR) { cachedFullBgColor = null }
+    var backgroundAlpha by IntPref("background_alpha", DEFAULT_BG_ALPHA) { cachedFullBgColor = null }
     var titleColor by StringPref("title_color", DEFAULT_TITLE_COLOR)
     var titleSize by FloatPref("title_size", DEFAULT_TITLE_SIZE)
     var messageColor by StringPref("message_color", DEFAULT_MSG_COLOR)
@@ -56,7 +57,7 @@ class AppSettings(context: Context) {
 
     val isBetaBuild: Boolean by lazy {
         val versionName = try {
-            context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
         } catch (_: Exception) { null }
 
         versionName?.let { v ->
@@ -154,12 +155,20 @@ class AppSettings(context: Context) {
             putString("pending_update_tag_name", data.pendingUpdateTagName)
             putString("language", data.language)
         }
+        cachedFullBgColor = null
     }
 
+    private var cachedFullBgColor: String? = null
+
     fun getFullBackgroundColor(): String {
+        cachedFullBgColor?.let { return it }
+
         val clean = backgroundColor.replace("#", "").let { if (it.length == 8) it.substring(2) else it }
         val alphaHex = String.format("%02X", backgroundAlpha)
-        return "#$alphaHex$clean"
+        val result = "#$alphaHex$clean"
+
+        cachedFullBgColor = result
+        return result
     }
 
     fun resetToDefaults() {
@@ -170,22 +179,24 @@ class AppSettings(context: Context) {
         }
     }
 
-    private class StringPref(val key: String, val defaultValue: String) : ReadWriteProperty<AppSettings, String> {
+    private class StringPref(val key: String, val defaultValue: String, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, String> {
         override fun getValue(thisRef: AppSettings, property: KProperty<*>): String {
             return thisRef.prefs.getString(key, defaultValue) ?: defaultValue
         }
         override fun setValue(thisRef: AppSettings, property: KProperty<*>, value: String) {
             thisRef.prefs.edit { putString(key, value) }
+            onSet?.invoke()
         }
     }
 
-    private class IntPref(val key: String, val defaultValue: Int) : ReadWriteProperty<AppSettings, Int> {
+    private class IntPref(val key: String, val defaultValue: Int, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, Int> {
         override fun getValue(thisRef: AppSettings, property: KProperty<*>): Int {
             return thisRef.prefs.getInt(key, defaultValue)
         }
         @Suppress("unused", "RedundantSuppression")
         override fun setValue(thisRef: AppSettings, property: KProperty<*>, value: Int) {
             thisRef.prefs.edit { putInt(key, value) }
+            onSet?.invoke()
         }
     }
 

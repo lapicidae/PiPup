@@ -31,7 +31,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
-import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.isEmulator
 import nl.rogro82.pipup.databinding.PopupBinding
@@ -47,6 +47,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     private val binding: PopupBinding = PopupBinding.inflate(LayoutInflater.from(context), this)
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val settings = PiPupApp.settings
     var readyListener: ReadyListener? = null
 
     private var mPlayer: ExoPlayer? = null
@@ -105,6 +106,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             is PopupProps.Media.Video -> m.width
             is PopupProps.Media.Web -> m.width
             is PopupProps.Media.Whep -> m.width
+            is PopupProps.Media.LocalFile -> m.width
             is PopupProps.Media.Bitmap -> m.width
             else -> props.imageWidth ?: 480
         }
@@ -170,8 +172,6 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         alpha = 1.0f
         background = null
         setPadding(0, 0, 0, 0)
-
-        val settings = AppSettings(context)
 
         // 1. Padding
         val paddingVal = props.contentPadding ?: settings.contentPadding
@@ -281,33 +281,36 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         container.addView(second, secondParams)
     }
 
-    private fun adjustHeights() {
+    private val adjustHeightsRunnable = Runnable {
         val screenHeight = resources.displayMetrics.heightPixels
         val maxPopupHeight = (screenHeight * 0.85).toInt()
 
-        binding.popupContainer.post {
-            if (binding.popupMediaFrame.isVisible && targetMediaHeight > 0) {
-                binding.popupMediaFrame.layoutParams.height = targetMediaHeight
-                binding.popupMediaFrame.requestLayout()
-            }
-
-            val otherViewsHeight = (if (binding.popupTitle.isVisible) binding.popupTitle.measuredHeight else 0) +
-                    (if (binding.popupMediaFrame.isVisible) (if (targetMediaHeight > 0) targetMediaHeight else binding.popupMediaFrame.measuredHeight) else 0) +
-                    binding.popupContainer.paddingTop + binding.popupContainer.paddingBottom + context.dpToPx(12)
-
-            val maxScrollHeight = if (binding.popupContainer.orientation == LinearLayout.HORIZONTAL) (screenHeight * 0.7).toInt()
-                                 else maxPopupHeight - otherViewsHeight
-
-            val contentHeight = binding.popupMessage.measuredHeight
-            if (contentHeight > maxScrollHeight) {
-                binding.popupScrollView.layoutParams.height = maxScrollHeight.coerceAtLeast(context.dpToPx(100))
-                binding.popupScrollView.requestLayout()
-                if (!isScrolling) startAutoScroll()
-            } else {
-                binding.popupScrollView.layoutParams.height = LayoutParams.WRAP_CONTENT
-                binding.popupScrollView.requestLayout()
-            }
+        if (binding.popupMediaFrame.isVisible && targetMediaHeight > 0) {
+            binding.popupMediaFrame.layoutParams.height = targetMediaHeight
+            binding.popupMediaFrame.requestLayout()
         }
+
+        val otherViewsHeight = (if (binding.popupTitle.isVisible) binding.popupTitle.measuredHeight else 0) +
+                (if (binding.popupMediaFrame.isVisible) (if (targetMediaHeight > 0) targetMediaHeight else binding.popupMediaFrame.measuredHeight) else 0) +
+                binding.popupContainer.paddingTop + binding.popupContainer.paddingBottom + context.dpToPx(12)
+
+        val maxScrollHeight = if (binding.popupContainer.orientation == LinearLayout.HORIZONTAL) (screenHeight * 0.7).toInt()
+        else maxPopupHeight - otherViewsHeight
+
+        val contentHeight = binding.popupMessage.measuredHeight
+        if (contentHeight > maxScrollHeight) {
+            binding.popupScrollView.layoutParams.height = maxScrollHeight.coerceAtLeast(context.dpToPx(100))
+            binding.popupScrollView.requestLayout()
+            if (!isScrolling) startAutoScroll()
+        } else {
+            binding.popupScrollView.layoutParams.height = LayoutParams.WRAP_CONTENT
+            binding.popupScrollView.requestLayout()
+        }
+    }
+
+    private fun adjustHeights() {
+        mainHandler.removeCallbacks(adjustHeightsRunnable)
+        mainHandler.post(adjustHeightsRunnable)
     }
 
     private fun startAutoScroll() {
@@ -350,7 +353,6 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             return
         }
 
-        val settings = AppSettings(context)
         val timeoutSec = settings.mediaTimeout
         if (timeoutSec > 0) {
             android.util.Log.d("PopupView", "Setting media loading timeout to $timeoutSec seconds")
@@ -366,41 +368,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             is PopupProps.Media.Video -> renderVideo(frame, media.uri, media.width, media.scale)
             is PopupProps.Media.Web -> renderWeb(frame, media.uri, media.width, media.height, media.cache, media.scale)
             is PopupProps.Media.Whep -> renderWhep(frame, media.uri, media.width, media.height, media.scale, media.videoFit)
+            is PopupProps.Media.LocalFile -> renderLocalFile(frame, media.path, media.width, media.scale)
             is PopupProps.Media.Bitmap -> renderBitmap(frame, media.bitmap, media.width, media.scale)
         }
     }
 
     private fun renderImage(frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean) {
-        val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
-        frame.layoutParams.width = tw
-
-        val iv = ImageView(context).apply {
-            adjustViewBounds = true
-            scaleType = ImageView.ScaleType.FIT_CENTER
-        }
-        frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-
-        Glide.with(context.applicationContext)
-            .`as`(Drawable::class.java)
-            .load(uri)
-            .diskCacheStrategy(if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE)
-            .override(tw, com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
-            .dontAnimate()
-            .listener(object : com.bumptech.glide.request.RequestListener<Drawable> {
-                override fun onLoadFailed(e: com.bumptech.glide.load.engine.GlideException?, model: Any?, target: com.bumptech.glide.request.target.Target<Drawable>, isFirstResource: Boolean): Boolean {
-                    showPlaceholder(context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
-                    notifyReady()
-                    return false
-                }
-                override fun onResourceReady(resource: Drawable, model: Any, target: com.bumptech.glide.request.target.Target<Drawable>?, dataSource: com.bumptech.glide.load.DataSource, isFirstResource: Boolean): Boolean {
-                    if (resource.intrinsicWidth > 0) {
-                        targetMediaHeight = (tw * resource.intrinsicHeight) / resource.intrinsicWidth
-                    }
-                    notifyReady()
-                    adjustHeights()
-                    return false
-                }
-            }).into(iv)
+        renderGlide(frame, uri, width, scale, if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE, false)
     }
 
     private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean) {
@@ -551,6 +525,44 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
+    private fun renderLocalFile(frame: FrameLayout, path: String, width: Int, scale: Boolean) {
+        renderGlide(frame, java.io.File(path), width, scale, DiskCacheStrategy.NONE, true)
+    }
+
+    private fun renderGlide(frame: FrameLayout, source: Any, width: Int, scale: Boolean, diskCache: DiskCacheStrategy, skipMemory: Boolean) {
+        val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
+        frame.layoutParams.width = tw
+
+        val iv = ImageView(context).apply {
+            adjustViewBounds = true
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+
+        Glide.with(context.applicationContext)
+            .`as`(Drawable::class.java)
+            .load(source)
+            .diskCacheStrategy(diskCache)
+            .skipMemoryCache(skipMemory)
+            .override(tw, com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
+            .dontAnimate()
+            .listener(object : com.bumptech.glide.request.RequestListener<Drawable> {
+                override fun onLoadFailed(e: com.bumptech.glide.load.engine.GlideException?, model: Any?, target: com.bumptech.glide.request.target.Target<Drawable>, isFirstResource: Boolean): Boolean {
+                    showPlaceholder(context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
+                    notifyReady()
+                    return false
+                }
+                override fun onResourceReady(resource: Drawable, model: Any, target: com.bumptech.glide.request.target.Target<Drawable>?, dataSource: com.bumptech.glide.load.DataSource, isFirstResource: Boolean): Boolean {
+                    if (resource.intrinsicWidth > 0) {
+                        targetMediaHeight = (tw * resource.intrinsicHeight) / resource.intrinsicWidth
+                    }
+                    notifyReady()
+                    adjustHeights()
+                    return false
+                }
+            }).into(iv)
+    }
+
     private fun renderBitmap(frame: FrameLayout, bitmap: Bitmap, width: Int, scale: Boolean) {
         if (bitmap.isRecycled) {
             notifyReady()
@@ -589,6 +601,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         mPlayer?.let { it.stop(); it.release() }
         mPlayer = null
+
+        (props.media as? PopupProps.Media.LocalFile)?.let {
+            try { java.io.File(it.path).delete() } catch (_: Exception) {}
+        }
 
         mWebView?.let { wv ->
             try {

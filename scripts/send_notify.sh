@@ -37,6 +37,13 @@ readonly STREAM_RTSP_PORT='8555'
 readonly STREAM_WHEP_PORT='8889'
 readonly STREAM_WEBRTC_PORT='8556'
 
+# Memory Monitoring
+readonly MEM_LOG_FILE='/dev/shm/pipup_mem.csv'
+readonly MEM_PACKAGE='nl.rogro82.pipup'
+readonly MONITOR_TEST_BUFFER=6
+readonly MONITOR_SETUP_BUFFER=30
+monitor_pid=""
+
 # Fallback Configuration
 readonly WHEP_FALLBACK_PORT="${STREAM_WHEP_PORT}"
 
@@ -95,11 +102,150 @@ readonly CLR_THEME='\033[34m'     # Blue
 readonly CLR_PARAM='\033[90m'     # Dark Gray
 readonly CLR_SUCCESS='\033[1;32m' # Bold Green
 readonly CLR_ERROR='\033[1;31m'   # Bold Red
+readonly CLR_MONITOR='\033[1;33m' # Bold Yellow
 
 
 #######################################
 # Helpers
 #######################################
+
+#######################################
+# Internal helper to extract memory values robustly from dumpsys output.
+#######################################
+get_mem_val() {
+  local data="${1:-}"
+  local label="${2:-}"
+  [[ -z "${data}" || -z "${label}" ]] && echo "0" && return
+
+  local line
+  line=$(echo "${data}" | grep "${label}" | head -n 1 || true)
+  [[ -z "${line}" ]] && echo "0" && return
+
+  local val=${line#*"${label}"}
+  # Remove leading whitespace
+  val="${val#"${val%%[![:space:]]*}"}"
+  # Extract first word (the number)
+  val="${val%%[[:space:]]*}"
+  # Strip non-numeric characters (like commas) just in case
+  val="${val//[!0-9]/}"
+
+  echo "${val:-0}"
+}
+
+#######################################
+# Background function to monitor device memory usage.
+# Arguments:
+#   duration: Seconds to monitor.
+#   adb_cmd: Full adb command with serial (e.g., "adb -s emulator-5554").
+#######################################
+monitor_memory() {
+  local duration="${1}"
+  local adb_cmd="${2}"
+  local interval=2
+
+  local end=$((SECONDS + duration))
+  while [ $SECONDS -lt $end ]; do
+    local timestamp
+    timestamp=$(date +"%H:%M:%S")
+    local meminfo
+    meminfo=$(${adb_cmd} shell dumpsys meminfo "${MEM_PACKAGE}" 2>/dev/null || printf "")
+
+    if [[ -n "${meminfo}" ]]; then
+      local total_pss java_heap native_heap
+      total_pss=$(get_mem_val "${meminfo}" "TOTAL PSS:")
+      java_heap=$(get_mem_val "${meminfo}" "Java Heap:")
+      native_heap=$(get_mem_val "${meminfo}" "Native Heap:")
+
+      if [[ "${total_pss}" != "0" ]]; then
+        printf "%s,%s,%s,%s\n" "${timestamp}" "${total_pss}" "${java_heap}" "${native_heap}" >> "${MEM_LOG_FILE}"
+      fi
+    fi
+    sleep "${interval}"
+  done
+  printf "\n%b[SYSTEM] Monitoring duration reached (%ss).%b\n" "${CLR_MONITOR}" "${duration}" "${CLR_RESET}"
+}
+
+#######################################
+# Analyzes the collected memory log and prints a summary using only Bash built-ins.
+#######################################
+print_memory_summary() {
+  [[ ! -f "${MEM_LOG_FILE}" ]] && return
+
+  local max_pss=0 max_java=0 max_native=0
+  local first_pss=0 last_pss=0
+  local count=0
+
+  # Internal function for pseudo-float formatting in pure Bash
+  format_mb() {
+    local raw="${1:-0}"
+    local val=${raw//[!0-9]/}
+    val=${val:-0}
+    local integer=$(( val / 1024 ))
+    local decimal=$(( (val % 1024) * 100 / 1024 ))
+    printf "%6d.%02d MB" "${integer}" "${decimal}"
+  }
+
+  printf "\n${CLR_MONITOR}[ANALYSIS] Memory Statistics (from %s):${CLR_RESET}\n" "${MEM_LOG_FILE}"
+
+  # Read CSV line by line using Bash, stripping possible \r
+  while IFS=',' read -r _ pss_val java_val native_val || [[ -n "${pss_val}" ]]; do
+    # Skip header and empty pss
+    [[ "${pss_val}" == "TotalPSS" || -z "${pss_val}" ]] && continue
+
+    # Strip any \r or non-numeric whitespace
+    local pss=${pss_val//[!0-9]/}
+    local java=${java_val//[!0-9]/}
+    local native=${native_val//[!0-9]/}
+
+    [[ -z "${pss}" ]] && continue
+
+    count=$(( count + 1 ))
+    if [ "${pss}" -gt "${max_pss}" ]; then max_pss="${pss}"; fi
+    if [ "${java}" -gt "${max_java}" ]; then max_java="${java}"; fi
+    if [ "${native}" -gt "${max_native}" ]; then max_native="${native}"; fi
+
+    last_pss="${pss}"
+    if [ "${count}" -eq 1 ]; then first_pss="${pss}"; fi
+  done < "${MEM_LOG_FILE}"
+
+  if [[ $count -gt 0 ]]; then
+    printf "  - Peak Total RAM:   " ; format_mb "$max_pss" ; printf "\n"
+    printf "  - Java Heap (Peak): " ; format_mb "$max_java" ; printf "\n"
+    printf "  - Native Heap (Pk): " ; format_mb "$max_native" ; printf "\n"
+    printf "  - Recovery:         " ; format_mb "$last_pss" ; printf " (Baseline: " ; format_mb "$first_pss" ; printf ")\n"
+
+    # Calculate recovery (allow 25% growth as stable)
+    if [[ $(( last_pss )) -le $(( first_pss * 125 / 100 )) ]]; then
+      printf "  - Health Status:    %bPASSED (Stable)%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
+    else
+      printf "  - Health Status:    %bWARNING (High Retention)%b\n" "${CLR_MONITOR}" "${CLR_RESET}"
+    fi
+  else
+    printf "  - No data collected for analysis.\n"
+  fi
+}
+
+#######################################
+# Finishes monitoring, waits for recovery, and prints summary.
+# Arguments:
+#   is_mon: Boolean, if memory monitoring is active.
+#   mon_pid: PID of the monitoring process.
+#   wait_time: Seconds to wait for recovery.
+#######################################
+finish_monitoring() {
+  local is_mon="${1}"
+  local mon_pid="${2}"
+  local wait_time="${3}"
+
+  [[ "${is_mon}" != "true" ]] && return
+
+  printf "\n${CLR_MONITOR}[SYSTEM] Waiting %ss for memory impact/recovery...${CLR_RESET}\n" "${wait_time}"
+  sleep "${wait_time}"
+
+  [[ -n "${mon_pid:-}" ]] && kill "${mon_pid}" 2>/dev/null || true
+  printf "%b[SYSTEM] Monitoring finished.%b\n" "${CLR_MONITOR}" "${CLR_RESET}"
+  print_memory_summary
+}
 
 #######################################
 # Formats the current WHEP_TIMEOUT for display.
@@ -369,9 +515,6 @@ start_whep_service() {
     (
       set +e
 
-      # Store state indicating docker mode with the active HOST port
-      printf "%s:%s" "$BASHPID" "${STREAM_WHEP_PORT}" > "${WHEP_STATE_FILE}"
-
       local container_name="webrtc_pipup_${BASHPID}"
       local ffmpeg_pid=""
       local config_file="/dev/shm/go2rtc_${BASHPID}.yaml"
@@ -443,6 +586,8 @@ EOF
       sleep "${WHEP_TIMEOUT}" &
       wait $!
     ) &
+    local whep_pid=$!
+    printf "%s:%s" "$whep_pid" "${STREAM_WHEP_PORT}" > "${WHEP_STATE_FILE}"
     disown
 
     # --- Robust WHEP Live Detection ---
@@ -474,7 +619,7 @@ EOF
       fi
 
       printf "."
-      ((retry += 1))
+      retry=$((retry + 1))
     done
 
     if [[ "${live}" == "true" ]]; then
@@ -545,7 +690,7 @@ EOF
   local wait_count=0
   while [[ ! -f "${WHEP_STATE_FILE}" && $wait_count -lt 10 ]]; do
     sleep 0.1
-    ((wait_count++))
+    wait_count=$((wait_count + 1))
   done
 
   WHEP_URL="http://${host_ip}:${assigned_port}/whep"
@@ -722,7 +867,7 @@ EOF
 )
 
   local response
-  response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
+  response=$(curl -s --max-time 60 -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
     -H "Content-Type: application/json" \
     -d "${json_payload}" || printf "000")
 
@@ -755,18 +900,20 @@ send_multipart_test() {
   local anim_duration="${7:-500}"
   local overwrite="${8:-false}"
   local endpoint="http://${target_ip}:${PORT}/notify"
-  local temp_file="/dev/shm/pipup_test.png"
+
+  local rand_idx=$(( RANDOM % ${#MULTIPART_IMAGES[@]} ))
+  local img_file="${MULTIPART_IMAGES[$rand_idx]}"
+  local img_ext="${img_file##*.}"
 
   local full_msg
-  full_msg=$(printf "Mode: Form-Data\nPos: %s\nMediaPos: %s\nPadding: %s\nOverwrite: %s%b" "${position}" "${media_pos}" "${padding}" "${overwrite}" "${suffix}")
-
-  curl -s --fail "${PNG_URL}" -o "${temp_file}" || return 1
+  full_msg=$(printf "Mode: Form-Data (Source: %s)\nPos: %s\nMediaPos: %s\nPadding: %s\nOverwrite: %s%b" \
+    "${img_ext^^}" "${position}" "${media_pos}" "${padding}" "${overwrite}" "${suffix}")
 
   local response
-  response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
+  response=$(curl -s --max-time 60 -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
     -F "title=Multipart Test" \
     -F "message=${full_msg}" \
-    -F "image=@${temp_file}" \
+    -F "image=@${img_file}" \
     -F "duration=${DURATION}" \
     -F "position=${position}" \
     -F "mediaPosition=${media_pos}" \
@@ -775,7 +922,7 @@ send_multipart_test() {
     -F "animationDuration=${anim_duration}" \
     -F "overwrite=${overwrite}" || printf '000')
 
-  rm -f "${temp_file}"
+  # rm -f "${temp_file}" # No longer needed with SHARED_MULTIPART_IMAGE
 
   local style_info
   style_info=$(printf "Pos:%s MedPos:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
@@ -804,6 +951,7 @@ Options:
   -o    Overwrite the current notification
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
+  -m    Monitor RAM usage in background. Optional: seconds (default: auto)
   -k    Stop the active WHEP pipeline and server
   -h, --help, -?  Show this help message and exit
 EOF
@@ -833,8 +981,10 @@ main() {
   local force_start_webrtc="false"
   local server_only="false"
   local overwrite="false"
+  local monitor_mem="false"
+  local monitor_duration="auto"
 
-  while getopts "d:t:u:alockswh?" opt; do
+  while getopts "d:t:u:alockswmh?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       t) test_type="${OPTARG}" ;;
@@ -845,6 +995,18 @@ main() {
       c) immediate_cancel="true" ;;
       k) kill_whep_pipeline="true" ;;
       s) run_stress="true" ;;
+      m)
+        monitor_mem="true"
+        # If the next argument doesn't start with a hyphen, use it as duration
+        local next_val="${!OPTIND:-}"
+        if [[ -n "${next_val}" && "${next_val}" =~ ^[0-9]+$ ]]; then
+          monitor_duration="${next_val}"
+          OPTIND=$((OPTIND + 1))
+        elif [[ "${next_val}" == "auto" ]]; then
+          monitor_duration="auto"
+          OPTIND=$((OPTIND + 1))
+        fi
+        ;;
       w)
         force_start_webrtc="true"
         server_only="true"
@@ -885,8 +1047,111 @@ main() {
     suffix="\n\n${LONG_TEXT}"
   fi
 
+  # Setup ADB target early to allow monitor to use it
+  local adb_full_cmd="adb"
   if [[ "${target_ip}" =~ ^(localhost|127\.0\.0\.1)$ ]]; then
     setup_adb_forwarding || true
+    # Extract the device name if setup_adb_forwarding printed it (not ideal, but let's re-run detection)
+    local local_emulator
+    local_emulator=$(adb devices | tail -n +2 | grep -E '^(emulator-|127\.0\.0\.1|localhost)' | awk '{print $1}' | head -n 1 || true)
+    [[ -n "${local_emulator}" ]] && adb_full_cmd="adb -s ${local_emulator}"
+  else
+    # Check if we can match the target IP to a device
+    local matched_device
+    matched_device=$(adb devices | tail -n +2 | grep "^${target_ip}" | awk '{print $1}' | head -n 1 || true)
+    [[ -n "${matched_device}" ]] && adb_full_cmd="adb -s ${matched_device}"
+  fi
+
+  # Prepare shared multipart test images to avoid rate limiting and race conditions
+  readonly SHARED_PNG="/dev/shm/pipup_shared.png"
+  readonly SHARED_JPG="/dev/shm/pipup_shared.jpg"
+  MULTIPART_IMAGES=()
+
+  if [[ "${run_stress}" == "true" || "${run_all}" == "true" || "${test_type}" == "multipart" ]]; then
+    # Download PNG
+    if [[ ! -f "${SHARED_PNG}" || ! -s "${SHARED_PNG}" ]]; then
+      printf "[SYSTEM] Downloading shared PNG for multipart tests... "
+      if curl -sL --fail "${PNG_URL}" -o "${SHARED_PNG}"; then
+        printf "OK\n"
+      else
+        printf "FAILED (generating local fallback)\n"
+        printf 'iVBORw0KGgoAAAANSUhEUgAAAAgAAAAICAYAAADED76LAAAADklEQVR42mNkYGD4DwABBQEA8RE6XgAAAABJRU5ErkJggg==' | base64 -d > "${SHARED_PNG}"
+      fi
+    fi
+    MULTIPART_IMAGES+=("${SHARED_PNG}")
+
+    # Download JPG
+    if [[ ! -f "${SHARED_JPG}" || ! -s "${SHARED_JPG}" ]]; then
+      printf "[SYSTEM] Downloading shared JPG for multipart tests... "
+      if curl -sL --fail "${JPG_URL}" -o "${SHARED_JPG}"; then
+        printf "OK\n"
+      else
+        printf "FAILED (reusing PNG as fallback)\n"
+        cp "${SHARED_PNG}" "${SHARED_JPG}"
+      fi
+    fi
+    MULTIPART_IMAGES+=("${SHARED_JPG}")
+  fi
+
+  # Ensure WebServer is listening before starting tests (robust readiness check)
+  if [[ "${target_ip}" =~ ^(localhost|127\.0\.0\.1)$ ]]; then
+    printf "[SYSTEM] Waiting for PiPup WebServer on port %s... " "${PORT}"
+    local ready=false
+    for ((i=1; i<=15; i++)); do
+      if (printf '' > "/dev/tcp/127.0.0.1/${PORT}") >/dev/null 2>&1; then
+        ready=true
+        break
+      fi
+      sleep 1
+      printf "."
+    done
+    if [[ "${ready}" == "true" ]]; then
+      printf " READY\n"
+    else
+      printf " TIMEOUT (continuing anyway)\n"
+    fi
+  fi
+
+  local recovery_time=12 # Default for single test
+  if [[ "${monitor_mem}" == "true" ]]; then
+    if [[ "${monitor_duration}" == "auto" ]]; then
+      local count_for_duration=1
+      if [[ "${run_stress}" == "true" ]]; then
+        count_for_duration="${STRESS_ITERATIONS}"
+        recovery_time=30
+      elif [[ "${run_all}" == "true" ]]; then
+        local test_count=0
+        for t in "${TEST_TYPES[@]}"; do [[ "$t" != "cancel" ]] && test_count=$((test_count + 1)); done
+        count_for_duration="${test_count}"
+        recovery_time=30
+      fi
+      # Simple formula: (Display Time with Buffer) + Setup + Recovery
+      monitor_duration=$(( (count_for_duration * (DURATION + MONITOR_TEST_BUFFER)) + MONITOR_SETUP_BUFFER + recovery_time ))
+    fi
+
+    printf "Timestamp,TotalPSS,JavaHeap,NativeHeap\n" > "${MEM_LOG_FILE}"
+    printf "${CLR_MONITOR}[SYSTEM] Starting background RAM monitoring (Duration: %ss, Target: %s)...${CLR_RESET}\n" \
+      "${monitor_duration}" "${adb_full_cmd}"
+
+    # Take initial synchronous baseline to ensure the log is not empty for fast tests
+    baseline_info=$(${adb_full_cmd} shell dumpsys meminfo "${MEM_PACKAGE}" 2>/dev/null || printf "")
+    if [[ -n "${baseline_info}" ]]; then
+       local pss java native
+       pss=$(get_mem_val "${baseline_info}" "TOTAL PSS:")
+       java=$(get_mem_val "${baseline_info}" "Java Heap:")
+       native=$(get_mem_val "${baseline_info}" "Native Heap:")
+       [[ "${pss}" != "0" ]] && printf "%s,%s,%s,%s\n" "$(date +"%H:%M:%S")" "${pss}" "${java}" "${native}" >> "${MEM_LOG_FILE}"
+    fi
+
+    monitor_memory "${monitor_duration}" "${adb_full_cmd}" &
+    monitor_pid=$!
+
+    cleanup_monitor() {
+      if [[ -n "${monitor_pid:-}" ]]; then
+        kill "${monitor_pid}" 2>/dev/null || true
+      fi
+    }
+    trap cleanup_monitor SIGINT SIGTERM EXIT
   fi
 
   # Start the background WHEP service for WebRTC/WHEP testing only if needed
@@ -963,6 +1228,7 @@ main() {
   run_stress_test() {
     local target_ip="${1}"
     local suffix="${2}"
+    local wait_time="${3:-20}"
 
     printf "[STRESS] Initiating parallel bombardment of %d requests...\n" "${STRESS_ITERATIONS}"
     printf "[STRESS] Spawning background jobs... "
@@ -973,32 +1239,42 @@ main() {
 
     local num_types=${#TEST_TYPES[@]}
     local i
-    for ((i = 0; i < STRESS_ITERATIONS; i++)); do
-      local seed
-      seed=$(date +%N | sed 's/^0*//')
-      local rand_idx=$(((seed + i) % num_types))
-      local type="${TEST_TYPES[rand_idx]}"
+    (
+      for ((i = 0; i < STRESS_ITERATIONS; i++)); do
+        local seed
+        seed=$(date +%N | sed 's/^0*//')
+        local rand_idx=$(((seed + i) % num_types))
+        local type="${TEST_TYPES[rand_idx]}"
 
-      [[ "${type}" == "cancel" ]] && continue
+        # Avoid 'cancel' during stress to ensure full count and prevent queue clearing
+        while [[ "${type}" == "cancel" ]]; do
+           seed=$((seed + 1))
+           rand_idx=$(((seed + i) % num_types))
+           type="${TEST_TYPES[rand_idx]}"
+        done
 
-      local radius border_w padding anim_type anim_dur fit
-      local style_data
-      style_data=$(get_random_style "${type}")
-      read -r radius border_w padding anim_type anim_dur fit <<< "${style_data}"
+        local radius border_w padding anim_type anim_dur fit
+        local style_data
+        style_data=$(get_random_style "${type}")
+        read -r radius border_w padding anim_type anim_dur fit <<< "${style_data}"
 
-      if [[ "${type}" == "multipart" ]]; then
-        send_multipart_test "${target_ip}" "$(( RANDOM % 5 ))" "${suffix}" \
-          "$(( RANDOM % 4 ))" "${padding}" "${anim_type}" \
-          "${anim_dur}" "${overwrite}" &
-        continue
-      fi
+        if [[ "${type}" == "multipart" ]]; then
+          send_multipart_test "${target_ip}" "$(( RANDOM % 5 ))" "${suffix}" \
+            "$(( RANDOM % 4 ))" "${padding}" "${anim_type}" \
+            "${anim_dur}" "${overwrite}" &
+          continue
+        fi
 
-      local media
-      media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
-      dispatch_test "${type}" "Stress #${i}" "$(( RANDOM % 5 ))" "${media}" "${fit}" &
-    done
+        local media
+        media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
+        dispatch_test "${type}" "Stress #${i}" "$(( RANDOM % 5 ))" "${media}" "${fit}" &
+      done
+      wait
+    )
 
+    printf "\n[SYSTEM] All requests sent. Waiting for app to process queue and monitor to finish...\n"
     wait
+    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${wait_time}"
     printf "\n[STRESS] Execution wave completed successfully.\n"
   }
 
@@ -1032,11 +1308,13 @@ main() {
       idx=$((idx + 1))
       sleep "$((DURATION - 1))"
     done
+
+    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${recovery_time}"
     return 0
   fi
 
   if [[ "${run_stress}" == "true" ]]; then
-    run_stress_test "${target_ip}" "${suffix}"
+    run_stress_test "${target_ip}" "${suffix}" "${recovery_time}"
     return 0
   fi
 
@@ -1081,6 +1359,8 @@ main() {
     print_table_header
     dispatch_test "${test_type}" "${test_type^^} Test" 0 "${media}" "${fit}"
   fi
+
+  finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${recovery_time}"
 }
 
 main "$@"
