@@ -11,7 +11,7 @@ set -euo pipefail
 readonly DEFAULT_IP='127.0.0.1'
 readonly PORT='7979'
 readonly DURATION=10
-readonly STRESS_ITERATIONS=50
+STRESS_ITERATIONS=50
 
 readonly WHEP_STATE_FILE='/dev/shm/pipup_whep.state'
 WHEP_TIMEOUT=600  # 10 minutes
@@ -40,9 +40,10 @@ readonly STREAM_WEBRTC_PORT='8556'
 # Memory Monitoring
 readonly MEM_LOG_FILE='/dev/shm/pipup_mem.csv'
 readonly MEM_PACKAGE='nl.rogro82.pipup'
-readonly MONITOR_TEST_BUFFER=6
-readonly MONITOR_SETUP_BUFFER=30
+readonly MONITOR_TEST_BUFFER=2
+readonly MONITOR_SETUP_BUFFER=10
 monitor_pid=""
+MONITOR_START_TIME=0
 
 # Fallback Configuration
 readonly WHEP_FALLBACK_PORT="${STREAM_WHEP_PORT}"
@@ -110,33 +111,57 @@ readonly CLR_MONITOR='\033[1;33m' # Bold Yellow
 #######################################
 
 #######################################
+# Internal helper to extract values from simple JSON objects using sed.
+# Arguments:
+#   json: String containing basic JSON object.
+#   key: String, the field name to extract.
+# Outputs:
+#   Writes the extracted value to STDOUT.
+#######################################
+extract_json_val() {
+  local json="${1:-}"
+  local key="${2:-}"
+  [[ -z "${json}" || -z "${key}" ]] && return
+
+  # Use sed to find "key":"value" or "key":value
+  printf '%s\n' "${json}" | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\?\([^\",}]*\)\"\?.*/\1/p"
+}
+
+#######################################
 # Internal helper to extract memory values robustly from dumpsys output.
+# Arguments:
+#   data: String containing dumpsys meminfo output.
+#   label: String, the label to look for (e.g. "TOTAL PSS:").
+# Outputs:
+#   Writes the numeric value to STDOUT.
 #######################################
 get_mem_val() {
   local data="${1:-}"
   local label="${2:-}"
-  [[ -z "${data}" || -z "${label}" ]] && echo "0" && return
+  [[ -z "${data}" || -z "${label}" ]] && printf "0\n" && return
 
   local line
-  line=$(echo "${data}" | grep "${label}" | head -n 1 || true)
-  [[ -z "${line}" ]] && echo "0" && return
+  line=$(printf '%s\n' "${data}" | grep "${label}" | head -n 1 || true)
+  [[ -z "${line}" ]] && printf "0\n" && return
 
   local val=${line#*"${label}"}
-  # Remove leading whitespace
   val="${val#"${val%%[![:space:]]*}"}"
-  # Extract first word (the number)
   val="${val%%[[:space:]]*}"
-  # Strip non-numeric characters (like commas) just in case
   val="${val//[!0-9]/}"
 
-  echo "${val:-0}"
+  printf '%s\n' "${val:-0}"
 }
 
 #######################################
 # Background function to monitor device memory usage.
+# Globals:
+#   MEM_PACKAGE
+#   MEM_LOG_FILE
 # Arguments:
-#   duration: Seconds to monitor.
-#   adb_cmd: Full adb command with serial (e.g., "adb -s emulator-5554").
+#   duration: Integer, monitoring time in seconds.
+#   adb_cmd: String, the full adb command with serial.
+# Outputs:
+#   Writes CSV entries to MEM_LOG_FILE.
 #######################################
 monitor_memory() {
   local duration="${1}"
@@ -166,7 +191,16 @@ monitor_memory() {
 }
 
 #######################################
-# Analyzes the collected memory log and prints a summary using only Bash built-ins.
+# Analyzes the collected memory log and prints a summary.
+# Globals:
+#   MEM_LOG_FILE
+#   CLR_MONITOR
+#   CLR_RESET
+#   CLR_SUCCESS
+# Arguments:
+#   None
+# Outputs:
+#   Memory statistics summary to STDOUT
 #######################################
 print_memory_summary() {
   [[ ! -f "${MEM_LOG_FILE}" ]] && return
@@ -175,7 +209,6 @@ print_memory_summary() {
   local first_pss=0 last_pss=0
   local count=0
 
-  # Internal function for pseudo-float formatting in pure Bash
   format_mb() {
     local raw="${1:-0}"
     local val=${raw//[!0-9]/}
@@ -187,16 +220,11 @@ print_memory_summary() {
 
   printf "\n${CLR_MONITOR}[ANALYSIS] Memory Statistics (from %s):${CLR_RESET}\n" "${MEM_LOG_FILE}"
 
-  # Read CSV line by line using Bash, stripping possible \r
   while IFS=',' read -r _ pss_val java_val native_val || [[ -n "${pss_val}" ]]; do
-    # Skip header and empty pss
     [[ "${pss_val}" == "TotalPSS" || -z "${pss_val}" ]] && continue
-
-    # Strip any \r or non-numeric whitespace
     local pss=${pss_val//[!0-9]/}
     local java=${java_val//[!0-9]/}
     local native=${native_val//[!0-9]/}
-
     [[ -z "${pss}" ]] && continue
 
     count=$(( count + 1 ))
@@ -214,7 +242,6 @@ print_memory_summary() {
     printf "  - Native Heap (Pk): " ; format_mb "$max_native" ; printf "\n"
     printf "  - Recovery:         " ; format_mb "$last_pss" ; printf " (Baseline: " ; format_mb "$first_pss" ; printf ")\n"
 
-    # Calculate recovery (allow 25% growth as stable)
     if [[ $(( last_pss )) -le $(( first_pss * 125 / 100 )) ]]; then
       printf "  - Health Status:    %bPASSED (Stable)%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
     else
@@ -226,25 +253,79 @@ print_memory_summary() {
 }
 
 #######################################
-# Finishes monitoring, waits for recovery, and prints summary.
+# Finishes monitoring, waits for recovery if needed, and prints summary.
+# Globals:
+#   MONITOR_START_TIME
+#   CLR_MONITOR
+#   CLR_RESET
 # Arguments:
-#   is_mon: Boolean, if memory monitoring is active.
-#   mon_pid: PID of the monitoring process.
-#   wait_time: Seconds to wait for recovery.
+#   is_mon: Boolean string ("true"/"false") indicating if monitor is active.
+#   mon_pid: Integer, the PID of the background monitor process.
+#   duration: Integer, the original calculated total duration.
+# Outputs:
+#   Status messages and final analysis summary to STDOUT.
 #######################################
 finish_monitoring() {
   local is_mon="${1}"
   local mon_pid="${2}"
-  local wait_time="${3}"
+  local duration="${3}"
 
   [[ "${is_mon}" != "true" ]] && return
 
-  printf "\n${CLR_MONITOR}[SYSTEM] Waiting %ss for memory impact/recovery...${CLR_RESET}\n" "${wait_time}"
-  sleep "${wait_time}"
+  local now
+  now=$(date +%s)
+  local target_end=$(( MONITOR_START_TIME + duration ))
+  local remaining=$(( target_end - now ))
 
-  [[ -n "${mon_pid:-}" ]] && kill "${mon_pid}" 2>/dev/null || true
+  if [ "${remaining}" -gt 0 ]; then
+    local h=$((remaining / 3600))
+    local m=$(( (remaining % 3600) / 60 ))
+    local s=$((remaining % 60))
+    local time_str=""
+    [[ $h -gt 0 ]] && time_str+="${h}h "
+    [[ $m -gt 0 || $h -gt 0 ]] && time_str+="${m}m "
+    time_str+="${s}s"
+
+    printf "\n${CLR_MONITOR}[SYSTEM] Waiting for popups to finish and memory to stabilize (%s)...${CLR_RESET}\n" "${time_str}"
+    sleep "${remaining}"
+  fi
+
+  printf "[SYSTEM] Processing final monitoring data...\n"
+  kill "${mon_pid}" 2>/dev/null || true
   printf "%b[SYSTEM] Monitoring finished.%b\n" "${CLR_MONITOR}" "${CLR_RESET}"
   print_memory_summary
+}
+
+#######################################
+# Signal and exit handler to ensure background processes are cleaned up.
+# Globals:
+#   monitor_pid
+#   CLR_ERROR
+#   CLR_RESET
+#   CLR_SUCCESS
+# Arguments:
+#   opt_mode: Optional string, "INT" for interrupt mode.
+# Outputs:
+#   Cleanup status messages to STDOUT.
+# Returns:
+#   1 if interrupted, 0 otherwise.
+#######################################
+cleanup_all() {
+  trap - SIGINT SIGTERM EXIT
+  printf "\n%b[SYSTEM] Interrupt/Exit signal received. Cleaning up background jobs...%b\n" "${CLR_ERROR}" "${CLR_RESET}"
+
+  local pids
+  pids=$(jobs -p)
+  if [[ -n "${pids}" ]]; then
+    # shellcheck disable=SC2086
+    kill ${pids} 2>/dev/null || true
+  fi
+
+  [[ -n "${monitor_pid:-}" ]] && kill "${monitor_pid}" 2>/dev/null || true
+  stop_whep_service true
+
+  printf "%b[SYSTEM] Cleanup complete. Goodbye.%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
+  [[ "${1:-}" == "INT" ]] && exit 1 || exit 0
 }
 
 #######################################
@@ -254,7 +335,7 @@ finish_monitoring() {
 # Arguments:
 #   None
 # Outputs:
-#   Echoes "infinite/24h" or "X min".
+#   Writes a formatted string (e.g. "10 min") to STDOUT.
 #######################################
 get_timeout_display() {
   if [[ "${WHEP_TIMEOUT}" -ge 86400 ]]; then
@@ -267,9 +348,11 @@ get_timeout_display() {
 #######################################
 # Resolves the corresponding JSON media payload string for a given test type.
 # Arguments:
-#   type: String, metadata category identifier (e.g., "png", "video").
+#   type: String category identifier (e.g., "png", "video").
+#   url: Optional string custom URL.
+#   fit: Optional string video fit mode (default: "cover").
 # Outputs:
-#   Echoes the JSON formatted string or "null".
+#   Writes the JSON formatted string or "null" to STDOUT.
 #######################################
 get_media_payload() {
   local type="${1}"
@@ -288,10 +371,13 @@ get_media_payload() {
 
 #######################################
 # Selects a random theme from the associative array.
+# Globals:
+#   THEME_KEYS
+#   THEMES
 # Arguments:
 #   None
 # Outputs:
-#   Echoes a semicolon-separated string: "bg;border;title_color;message_color"
+#   Writes semicolon-separated colors to STDOUT.
 #######################################
 get_random_theme_colors() {
   local random_index=$((RANDOM % ${#THEME_KEYS[@]}))
@@ -301,16 +387,20 @@ get_random_theme_colors() {
 
 #######################################
 # Prints a standardized, colorized table header for test results.
+# Globals:
+#   CLR_HEADER
+#   CLR_RESET
+#   CLR_PARAM
 # Arguments:
 #   None
 # Outputs:
-#   Writes the table header and separator line to stdout.
+#   Writes the table header to STDOUT.
 #######################################
 print_table_header() {
-  printf "${CLR_HEADER}%-12s | %-15s | %-76s | %-15s | %-6s${CLR_RESET}\n" \
-    "TEST TYPE" "THEME" "STYLE PARAMETERS" "ENDPOINT" "HTTP"
+  printf "${CLR_HEADER}%-12s | %-15s | %-76s | %-15s | %-6s | %-20s${CLR_RESET}\n" \
+    "TEST TYPE" "THEME" "STYLE PARAMETERS" "ENDPOINT" "HTTP" "JSON STATUS"
   printf "${CLR_PARAM}%s${CLR_RESET}\n" \
-    "--------------------------------------------------------------------------------------------------------------------------------------"
+    "--------------------------------------------------------------------------------------------------------------------------------------------------------"
 }
 
 #######################################
@@ -320,7 +410,7 @@ print_table_header() {
 # Arguments:
 #   None
 # Outputs:
-#   Writes space-separated PID and Port/Mode to stdout if valid.
+#   Writes space-separated PID and Port/Mode to STDOUT.
 #######################################
 parse_whep_state() {
   if [[ -f "${WHEP_STATE_FILE}" ]]; then
@@ -335,11 +425,12 @@ parse_whep_state() {
 #######################################
 # Generates randomized layout configuration styling parameters.
 # Globals:
+#   RANDOM
 #   MIN_PADDING
 # Arguments:
-#   type: String, metadata category identifier (e.g., "png", "whep").
+#   type: String category identifier.
 # Outputs:
-#   Prints space-separated values: radius border padding anim_type anim_dur fit
+#   Writes space-separated values (radius border padding etc.) to STDOUT.
 #######################################
 get_random_style() {
   local type="${1}"
@@ -369,34 +460,49 @@ get_random_style() {
 #   CLR_ERROR
 # Arguments:
 #   type: String, capitalized identifier.
-#   theme: String, theme identification profile name.
-#   style: String, layout metric information line.
-#   target: String, IP routing endpoint address.
-#   code: Integer, HTTP response status value.
+#   theme: String theme name.
+#   style: String info line.
+#   target: String IP address.
+#   result: String "CODE|BODY" response.
 # Outputs:
-#   Writes colorized terminal row representation to stdout.
+#   Writes a colorized terminal row to STDOUT.
 #######################################
 print_result_row() {
   local type="${1}"
   local theme="${2}"
   local style="${3}"
   local target="${4}"
-  local code="${5}"
+  local result="${5}"
+
+  local code="${result%%|*}"
+  local body="${result#*|}"
+  [[ "${code}" == "${body}" ]] && body="" # No body returned
+
+  local status
+  status=$(extract_json_val "${body}" "status")
+  local message
+  message=$(extract_json_val "${body}" "message")
 
   local status_color="${CLR_SUCCESS}"
-  [[ "${code}" != "200" ]] && status_color="${CLR_ERROR}"
+  if [[ "${code}" != "200" || "${status}" == "Error" ]]; then
+    status_color="${CLR_ERROR}"
+  fi
 
-  printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-76s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET}\n" \
-    "${type}" "${theme}" "${style}" "${target}" "${code}"
+  local status_display="N/A"
+  if [[ -n "${status}" ]]; then
+    status_display="${status}: ${message}"
+  fi
+
+  printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-76s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET} | ${status_color}%-20s${CLR_RESET}\n" \
+    "${type}" "${theme}" "${style}" "${target}" "${code}" "${status_display}"
 }
 
 #######################################
-# Stops the active background WHEP service.
-# Cleans up Docker containers, netcat processes, and state files.
+# Stops the active background WHEP service and cleans up Docker/Netcat.
 # Arguments:
-#   silent: Boolean, if true, suppresses "No active pipeline" messages.
+#   silent: Optional boolean string (default: false) to suppress status info.
 # Outputs:
-#   Writes status information to stdout.
+#   Writes status information to STDOUT.
 #######################################
 stop_whep_service() {
   local silent="${1:-false}"
@@ -425,8 +531,7 @@ stop_whep_service() {
 }
 
 #######################################
-# Starts a persistent background WHEP service serving the video in a loop.
-# Spawns MediaMTX or Go2RTC via Docker, or falls back to a netcat mock server.
+# Starts a persistent background WHEP service serving a video loop.
 # Globals:
 #   ENGINE_IMAGE
 #   ENGINE_NAME
@@ -438,9 +543,11 @@ stop_whep_service() {
 #   WHEP_STATE_FILE
 #   WHEP_TIMEOUT
 # Arguments:
-#   force_restart: Boolean, if true, kills existing service before starting.
+#   force_restart: Optional boolean string (default: false).
 # Outputs:
-#   Writes status information to stdout.
+#   Writes status information to STDOUT.
+# Returns:
+#   0 on success, 1 on error.
 #######################################
 start_whep_service() {
   local force_restart="${1:-false}"
@@ -698,18 +805,15 @@ EOF
 
 #######################################
 # Sets up ADB port forwarding based on target location or specific device.
-# Resolves connected target network IP addresses or falls back to locally
-# deployed emulators to prevent device collisions.
 # Globals:
-#   PORT: Integer, read-only system service port identifier.
-#   target_ip: String, checked to determine matching mechanics.
+#   PORT
+#   target_ip
 # Arguments:
 #   None
 # Outputs:
-#   Writes logging actions and port mapping diagnostics to stdout.
+#   Writes logging actions and port mapping diagnostics to STDOUT.
 # Returns:
-#   0 if setup succeeded or routing is already open.
-#   1 if adb tool binary is missing or routing generation fails.
+#   0 on success, 1 on error.
 #######################################
 setup_adb_forwarding() {
   if (printf '' > "/dev/tcp/127.0.0.1/${PORT}") >/dev/null 2>&1; then
@@ -775,10 +879,12 @@ setup_adb_forwarding() {
 
 #######################################
 # Sends a request to clear the active notification queue on the server.
+# Globals:
+#   PORT
 # Arguments:
-#   target_ip: String, IP address of the PiPup server.
+#   target_ip: String IP address of the PiPup server.
 # Outputs:
-#   Writes HTTP status results to stdout.
+#   Writes HTTP status results to STDOUT.
 #######################################
 send_cancel_request() {
   local target_ip="${1}"
@@ -786,31 +892,42 @@ send_cancel_request() {
 
   printf "[SYSTEM] Sending CANCEL request to %s\n" "${target_ip}"
   local response
-  response=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${endpoint}" || printf '000')
-  printf "[RESULT] Cancel HTTP %s\n" "${response}"
+  response=$(curl -s -w "\n%{http_code}" -X POST "${endpoint}" || printf "\n000")
+
+  local code
+  code=$(printf '%s\n' "${response}" | tail -n 1)
+  local body
+  body=$(printf '%s\n' "${response}" | head -n -1)
+
+  printf "[RESULT] Cancel HTTP %s | Status: %s\n" "${code}" "$(extract_json_val "${body}" "status")"
 }
 
 #######################################
-# Sends a JSON notification payload to the PiPup server.
+# Sends a JSON notification payload to the PiPup server via POST.
+# Globals:
+#   PORT
+#   DURATION
+#   DEFAULT_TITLE_SIZE
+#   DEFAULT_MSG_SIZE
 # Arguments:
-#   target_ip: String, IP address of the target server.
-#   title: String, notification title text.
-#   message: String, notification body text.
-#   media_json: String, JSON formatted string containing the media object, or "null".
-#   position: Integer, screen location index (0-4).
-#   bg_color: String, background hex color code.
-#   border_width: Integer, border thickness in pixels.
-#   border_color: String, border hex color code.
-#   title_color: String, title text hex color code.
-#   msg_color: String, body text hex color code.
-#   border_radius: Integer, layout corner rounding radius in pixels.
-#   media_pos: Integer, relative media alignment index (0-3).
-#   padding: Integer, inner layout padding in pixels (>= 16).
-#   anim_type: Integer, animation type index (0-10).
-#   anim_duration: Integer, animation duration in ms.
-#   overwrite: Boolean, true or false.
+#   target_ip: String IP address of the target server.
+#   title: String title text.
+#   message: String message text.
+#   media_json: String JSON media configuration.
+#   position: Integer screen position (0-4).
+#   bg_color: String background hex color.
+#   border_width: Integer border width in pixels.
+#   border_color: String border hex color.
+#   title_color: String title hex color.
+#   msg_color: String message hex color.
+#   border_radius: Integer radius in pixels.
+#   media_pos: Integer media alignment (0-3).
+#   padding: Integer padding in pixels.
+#   anim_type: Integer animation type index.
+#   anim_duration: Integer duration in milliseconds.
+#   overwrite: Optional boolean string (default: false).
 # Outputs:
-#   Writes test parameters and server response codes to stdout.
+#   Writes "CODE|BODY" response string to STDOUT.
 #######################################
 send_json_notification() {
   local target_ip="${1}"
@@ -867,28 +984,35 @@ EOF
 )
 
   local response
-  response=$(curl -s --max-time 60 -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
+  response=$(curl -s --max-time 60 -w "\n%{http_code}" -X POST "${endpoint}" \
     -H "Content-Type: application/json" \
-    -d "${json_payload}" || printf "000")
+    -d "${json_payload}" || printf "\n000")
 
-  printf "%s" "${response}"
+  local code
+  code=$(printf '%s\n' "${response}" | tail -n 1)
+  local body
+  body=$(printf '%s\n' "${response}" | head -n -1)
+
+  printf "%s|%s" "${code}" "${body}"
 }
 
 #######################################
-# Sends an image notification using multipart/form-data.
+# Sends an image notification using multipart/form-data via POST.
+# Globals:
+#   PORT
+#   DURATION
+#   MULTIPART_IMAGES
 # Arguments:
-#   target_ip: String, IP address of the target server.
-#   position: Integer, screen location index (0-4).
-#   suffix: String, optional additional debug text to append to the layout body.
-#   media_pos: Integer, relative media alignment index (0-3), defaults to 0.
-#   padding: Integer, inner layout padding in pixels, defaults to 16.
-#   anim_type: Integer, animation type index (0-10).
-#   anim_duration: Integer, animation duration in ms.
-#   overwrite: Boolean, true or false.
+#   target_ip: String IP address of the target server.
+#   position: Integer screen position index (0-4).
+#   suffix: Optional string debug message.
+#   media_pos: Optional integer alignment index (0-3).
+#   padding: Optional integer padding in pixels.
+#   anim_type: Optional integer animation index (0-10).
+#   anim_duration: Optional integer duration in ms.
+#   overwrite: Optional boolean string (default: false).
 # Outputs:
-#   Writes processing status and server HTTP codes to stdout.
-# Returns:
-#   0 if successful, 1 if the test asset download fails.
+#   Writes result row to STDOUT.
 #######################################
 send_multipart_test() {
   local target_ip="${1}"
@@ -910,7 +1034,7 @@ send_multipart_test() {
     "${img_ext^^}" "${position}" "${media_pos}" "${padding}" "${overwrite}" "${suffix}")
 
   local response
-  response=$(curl -s --max-time 60 -o /dev/null -w "%{http_code}" -X POST "${endpoint}" \
+  response=$(curl -s --max-time 60 -w "\n%{http_code}" -X POST "${endpoint}" \
     -F "title=Multipart Test" \
     -F "message=${full_msg}" \
     -F "image=@${img_file}" \
@@ -920,7 +1044,12 @@ send_multipart_test() {
     -F "contentPadding=${padding}" \
     -F "animationType=${anim_type}" \
     -F "animationDuration=${anim_duration}" \
-    -F "overwrite=${overwrite}" || printf '000')
+    -F "overwrite=${overwrite}" || printf '\n000')
+
+  local code
+  code=$(printf '%s\n' "${response}" | tail -n 1)
+  local body
+  body=$(printf '%s\n' "${response}" | head -n -1)
 
   # rm -f "${temp_file}" # No longer needed with SHARED_MULTIPART_IMAGE
 
@@ -928,7 +1057,7 @@ send_multipart_test() {
   style_info=$(printf "Pos:%s MedPos:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
     "${position}" "${media_pos}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
 
-  print_result_row "MULTIPART" "N/A (Form-Data)" "${style_info}" "${target_ip}" "${response}"
+  print_result_row "MULTIPART" "N/A (Form-Data)" "${style_info}" "${target_ip}" "${code}|${body}"
 }
 
 #######################################
@@ -936,16 +1065,17 @@ send_multipart_test() {
 # Arguments:
 #   None
 # Outputs:
-#   Writes CLI options to stderr.
+#   CLI options summary to STDERR
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-a] [-l] [-o] [-c] [-s] [-k] [-h]
+Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]] [-a] [-l] [-o] [-c] [-s] [-k] [-h]
 Options:
   -d    Target IP (default: ${DEFAULT_IP})
   -w    Start WebRTC server only. Optional: minutes (0 = infinite/24h)
   -t    Test type: ${TEST_TYPES[*]}
   -u    Custom media URL (overrides default assets)
+  -r    Repeat count for single/all tests, OR iterations for stress test (default: 5 for tests, 50 for stress)
   -a    Run all standard tests in sequence
   -l    Add long text to messages
   -o    Overwrite the current notification
@@ -965,6 +1095,19 @@ EOF
 # Outputs:
 #   Passes standard logs and structural test suite sequences to stdout.
 #######################################
+#######################################
+# Main entry point for the script. Handles CLI arguments and test execution.
+# Globals:
+#   DEFAULT_IP
+#   TEST_TYPES
+#   STRESS_ITERATIONS
+#   MONITOR_START_TIME
+#   monitor_pid
+# Arguments:
+#   $@: Array of command line arguments.
+# Outputs:
+#   Writes logs and test results to STDOUT/STDERR.
+#######################################
 main() {
   if [[ "${1:-}" == "--help" || "${1:-}" == "-help" || "${1:-}" == "-?" ]]; then
     usage
@@ -983,8 +1126,10 @@ main() {
   local overwrite="false"
   local monitor_mem="false"
   local monitor_duration="auto"
+  local repeat_count=1
+  local repeat_explicit="false"
 
-  while getopts "d:t:u:alockswmh?" opt; do
+  while getopts "d:t:u:alockswmhr?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       t) test_type="${OPTARG}" ;;
@@ -995,6 +1140,15 @@ main() {
       c) immediate_cancel="true" ;;
       k) kill_whep_pipeline="true" ;;
       s) run_stress="true" ;;
+      r)
+        repeat_count=5
+        repeat_explicit="true"
+        local next_val="${!OPTIND:-}"
+        if [[ -n "${next_val}" && "${next_val}" =~ ^[0-9]+$ ]]; then
+          repeat_count="${next_val}"
+          OPTIND=$((OPTIND + 1))
+        fi
+        ;;
       m)
         monitor_mem="true"
         # If the next argument doesn't start with a hyphen, use it as duration
@@ -1040,6 +1194,10 @@ main() {
   if [[ "${immediate_cancel}" == "true" ]]; then
     send_cancel_request "${target_ip}"
     return 0
+  fi
+
+  if [[ "${run_stress}" == "true" && "${repeat_explicit}" == "true" ]]; then
+    STRESS_ITERATIONS="${repeat_count}"
   fi
 
   local suffix=""
@@ -1112,22 +1270,30 @@ main() {
     fi
   fi
 
+  trap 'cleanup_all INT' SIGINT SIGTERM
+
   local recovery_time=12 # Default for single test
   if [[ "${monitor_mem}" == "true" ]]; then
     if [[ "${monitor_duration}" == "auto" ]]; then
       local count_for_duration=1
       if [[ "${run_stress}" == "true" ]]; then
-        count_for_duration="${STRESS_ITERATIONS}"
+        # If overwrite is active, the total display time is almost independent of count
+        [[ "${overwrite}" == "true" ]] && count_for_duration=1 || count_for_duration="${STRESS_ITERATIONS}"
         recovery_time=30
       elif [[ "${run_all}" == "true" ]]; then
         local test_count=0
         for t in "${TEST_TYPES[@]}"; do [[ "$t" != "cancel" ]] && test_count=$((test_count + 1)); done
-        count_for_duration="${test_count}"
+        count_for_duration=$(( test_count * repeat_count ))
         recovery_time=30
+      else
+        count_for_duration="${repeat_count}"
       fi
       # Simple formula: (Display Time with Buffer) + Setup + Recovery
       monitor_duration=$(( (count_for_duration * (DURATION + MONITOR_TEST_BUFFER)) + MONITOR_SETUP_BUFFER + recovery_time ))
     fi
+
+    # Ensure monitor duration is at least setup + recovery + some buffer
+    [[ "${monitor_duration}" -lt $(( MONITOR_SETUP_BUFFER + recovery_time + 10 )) ]] && monitor_duration=$(( MONITOR_SETUP_BUFFER + recovery_time + 10 ))
 
     printf "Timestamp,TotalPSS,JavaHeap,NativeHeap\n" > "${MEM_LOG_FILE}"
     printf "${CLR_MONITOR}[SYSTEM] Starting background RAM monitoring (Duration: %ss, Target: %s)...${CLR_RESET}\n" \
@@ -1143,15 +1309,9 @@ main() {
        [[ "${pss}" != "0" ]] && printf "%s,%s,%s,%s\n" "$(date +"%H:%M:%S")" "${pss}" "${java}" "${native}" >> "${MEM_LOG_FILE}"
     fi
 
+    MONITOR_START_TIME=$(date +%s)
     monitor_memory "${monitor_duration}" "${adb_full_cmd}" &
     monitor_pid=$!
-
-    cleanup_monitor() {
-      if [[ -n "${monitor_pid:-}" ]]; then
-        kill "${monitor_pid}" 2>/dev/null || true
-      fi
-    }
-    trap cleanup_monitor SIGINT SIGTERM EXIT
   fi
 
   # Start the background WHEP service for WebRTC/WHEP testing only if needed
@@ -1165,11 +1325,20 @@ main() {
 
   #######################################
   # Wraps randomized styling configurations and maps variables to json dispatchers.
+  # Globals:
+  #   THEME_KEYS
+  #   THEMES
+  #   target_ip
+  #   overwrite
+  #   suffix
   # Arguments:
-  #   type: String, metadata category identifier.
-  #   title: String, notification header layout string.
-  #   pos: Integer, screen quadrant target index.
-  #   media: String, JSON escaped configuration block or null string.
+  #   type: String type identifier.
+  #   title: String notification title.
+  #   pos: Integer screen position.
+  #   media: String JSON media payload.
+  #   fit: Optional string video fit mode.
+  # Outputs:
+  #   Writes test results via print_result_row to STDOUT.
   #######################################
   dispatch_test() {
     local type="${1}"
@@ -1215,20 +1384,72 @@ main() {
   }
 
   #######################################
+  # Internal dispatcher that decides which test method to use.
+  # Globals:
+  #   target_ip
+  #   custom_url
+  #   overwrite
+  #   suffix
+  # Arguments:
+  #   type: String type identifier.
+  #   title: String notification title.
+  #   pos: Integer screen position index.
+  #   target_ip: String target server IP.
+  #   custom_url: Optional string URL override.
+  #   overwrite: Optional boolean string.
+  #   suffix: Optional string debug suffix.
+  #   is_async: Optional boolean string ("true" for background).
+  # Outputs:
+  #   Writes test results to STDOUT.
+  #######################################
+  trigger_test() {
+    local type="${1}"
+    local title="${2}"
+    local pos="${3}"
+    local target_ip="${4}"
+    local custom_url="${5:-}"
+    local overwrite="${6:-false}"
+    local suffix="${7:-}"
+    local is_async="${8:-false}"
+
+    if [[ "${type}" == "multipart" ]]; then
+      if [[ "${is_async}" == "true" ]]; then
+        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" &
+      else
+        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}"
+      fi
+    else
+      local radius border_w padding anim_type anim_dur fit
+      local style_data
+      style_data=$(get_random_style "${type}")
+      read -r radius border_w padding anim_type anim_dur fit <<< "${style_data}"
+
+      local media
+      media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
+      if [[ "${is_async}" == "true" ]]; then
+        dispatch_test "${type}" "${title}" "${pos}" "${media}" "${fit}" &
+      else
+        dispatch_test "${type}" "${title}" "${pos}" "${media}" "${fit}"
+      fi
+    fi
+  }
+
+  #######################################
   # Executes a rapid concurrent background stress test against the endpoint.
   # Globals:
-  #   STRESS_ITERATIONS: Integer, total parallel payloads to dispatch.
-  #   TEST_TYPES: Array, available test configurations.
+  #   STRESS_ITERATIONS
+  #   TEST_TYPES
+  #   monitor_mem
+  #   monitor_pid
   # Arguments:
-  #   target_ip: String, IP address of the target server.
-  #   suffix: String, payload text modifiers.
+  #   target_ip: String IP address of the target server.
+  #   suffix: String text modifier suffix.
   # Outputs:
-  #   Writes stress initialization metrics and test results to stdout.
+  #   Writes stress initialization metrics and test results to STDOUT.
   #######################################
   run_stress_test() {
     local target_ip="${1}"
     local suffix="${2}"
-    local wait_time="${3:-20}"
 
     printf "[STRESS] Initiating parallel bombardment of %d requests...\n" "${STRESS_ITERATIONS}"
     printf "[STRESS] Spawning background jobs... "
@@ -1239,74 +1460,62 @@ main() {
 
     local num_types=${#TEST_TYPES[@]}
     local i
-    (
-      for ((i = 0; i < STRESS_ITERATIONS; i++)); do
-        local seed
-        seed=$(date +%N | sed 's/^0*//')
-        local rand_idx=$(((seed + i) % num_types))
-        local type="${TEST_TYPES[rand_idx]}"
+    local test_pids=()
+    # Run the bombardment in a way that we can easily kill it
+    for ((i = 0; i < STRESS_ITERATIONS; i++)); do
+      local seed
+      seed=$(date +%N | sed 's/^0*//')
+      local rand_idx=$(((seed + i) % num_types))
+      local type="${TEST_TYPES[rand_idx]}"
 
-        # Avoid 'cancel' during stress to ensure full count and prevent queue clearing
-        while [[ "${type}" == "cancel" ]]; do
-           seed=$((seed + 1))
-           rand_idx=$(((seed + i) % num_types))
-           type="${TEST_TYPES[rand_idx]}"
-        done
-
-        local radius border_w padding anim_type anim_dur fit
-        local style_data
-        style_data=$(get_random_style "${type}")
-        read -r radius border_w padding anim_type anim_dur fit <<< "${style_data}"
-
-        if [[ "${type}" == "multipart" ]]; then
-          send_multipart_test "${target_ip}" "$(( RANDOM % 5 ))" "${suffix}" \
-            "$(( RANDOM % 4 ))" "${padding}" "${anim_type}" \
-            "${anim_dur}" "${overwrite}" &
-          continue
-        fi
-
-        local media
-        media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
-        dispatch_test "${type}" "Stress #${i}" "$(( RANDOM % 5 ))" "${media}" "${fit}" &
+      # Avoid 'cancel' during stress to ensure full count and prevent queue clearing
+      while [[ "${type}" == "cancel" ]]; do
+         seed=$((seed + 1))
+         rand_idx=$(((seed + i) % num_types))
+         type="${TEST_TYPES[rand_idx]}"
       done
-      wait
-    )
 
-    printf "\n[SYSTEM] All requests sent. Waiting for app to process queue and monitor to finish...\n"
-    wait
-    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${wait_time}"
+      trigger_test "${type}" "Stress #${i}" "$(( RANDOM % 5 ))" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "true"
+      test_pids+=($!)
+    done
+
+    # Wait ONLY for the test requests to finish, not the monitor
+    if [ ${#test_pids[@]} -gt 0 ]; then
+        wait "${test_pids[@]}"
+    fi
+
+    printf "\n[SYSTEM] All %d requests processed.\n" "${STRESS_ITERATIONS}"
+    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}"
     printf "\n[STRESS] Execution wave completed successfully.\n"
   }
 
   # --- Execution Flows ---
 
   if [[ "${run_all}" == "true" ]]; then
-    local pos_list
-    mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 1 2 3 | shuf)
-
     print_table_header
 
-    local type
-    local idx=0
-    for type in "${TEST_TYPES[@]}"; do
-      [[ "${type}" == "cancel" ]] && continue
+    local test_count=0
+    for t in "${TEST_TYPES[@]}"; do [[ "$t" != "cancel" ]] && test_count=$((test_count + 1)); done
 
-      if [[ "${type}" == "multipart" ]]; then
-        local radius border_w padding anim_type anim_dur fit
-        read -r radius border_w padding anim_type anim_dur fit <<< "$(get_random_style "${type}")"
+    for ((r = 1; r <= repeat_count; r++)); do
+      [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
 
-        send_multipart_test "${target_ip}" "${pos_list[idx]}" "${suffix}" "$((RANDOM % 4))" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}"
-      else
-        local radius border_w padding anim_type anim_dur fit
-        read -r radius border_w padding anim_type anim_dur fit <<< "$(get_random_style "${type}")"
+      local pos_list
+      mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 1 2 3 | shuf)
 
-        local media
-        media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
-        dispatch_test "${type}" "${type^^} Test" "${pos_list[idx]}" "${media}" "${fit}"
-      fi
+      local type
+      local current_test_idx=0
+      for type in "${TEST_TYPES[@]}"; do
+        [[ "${type}" == "cancel" ]] && continue
+        current_test_idx=$((current_test_idx + 1))
 
-      idx=$((idx + 1))
-      sleep "$((DURATION - 1))"
+        trigger_test "${type}" "${type^^} Test" "${pos_list[current_test_idx-1]}" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "false"
+
+        # Don't sleep after the very last test of the very last run
+        if [[ $r -lt $repeat_count || $current_test_idx -lt $test_count ]]; then
+           sleep "$((DURATION - 1))"
+        fi
+      done
     done
 
     finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${recovery_time}"
@@ -1321,12 +1530,14 @@ main() {
   # Single Test Case Execution
   [[ -z "${test_type}" ]] && test_type="message"
 
-  local radius border_w padding anim_type anim_dur fit
-  read -r radius border_w padding anim_type anim_dur fit <<< "$(get_random_style "${test_type}")"
-
   if [[ "${test_type}" == "multipart" ]]; then
     print_table_header
-    send_multipart_test "${target_ip}" 0 "${suffix}" "$((RANDOM % 4))" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}"
+    for ((r = 1; r <= repeat_count; r++)); do
+      [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
+
+      trigger_test "multipart" "Multipart Test" 0 "${target_ip}" "" "${overwrite}" "${suffix}" "false"
+      [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
+    done
   elif [[ "${test_type}" == "cancel" ]]; then
     local media
     media=$(get_media_payload "png")
@@ -1339,9 +1550,6 @@ main() {
       printf "Test '%s' not recognized.\n" "${test_type}" >&2
       usage
     fi
-
-    local media
-    media=$(get_media_payload "${test_type}" "${custom_url}" "${fit}")
 
     if [[ "${test_type}" == "whep" && -z "${custom_url}" ]]; then
       local state_info
@@ -1357,7 +1565,12 @@ main() {
       fi
     fi
     print_table_header
-    dispatch_test "${test_type}" "${test_type^^} Test" 0 "${media}" "${fit}"
+    for ((r = 1; r <= repeat_count; r++)); do
+      [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
+
+      trigger_test "${test_type}" "${test_type^^} Test" 0 "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "false"
+      [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
+    done
   fi
 
   finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${recovery_time}"

@@ -15,134 +15,156 @@
         const stream = new MediaStream();
         video.srcObject = stream;
 
+        let pc = null;
+
         async function start() {
             const urlParams = new URLSearchParams(window.location.search);
             const streamUrl = urlParams.get('url');
             if (!streamUrl) return;
 
-            console.log('WHEP: Starting connection to ' + streamUrl);
             const startTime = Date.now();
+            let lastError = null;
 
-            try {
-                const hostname = new URL(streamUrl).hostname;
-                const isLocal = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|localhost|10\.0\.2\.2)/.test(hostname) || hostname.endsWith('.local');
+            for (let attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    console.log(`WHEP: Connection attempt ${attempt}/3 to ${streamUrl}`);
 
-                console.log('WHEP: ' + (isLocal ? 'Local' : 'Remote') + ' connection detected');
-
-                const config = {
-                    iceServers: isLocal ? [] : [{ urls: 'stun:stun.l.google.com:19302' }],
-                    iceTransportPolicy: 'all',
-                    bundlePolicy: 'max-bundle'
-                };
-
-                const pc = new RTCPeerConnection(config);
-
-                pc.oniceconnectionstatechange = () => {
-                    console.log('WHEP: ICE Connection State: ' + pc.iceConnectionState);
-                };
-
-                pc.onicegatheringstatechange = () => {
-                    console.log('WHEP: ICE Gathering State: ' + pc.iceGatheringState);
-                };
-
-                pc.onsignalingstatechange = () => {
-                    console.log('WHEP: Signaling State: ' + pc.signalingState);
-                };
-
-                video.onplaying = () => {
-                    const elapsed = Date.now() - startTime;
-                    console.log('WHEP: Video playing after ' + elapsed + 'ms');
-                    if (window.PiPup) window.PiPup.onMediaPlaying();
-                };
-
-                pc.ontrack = (e) => {
-                    console.log('WHEP: Received remote track: ' + e.track.kind);
-                    if (e.track.kind === 'video') {
-                        stream.addTrack(e.track);
-                        video.play().catch(err => console.error('WHEP: Play failed', err));
+                    if (pc) {
+                        pc.close();
+                        pc = null;
                     }
-                };
 
-                if (pc.addTransceiver) {
-                    pc.addTransceiver('video', { direction: 'recvonly' });
-                }
+                    // Clear existing tracks from the stream if any
+                    stream.getTracks().forEach(track => {
+                        stream.removeTrack(track);
+                        track.stop();
+                    });
 
-                console.log('WHEP: Creating offer...');
-                const offerOptions = pc.addTransceiver ? {} : { offerToReceiveVideo: true };
-                const offer = await pc.createOffer(offerOptions);
-                await pc.setLocalDescription(offer);
+                    const hostname = new URL(streamUrl).hostname;
+                    // Improved local detection (IPv4 private, IPv6 local, .local domains, localhost)
+                    const isLocal = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|localhost|10\.0\.2\.2|\[?fe80:)/i.test(hostname) || hostname.endsWith('.local');
 
-                // Wait for ICE gathering to start (Non-trickle WHEP)
-                // On local networks, sending as soon as we have the first candidate is much faster
-                console.log('WHEP: Waiting for initial ICE candidates...');
-                await new Promise(resolve => {
-                    if (pc.iceGatheringState === 'complete') {
-                        resolve();
-                    } else {
-                        const checkState = () => {
-                            // If we have at least one candidate or gathering is complete, proceed
-                            if (pc.iceGatheringState === 'complete' || pc.localDescription.sdp.includes('a=candidate')) {
-                                pc.removeEventListener('icegatheringstatechange', checkState);
-                                resolve();
-                            }
-                        };
-                        pc.addEventListener('icegatheringstatechange', checkState);
-                        // Hard timeout after 1.5 seconds to avoid hanging
-                        setTimeout(resolve, 1500);
+                    console.log('WHEP: ' + (isLocal ? 'Local' : 'Remote') + ' connection detected for ' + hostname);
+
+                    const config = {
+                        iceServers: isLocal ? [] : [{ urls: 'stun:stun.l.google.com:19302' }],
+                        iceTransportPolicy: 'all',
+                        bundlePolicy: 'max-bundle',
+                        iceCandidatePoolSize: 1 // Pre-warm ICE engine
+                    };
+
+                    pc = new RTCPeerConnection(config);
+
+                    pc.oniceconnectionstatechange = () => {
+                        console.log(`WHEP: [${Date.now() - startTime}ms] ICE Connection State: ${pc.iceConnectionState}`);
+                        if (pc.iceConnectionState === 'failed' && attempt === 3) {
+                            if (window.PiPup) window.PiPup.onMediaError('WebRTC ICE Connection Failed');
+                        }
+                    };
+
+                    pc.onicegatheringstatechange = () => {
+                        console.log(`WHEP: [${Date.now() - startTime}ms] ICE Gathering State: ${pc.iceGatheringState}`);
+                    };
+
+                    pc.onsignalingstatechange = () => {
+                        console.log(`WHEP: [${Date.now() - startTime}ms] Signaling State: ${pc.signalingState}`);
+                    };
+
+                    video.onplaying = () => {
+                        const elapsed = Date.now() - startTime;
+                        console.log('WHEP: Video playing after ' + elapsed + 'ms');
+                        if (window.PiPup) window.PiPup.onMediaPlaying();
+                    };
+
+                    pc.ontrack = (e) => {
+                        console.log('WHEP: Received remote track: ' + e.track.kind);
+                        if (e.track.kind === 'video') {
+                            stream.addTrack(e.track);
+                            video.play().catch(err => console.error('WHEP: Play failed', err));
+                        }
+                    };
+
+                    if (pc.addTransceiver) {
+                        pc.addTransceiver('video', { direction: 'recvonly' });
                     }
-                });
 
-                console.log('WHEP: Fetching SDP answer...');
-                const response = await fetch(streamUrl, {
-                    method: 'POST',
-                    body: pc.localDescription.sdp,
-                    headers: { 'Content-Type': 'application/sdp' }
-                });
+                    const offerOptions = pc.addTransceiver ? {} : { offerToReceiveVideo: true };
+                    const offer = await pc.createOffer(offerOptions);
+                    await pc.setLocalDescription(offer);
 
-                if (!response.ok) {
-                    const errorText = await response.text().catch(() => '');
-                    throw new Error('HTTP error ' + response.status + (errorText ? ': ' + errorText.substring(0, 100) : ''));
+                    // Wait for initial ICE candidates (Non-trickle WHEP)
+                    await new Promise(resolve => {
+                        if (pc.iceGatheringState === 'complete') {
+                            resolve();
+                        } else {
+                            const checkState = () => {
+                                // Resolve if we have at least one candidate (faster on local networks)
+                                if (pc.iceGatheringState === 'complete' || pc.localDescription.sdp.includes('a=candidate')) {
+                                    pc.removeEventListener('icegatheringstatechange', checkState);
+                                    resolve();
+                                }
+                            };
+                            pc.addEventListener('icegatheringstatechange', checkState);
+                            // Hard timeout after 1.0 seconds to avoid hanging
+                            setTimeout(resolve, 1000);
+                        }
+                    });
+
+                    console.log(`WHEP: [${Date.now() - startTime}ms] Fetching SDP answer...`);
+                    const response = await fetch(streamUrl, {
+                        method: 'POST',
+                        body: pc.localDescription.sdp,
+                        headers: { 'Content-Type': 'application/sdp' }
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text().catch(() => '');
+                        throw new Error('HTTP error ' + response.status + (errorText ? ': ' + errorText.substring(0, 100) : ''));
+                    }
+
+                    const answerSdpRaw = await response.text();
+                    if (!answerSdpRaw.trim()) {
+                        throw new Error('No SDP answer: Received empty response from server.');
+                    }
+
+                    if (answerSdpRaw.trim().startsWith('<')) {
+                        throw new Error('No SDP answer: Received HTML instead of WebRTC stream.');
+                    }
+
+                    // Strip a=end-of-candidates as it causes parsing errors in some WebView versions
+                    const answerSdp = answerSdpRaw.replace(/a=end-of-candidates\s?\r?\n?/g, "");
+
+                    if (!answerSdp.trim().startsWith('v=')) {
+                        throw new Error('No SDP answer: Response does not start with v=0');
+                    }
+
+                    console.log(`WHEP: [${Date.now() - startTime}ms] Setting remote description...`);
+                    await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+                    console.log(`WHEP: [${Date.now() - startTime}ms] Setup complete, waiting for tracks...`);
+
+                    return; // Success, exit the loop
+                } catch (e) {
+                    lastError = e;
+                    console.warn(`WHEP: Attempt ${attempt} failed: ${e.message}`);
+                    if (attempt < 3) {
+                        await new Promise(r => setTimeout(r, 500)); // Short delay for local networks
+                    }
                 }
-
-                const contentType = response.headers.get('content-type');
-                console.log('WHEP: Response Content-Type: ' + contentType);
-
-                const answerSdpRaw = await response.text();
-
-                // DEBUG: Log the first few bytes as Hex to help diagnose invisible characters
-                const hexStart = Array.from(answerSdpRaw.substring(0, 10))
-                    .map(c => c.charCodeAt(0).toString(16).padStart(2, '0'))
-                    .join(' ');
-                console.log('WHEP: SDP Start (Hex): ' + hexStart);
-
-                if (!answerSdpRaw.trim()) {
-                    throw new Error('No SDP answer: Received empty response from server.');
-                }
-
-                if (answerSdpRaw.trim().startsWith('<')) {
-                    const preview = answerSdpRaw.trim().substring(0, 50).replace(/[\r\n]+/g, ' ');
-                    throw new Error('No SDP answer: Received HTML instead of WebRTC stream. Preview: ' + preview);
-                }
-
-                // Strip a=end-of-candidates as it causes parsing errors in some WebView versions
-                const answerSdp = answerSdpRaw.replace(/a=end-of-candidates\s?\r?\n?/g, "");
-
-                console.log('WHEP: Received answer (length: ' + answerSdp.length + ')');
-
-                if (!answerSdp.trim().startsWith('v=')) {
-                    console.error('WHEP: Invalid SDP content received:', answerSdp);
-                    const preview = answerSdp.trim().substring(0, 100).replace(/[\r\n]+/g, ' ');
-                    throw new Error('No SDP answer: Response does not start with v=0. Preview: ' + preview + '...');
-                }
-
-                console.log('WHEP: Setting remote description...');
-                await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-                console.log('WHEP: Setup complete, waiting for tracks...');
-            } catch (e) {
-                console.error('WHEP Error:', e);
-                if (window.PiPup) window.PiPup.onMediaError(e.message);
             }
+
+            // If we reached here, all attempts failed
+            console.error('WHEP Error: All connection attempts failed.', lastError);
+            if (window.PiPup) window.PiPup.onMediaError(lastError ? lastError.message : 'Connection failed after 3 attempts');
         }
+
+        // Cleanup function for explicitly closing connection
+        window.addEventListener('unload', () => {
+            if (pc) {
+                console.log('WHEP: Closing RTCPeerConnection');
+                pc.close();
+                pc = null;
+            }
+        });
 
         start();
     </script>

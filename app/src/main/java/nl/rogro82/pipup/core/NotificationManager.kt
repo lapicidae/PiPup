@@ -43,12 +43,42 @@ class NotificationManager(
     fun enqueue(props: PopupProps) {
         handler.post {
             if (props.overwrite) {
-                Log.d(TAG, "Overwrite requested, prioritizing new popup and interrupting current")
-                handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
+                // 1. Handle case where a popup is already visible -> Reuse it!
+                currentPopup?.let {
+                    Log.d(TAG, "Overwrite: Updating existing visible popup")
+                    handler.removeCallbacksAndMessages(durationToken)
+                    it.updateFromProps(props)
+                    it.startMedia() // Restart/play if media was added/updated
 
+                    // Reset the duration timer
+                    handler.postAtTime({
+                        removeCurrentPopup()
+                    }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
+
+                    // Cleanup any pending next/preparing views as they are now irrelevant
+                    handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
+                    isPreparing = false
+                    preparingView?.cleanup()
+                    preparingView = null
+                    nextPopup?.cleanup()
+                    nextPopup = null
+                    nextProps = null
+                    return@post
+                }
+
+                // 2. Handle case where a popup is being prepared -> Update it!
+                if (isPreparing && preparingView != null) {
+                    Log.d(TAG, "Overwrite: Updating popup currently in preparation")
+                    preparingView?.updateFromProps(props)
+                    // The existing ReadyListener will eventually trigger handlePopupReady with updated props
+                    return@post
+                }
+
+                // 3. Fallback: Standard overwrite behavior (interrupt and show new)
+                Log.d(TAG, "Overwrite requested, no active view to recycle, starting new")
+                handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
                 isPreparing = false
                 preparingView?.let { it.cleanup(); preparingView = null }
-
                 nextPopup?.let { it.cleanup(); nextPopup = null }
                 nextProps = null
 
@@ -110,6 +140,11 @@ class NotificationManager(
     }
 
     private fun handlePopupReady(view: PopupView, props: PopupProps) {
+        if (view != preparingView) {
+            Log.d(TAG, "Ignoring ready signal from stale/cancelled view")
+            view.cleanup()
+            return
+        }
         isPreparing = false
         preparingView = null
 

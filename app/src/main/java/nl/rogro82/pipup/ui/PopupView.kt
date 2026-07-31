@@ -33,6 +33,7 @@ import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.isEmulator
 import nl.rogro82.pipup.databinding.PopupBinding
 import nl.rogro82.pipup.dpToPx
@@ -56,6 +57,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var isScrolling = false
     private var targetMediaHeight = 0
     private var isReadyCalled = false
+    private var isCleanedUp = false
 
     @Keep
     @Suppress("unused")
@@ -63,6 +65,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         @JavascriptInterface
         fun onMediaPlaying() {
             mainHandler.post {
+                if (isCleanedUp) return@post
                 android.util.Log.d("PopupView", "WHEP video playing signal received from JS")
                 notifyReady()
             }
@@ -71,6 +74,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         @JavascriptInterface
         fun onMediaError(error: String) {
             mainHandler.post {
+                if (isCleanedUp) return@post
                 android.util.Log.e("PopupView", "WHEP error signal received from JS: $error")
                 showPlaceholder(error)
                 notifyReady()
@@ -153,14 +157,18 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
      * Useful for fluid settings previews.
      */
     fun updateFromProps(newProps: PopupProps) {
+        if (isCleanedUp) return
+
         val mediaChanged = props.media != newProps.media ||
                          props.image != newProps.image ||
                          props.mediaPosition != newProps.mediaPosition
 
         this.props = newProps
+
         updateVisuals()
 
         if (mediaChanged) {
+            android.util.Log.d("PopupView", "Media changed, re-initializing media content")
             setupMediaContent()
         } else {
             adjustHeights()
@@ -425,6 +433,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         frame.layoutParams.apply { this.width = tw; this.height = th }
 
         val wv = WebView(context).apply {
+            if (BuildConfig.DEBUG) {
+                WebView.setWebContentsDebuggingEnabled(true)
+            }
             mWebView = this
             webViewClient = object : WebViewClient() {
                 override fun onPageFinished(v: WebView?, u: String?) { notifyReady(); adjustHeights() }
@@ -461,6 +472,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }
         }
         frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        wv.onResume()
         wv.loadUrl(uri)
     }
 
@@ -490,6 +502,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             frame.layoutParams.apply { this.width = tw; this.height = th }
 
             val wv = WebView(context).apply {
+                if (BuildConfig.DEBUG) {
+                    WebView.setWebContentsDebuggingEnabled(true)
+                }
                 mWebView = this
                 addJavascriptInterface(JsBridge(), "PiPup")
                 webViewClient = object : WebViewClient() {
@@ -519,6 +534,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 }
             }
             frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
+            wv.onResume()
             wv.loadDataWithBaseURL(finalUri, injectedHtml, "text/html", "UTF-8", null)
         } catch (_: Exception) {
             notifyReady()
@@ -582,11 +598,22 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     fun startMedia() {
-        mVideoView?.isVisible = true
-        mPlayer?.play()
+        if (isCleanedUp) {
+            android.util.Log.w("PopupView", "startMedia() called on cleaned up view, ignoring")
+            return
+        }
+        try {
+            mVideoView?.isVisible = true
+            mPlayer?.play()
+        } catch (e: Exception) {
+            android.util.Log.e("PopupView", "Failed to start media: ${e.message}")
+        }
     }
 
     fun cleanup() {
+        if (isCleanedUp) return
+        isCleanedUp = true
+
         mainHandler.removeCallbacksAndMessages(null)
         try {
             Glide.with(context.applicationContext).clear(this)
@@ -594,12 +621,21 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             for (i in 0 until frame.childCount) {
                 (frame.getChildAt(i) as? ImageView)?.let { Glide.with(context.applicationContext).clear(it); it.setImageDrawable(null) }
             }
-        } catch (_: Exception) {}
+        } catch (e: Exception) {
+            android.util.Log.d("PopupView", "Glide cleanup error: ${e.message}")
+        }
 
         // Note: Do NOT recycle Bitmap here if it's the shared preview placeholder!
         // That logic should be handled by the owner (SettingsActivity).
 
-        mPlayer?.let { it.stop(); it.release() }
+        try {
+            mPlayer?.let {
+                it.stop()
+                it.release()
+            }
+        } catch (e: Exception) {
+            android.util.Log.w("PopupView", "Player release error: ${e.message}")
+        }
         mPlayer = null
 
         (props.media as? PopupProps.Media.LocalFile)?.let {
@@ -608,6 +644,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         mWebView?.let { wv ->
             try {
+                wv.onPause()
                 wv.stopLoading()
                 wv.webViewClient = WebViewClient()
                 wv.webChromeClient = WebChromeClient()
@@ -617,10 +654,14 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 wv.loadUrl("about:blank")
                 // Use post to destroy after current event loop to avoid "call on destroyed"
                 wv.post { try { wv.destroy() } catch (_: Exception) {} }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                android.util.Log.d("PopupView", "WebView cleanup error: ${e.message}")
+            }
         }
         mWebView = null
-        binding.popupMediaFrame.removeAllViews()
+        try {
+            binding.popupMediaFrame.removeAllViews()
+        } catch (_: Exception) {}
     }
 
     fun animateIn() {

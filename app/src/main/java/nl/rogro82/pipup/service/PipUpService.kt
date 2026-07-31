@@ -109,11 +109,20 @@ class PipUpService : Service() {
     }
 
     override fun onDestroy() {
-        warmWebView?.post {
-            try { warmWebView?.destroy(); warmWebView = null } catch (_: Exception) {}
-        }
+        Log.d(TAG, "Service destroying, cleaning up resources...")
         webServer.stop()
         notificationManager.cancelAll()
+
+        warmWebView?.let { wv ->
+            wv.post {
+                try {
+                    Log.d(TAG, "Destroying pre-warmed WebView")
+                    wv.stopLoading()
+                    wv.destroy()
+                } catch (_: Exception) {}
+            }
+            warmWebView = null
+        }
         super.onDestroy()
     }
 
@@ -254,6 +263,13 @@ class PipUpService : Service() {
         manager.createNotificationChannel(channel)
     }
 
-    private fun ok(msg: String) = NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", msg)
-    private fun invalidRequest(msg: String?) = NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "application/json", msg ?: "Invalid")
+    private fun ok(msg: String): NanoHTTPD.Response {
+        val json = Json.mapper.writeValueAsString(mapOf("status" to "OK", "message" to msg))
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json)
+    }
+
+    private fun invalidRequest(msg: String?): NanoHTTPD.Response {
+        val json = Json.mapper.writeValueAsString(mapOf("status" to "Error", "message" to (msg ?: "Invalid")))
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "application/json", json)
+    }
 }
