@@ -17,7 +17,7 @@ media3 = "1.10.1"
 nanohttpd = "2.3.1"
 # @keep
 pipup = "0.6.6"
-versions-plugin = "0.56.0"
+versions-plugin = "0.58.0"
 work = "2.11.2"
 
 [libraries]
@@ -46,4 +46,4 @@ android-application = { id = "com.android.application", version.ref = "gradle" }
 catalog-update = { id = "nl.littlerobots.version-catalog-update", version.ref = "catalog-update-plugin" }
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 google-devtools-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-versions = { id = "com.github.ben-manes.versions", version.ref = "versions-plugin" }
+versions = { id = "io.github.ben-manes.versions", version.ref = "versions-plugin" }
