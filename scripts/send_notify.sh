@@ -54,7 +54,7 @@ readonly MOCK_SDP_ANSWER=$'v=0\r\no=- 1719830000 1719830000 IN IP4 127.0.0.1\r\n
 # Style Variations
 readonly MIN_PADDING=16
 
-readonly TEST_TYPES=("png" "jpg" "svg" "video" "whep" "web" "multipart" "message" "cancel")
+readonly TEST_TYPES=("png" "jpg" "webp" "svg" "video" "whep" "web" "multipart" "message" "cancel")
 
 # Theme definitions: "background;border;title_text;message_text"
 declare -A THEMES
@@ -82,11 +82,12 @@ readonly ALIGN_NAMES=("Left" "Center" "Right")
 readonly THEME_KEYS=("${!THEMES[@]}")
 
 # Test Assets
-readonly PNG_URL="https://upload.wikimedia.org/wikipedia/commons/6/6a/PNG_Test.png"
 readonly JPG_URL="https://picsum.photos/427/240.jpg"
+readonly PNG_URL="https://upload.wikimedia.org/wikipedia/commons/6/6a/PNG_Test.png"
 readonly SVG_URL="https://upload.wikimedia.org/wikipedia/commons/b/bd/Test.svg"
 readonly VIDEO_URL="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_5MB.mp4"
 readonly WEB_URL="https://opensource.org"
+readonly WEBP_URL="https://picsum.photos/427/240.webp"
 
 # Dynamic Mock WHEP URL (will be updated if server starts)
 WHEP_URL="http://127.0.0.1:${WHEP_FALLBACK_PORT}/whep"
@@ -359,13 +360,17 @@ get_media_payload() {
   local type="${1}"
   local url="${2:-}"
   local fit="${3:-cover}"
+  local cache_field=""
+  [[ "${USE_CACHE}" == "false" ]] && cache_field=", \"cache\": false"
+
   case "${type}" in
-    png)   printf '%s' "{\"image\": {\"uri\": \"${url:-$PNG_URL}\", \"width\": 480}}" ;;
-    jpg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$JPG_URL}\", \"width\": 480}}" ;;
-    svg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$SVG_URL}\", \"width\": 480}}" ;;
+    png)   printf '%s' "{\"image\": {\"uri\": \"${url:-$PNG_URL}\", \"width\": 480${cache_field}}}" ;;
+    jpg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$JPG_URL}\", \"width\": 480${cache_field}}}" ;;
+    webp)  printf '%s' "{\"image\": {\"uri\": \"${url:-$WEBP_URL}\", \"width\": 480${cache_field}}}" ;;
+    svg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$SVG_URL}\", \"width\": 480${cache_field}}}" ;;
     video) printf '%s' "{\"video\": {\"uri\": \"${url:-$VIDEO_URL}\", \"width\": 480}}" ;;
     whep)  printf '%s' "{\"whep\": {\"uri\": \"${url:-$WHEP_URL}\", \"width\": 640, \"videoFit\": \"${fit}\"}}" ;;
-    web)   printf '%s' "{\"web\": {\"uri\": \"${url:-$WEB_URL}\", \"width\": 640, \"height\": 480}}" ;;
+    web)   printf '%s' "{\"web\": {\"uri\": \"${url:-$WEB_URL}\", \"width\": 640, \"height\": 480${cache_field}}}" ;;
     *)     printf 'null' ;;
   esac
 }
@@ -1079,7 +1084,7 @@ send_multipart_test() {
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]] [-a] [-l] [-o] [-c] [-s] [-k] [-h]
+Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]] [-a] [-l] [-o] [-C] [-c] [-s] [-k] [-h]
 Options:
   -d    Target IP (default: ${DEFAULT_IP})
   -w    Start WebRTC server only. Optional: minutes (0 = infinite/24h)
@@ -1089,6 +1094,7 @@ Options:
   -a    Run all standard tests in sequence
   -l    Add long text to messages
   -o    Overwrite the current notification
+  -C    Disable media caching (for URL-based media)
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
   -g    Gallery mode: Systematic walkthrough of all animations and positions
@@ -1137,13 +1143,15 @@ main() {
   local server_only="false"
   local overwrite="false"
   local monitor_mem="false"
+  local USE_CACHE="true"
   local monitor_duration="auto"
   local repeat_count=1
   local repeat_explicit="false"
 
-  while getopts "d:t:u:alockswmghr?" opt; do
+  while getopts "d:t:u:alockswmghrC?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
+      C) USE_CACHE="false" ;;
       t) test_type="${OPTARG}" ;;
       u) custom_url="${OPTARG}" ;;
       a) run_all="true" ;;
@@ -1517,7 +1525,7 @@ main() {
       [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
 
       local pos_list
-      mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 1 2 3 | shuf)
+      mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 0 1 2 3 4 | shuf)
 
       local type
       local current_test_idx=0

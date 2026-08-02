@@ -61,7 +61,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     @Keep
     @Suppress("unused")
-    inner class JsBridge {
+    inner class JsBridge(private val retryCount: Int = 0) {
         @JavascriptInterface
         fun onMediaPlaying() {
             mainHandler.post {
@@ -76,9 +76,27 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             mainHandler.post {
                 if (isCleanedUp) return@post
                 android.util.Log.e("PopupView", "WHEP error signal received from JS: $error")
-                showPlaceholder(error)
-                notifyReady()
+                handleWhepRetry(error, retryCount)
             }
+        }
+    }
+
+    private fun handleWhepRetry(error: String, currentRetry: Int) {
+        val maxRetries = this@PopupView.settings.mediaRetries
+        if (currentRetry < maxRetries && !isCleanedUp) {
+            val nextRetry = currentRetry + 1
+            android.util.Log.w("PopupView", "WHEP load failed, retrying ($nextRetry/$maxRetries): $error")
+            mainHandler.postDelayed({
+                val frame = binding.popupMediaFrame
+                val m = props.media as? PopupProps.Media.Whep
+                if (m != null) {
+                    renderWhep(frame, m.uri, m.width, m.height, m.scale, m.videoFit, nextRetry)
+                }
+            }, 1000L * nextRetry)
+        } else {
+            android.util.Log.e("PopupView", "WHEP load failed permanently after $currentRetry retries")
+            showPlaceholder(error)
+            notifyReady()
         }
     }
 
@@ -387,10 +405,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     private fun renderImage(frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean) {
-        renderGlide(frame, uri, width, scale, if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE, false)
+        android.util.Log.d("PopupView", "Rendering image (cache=$cache): $uri")
+        renderGlide(frame, uri, width, scale, if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE, !cache)
     }
 
-    private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean) {
+    private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean, retryCount: Int = 0) {
         val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
         val th = (tw * 9) / 16
         frame.layoutParams.width = tw
@@ -422,6 +441,19 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }
             override fun onPlayerError(error: PlaybackException) {
                 if (!ready) {
+                    val maxRetries = this@PopupView.settings.mediaRetries
+                    if (retryCount < maxRetries && !isCleanedUp) {
+                        val nextRetry = retryCount + 1
+                        android.util.Log.w("PopupView", "Video load failed, retrying ($nextRetry/$maxRetries): ${error.message}")
+                        cleanup() // Reset player
+                        isCleanedUp = false // We want to reuse the view
+                        mainHandler.postDelayed({
+                            frame.removeAllViews()
+                            renderVideo(frame, uri, width, scale, nextRetry)
+                        }, 1000L * nextRetry)
+                        return
+                    }
+                    android.util.Log.e("PopupView", "Video load failed permanently after $retryCount retries")
                     showPlaceholder(error.errorCodeName)
                     notifyReady()
                     adjustHeights()
@@ -431,7 +463,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         frame.addView(tv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
     }
 
-    private fun renderWeb(frame: FrameLayout, uri: String, width: Int, height: Int, cache: Boolean, scale: Boolean) {
+    private fun renderWeb(frame: FrameLayout, uri: String, width: Int, height: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0) {
         val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
         val th = if (scale) context.getScaledPixels(height) else context.dpToPx(height)
         targetMediaHeight = th
@@ -443,19 +475,38 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }
             mWebView = this
             webViewClient = object : WebViewClient() {
-                override fun onPageFinished(v: WebView?, u: String?) { notifyReady(); adjustHeights() }
-                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                    if (request?.isForMainFrame == true) {
-                        showPlaceholder(error?.description?.toString() ?: context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
+                var errorOccurred = false
+                override fun onPageFinished(v: WebView?, u: String?) {
+                    if (!errorOccurred) {
                         notifyReady()
                         adjustHeights()
                     }
                 }
+                override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
+                    if (request?.isForMainFrame == true) {
+                        handleWebError(error?.description?.toString() ?: "Unknown")
+                    }
+                }
                 @Deprecated("Deprecated in Java")
                 override fun onReceivedError(v: WebView?, r: Int, d: String?, u: String?) {
-                    showPlaceholder(d ?: context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
-                    notifyReady()
-                    adjustHeights()
+                    handleWebError(d ?: "Unknown")
+                }
+
+                private fun handleWebError(description: String) {
+                    errorOccurred = true
+                    val maxRetries = this@PopupView.settings.mediaRetries
+                    if (retryCount < maxRetries && !isCleanedUp) {
+                        val nextRetry = retryCount + 1
+                        android.util.Log.w("PopupView", "Web load failed, retrying ($nextRetry/$maxRetries): $description")
+                        mainHandler.postDelayed({
+                            renderWeb(frame, uri, width, height, cache, scale, nextRetry)
+                        }, 1000L * nextRetry)
+                    } else {
+                        android.util.Log.e("PopupView", "Web load failed permanently after $retryCount retries")
+                        showPlaceholder(description)
+                        notifyReady()
+                        adjustHeights()
+                    }
                 }
             }
             webChromeClient = object : WebChromeClient() {
@@ -474,14 +525,16 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 allowContentAccess = true
                 mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 cacheMode = if (cache) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_NO_CACHE
+                android.util.Log.d("PopupView", "WebView cache mode: ${if (cache) "LOAD_DEFAULT" else "LOAD_NO_CACHE"}")
             }
         }
+        frame.removeAllViews()
         frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         wv.onResume()
         wv.loadUrl(uri)
     }
 
-    private fun renderWhep(frame: FrameLayout, uri: String, width: Int, height: Int, scale: Boolean, videoFit: String) {
+    private fun renderWhep(frame: FrameLayout, uri: String, width: Int, height: Int, scale: Boolean, videoFit: String, retryCount: Int = 0) {
         val finalUri = if (isEmulator()) {
             if (uri.contains("127.0.0.1")) uri.replace("127.0.0.1", "10.0.2.2")
             else if (uri.contains("localhost")) uri.replace("localhost", "10.0.2.2")
@@ -511,7 +564,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     WebView.setWebContentsDebuggingEnabled(true)
                 }
                 mWebView = this
-                addJavascriptInterface(JsBridge(), "PiPup")
+                addJavascriptInterface(JsBridge(retryCount), "PiPup")
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(v: WebView?, u: String?) {
                         // For WHEP, we don't call notifyReady here.
@@ -520,9 +573,12 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     }
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                         if (request?.isForMainFrame == true) {
-                            showPlaceholder(error?.description?.toString() ?: context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
-                            notifyReady()
+                            handleWhepRetry(error?.description?.toString() ?: "Unknown", retryCount)
                         }
+                    }
+                    @Deprecated("Deprecated in Java")
+                    override fun onReceivedError(v: WebView?, r: Int, d: String?, u: String?) {
+                        handleWhepRetry(d ?: "Unknown", retryCount)
                     }
                 }
                 webChromeClient = object : WebChromeClient() {
@@ -538,6 +594,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 }
             }
+            frame.removeAllViews()
             frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
             wv.onResume()
             wv.loadDataWithBaseURL(finalUri, injectedHtml, "text/html", "UTF-8", null)
@@ -554,25 +611,51 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
         frame.layoutParams.width = tw
 
+        // If caching is disabled (skipMemory is true), we use DiskCacheStrategy.DATA
+        // with a unique signature instead of NONE. This ensures Glide buffers the
+        // large remote images to disk during the fetch/decode process, avoiding
+        // InvalidMarkException, while still forcing a fresh download from the network.
+        val effectiveStrategy = if (skipMemory) DiskCacheStrategy.DATA else diskCache
+        val signature = if (skipMemory) com.bumptech.glide.signature.ObjectKey(System.currentTimeMillis().toString()) else null
+
+        android.util.Log.d("PopupView", "Glide config: strategy=$effectiveStrategy, skipMemory=$skipMemory, sig=$signature")
+
         val iv = ImageView(context).apply {
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
         frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
 
-        Glide.with(context.applicationContext)
-            .`as`(Drawable::class.java)
-            .load(source)
-            .diskCacheStrategy(diskCache)
-            .skipMemoryCache(skipMemory)
-            .override(tw, com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
-            .dontAnimate()
-            .listener(object : com.bumptech.glide.request.RequestListener<Drawable> {
+        fun startLoad(retryCount: Int = 0) {
+            if (isCleanedUp) return
+
+            var builder = Glide.with(context.applicationContext)
+                .`as`(Drawable::class.java)
+                .load(source)
+                .diskCacheStrategy(effectiveStrategy)
+                .skipMemoryCache(skipMemory)
+                .override(tw, com.bumptech.glide.request.target.Target.SIZE_ORIGINAL)
+                .dontAnimate()
+
+            if (signature != null) {
+                builder = builder.signature(signature)
+            }
+
+            builder.listener(object : com.bumptech.glide.request.RequestListener<Drawable> {
                 override fun onLoadFailed(e: com.bumptech.glide.load.engine.GlideException?, model: Any?, target: com.bumptech.glide.request.target.Target<Drawable>, isFirstResource: Boolean): Boolean {
+                    val maxRetries = this@PopupView.settings.mediaRetries
+                    if (retryCount < maxRetries && !isCleanedUp) {
+                        val nextRetry = retryCount + 1
+                        android.util.Log.w("PopupView", "Glide load failed, retrying ($nextRetry/$maxRetries): ${e?.message}")
+                        mainHandler.postDelayed({ startLoad(nextRetry) }, 500L * nextRetry)
+                        return true
+                    }
+                    android.util.Log.e("PopupView", "Glide load failed permanently after $retryCount retries: ${e?.message}")
                     showPlaceholder(context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
                     notifyReady()
                     return false
                 }
+
                 override fun onResourceReady(resource: Drawable, model: Any, target: com.bumptech.glide.request.target.Target<Drawable>?, dataSource: com.bumptech.glide.load.DataSource, isFirstResource: Boolean): Boolean {
                     if (resource.intrinsicWidth > 0) {
                         targetMediaHeight = (tw * resource.intrinsicHeight) / resource.intrinsicWidth
@@ -582,6 +665,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     return false
                 }
             }).into(iv)
+        }
+
+        startLoad()
     }
 
     private fun renderBitmap(frame: FrameLayout, bitmap: Bitmap, width: Int, scale: Boolean) {

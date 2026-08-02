@@ -52,6 +52,11 @@ class AdvancedSubmenu(
             settings.mediaTimeout = it
         }
 
+        // Media Retries
+        setupSeekBar(root, R.id.seekbar_media_retries, R.id.text_media_retries_value, settings.mediaRetries) {
+            settings.mediaRetries = it
+        }
+
         // Pre-warm WebView Toggle
         root.findViewById<View>(R.id.container_pre_warm)?.apply {
             val sw = findViewById<SwitchCompat>(R.id.switch_pre_warm)
