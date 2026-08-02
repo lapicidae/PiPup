@@ -1,7 +1,6 @@
 package nl.rogro82.pipup.ui
 
 import android.annotation.SuppressLint
-import androidx.annotation.Keep
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.drawable.Drawable
@@ -10,6 +9,7 @@ import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.TextureView
 import android.view.animation.OvershootInterpolator
+import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -17,11 +17,11 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebSettings
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.webkit.JavascriptInterface
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
-import androidx.core.view.contains
+import androidx.annotation.Keep
+import androidx.core.view.isNotEmpty
 import androidx.core.view.isVisible
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
@@ -31,13 +31,13 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
-import nl.rogro82.pipup.BuildConfig
-import nl.rogro82.pipup.isEmulator
 import nl.rogro82.pipup.databinding.PopupBinding
 import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.getScaledPixels
+import nl.rogro82.pipup.isEmulator
 
 /**
  * Modern PopupView using ViewBinding and modular rendering logic.
@@ -55,19 +55,25 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var mVideoView: android.view.View? = null
     private var mWebView: WebView? = null
     private var isScrolling = false
+    private var targetMediaWidth = 0
     private var targetMediaHeight = 0
     private var isReadyCalled = false
     private var isCleanedUp = false
+    private var isFirstAnimateIn = true
 
     @Keep
-    @Suppress("unused")
     inner class JsBridge(private val retryCount: Int = 0) {
         @JavascriptInterface
         fun onMediaPlaying() {
             mainHandler.post {
                 if (isCleanedUp) return@post
                 android.util.Log.d("PopupView", "WHEP video playing signal received from JS")
+                mWebView?.let {
+                    it.visibility = VISIBLE
+                    removeStaleViews(it)
+                }
                 notifyReady()
+                adjustHeights()
             }
         }
 
@@ -109,7 +115,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     private fun notifyReady() {
-        if (isReadyCalled) return
+        if (isReadyCalled || isCleanedUp) return
         isReadyCalled = true
         mainHandler.removeCallbacks(timeoutRunnable)
         readyListener?.onReady()
@@ -170,33 +176,78 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         return this
     }
 
-    /**
-     * Updates only the visual properties (colors, size, padding) without recreating media.
-     * Useful for fluid settings previews.
-     */
     fun updateFromProps(newProps: PopupProps) {
-        if (isCleanedUp) return
+        if (isCleanedUp) {
+            android.util.Log.w("PopupView", "updateFromProps called on cleaned up view")
+            return
+        }
 
-        val mediaChanged = props.media != newProps.media ||
-                         props.image != newProps.image ||
-                         props.mediaPosition != newProps.mediaPosition
+        val oldMedia = props.media ?: props.image?.let { PopupProps.Media.Image(it, props.imageWidth ?: 480) }
+        val newMedia = newProps.media ?: newProps.image?.let { PopupProps.Media.Image(it, newProps.imageWidth ?: 480) }
+
+        val contentChanged = !isMediaContentSame(oldMedia, newMedia)
+        if (contentChanged) {
+            android.util.Log.d("PopupView", "Media content changed, triggering reload")
+        }
 
         this.props = newProps
-
+        calculateTargetDimensions(newMedia, newProps)
         updateVisuals()
 
-        if (mediaChanged) {
-            android.util.Log.d("PopupView", "Media changed, re-initializing media content")
+        if (contentChanged) {
             setupMediaContent()
         } else {
+            // Handle property-only updates (e.g. WHEP videoFit) without full reload
+            if (oldMedia is PopupProps.Media.Whep && newMedia is PopupProps.Media.Whep) {
+                if (oldMedia.videoFit != newMedia.videoFit) {
+                    android.util.Log.d("PopupView", "Updating WHEP videoFit dynamically to ${newMedia.videoFit}")
+                    mWebView?.evaluateJavascript("document.getElementById('v').style.objectFit = '${newMedia.videoFit}';", null)
+                }
+            }
             adjustHeights()
         }
     }
 
+    private fun calculateTargetDimensions(media: PopupProps.Media?, props: PopupProps) {
+        val width = when (media) {
+            is PopupProps.Media.Image -> media.width
+            is PopupProps.Media.Video -> media.width
+            is PopupProps.Media.Web -> media.width
+            is PopupProps.Media.Whep -> media.width
+            is PopupProps.Media.LocalFile -> media.width
+            is PopupProps.Media.Bitmap -> media.width
+            else -> props.imageWidth ?: 480
+        }
+        targetMediaWidth = if (props.scale) context.getScaledPixels(width) else context.dpToPx(width)
+
+        targetMediaHeight = when (media) {
+            is PopupProps.Media.Video -> (targetMediaWidth * 9) / 16
+            is PopupProps.Media.Web -> if (props.scale) context.getScaledPixels(media.height) else context.dpToPx(media.height)
+            is PopupProps.Media.Whep -> if (props.scale) context.getScaledPixels(media.height) else context.dpToPx(media.height)
+            is PopupProps.Media.Bitmap -> (targetMediaWidth * media.bitmap.height) / media.bitmap.width
+            else -> 0 // For images, height is determined after load in renderGlide
+        }
+    }
+
+    private fun isMediaContentSame(m1: PopupProps.Media?, m2: PopupProps.Media?): Boolean {
+        if (m1 == null || m2 == null) return m1 == m2
+        if (m1::class != m2::class) return false
+        return when (m1) {
+            is PopupProps.Media.Image -> (m2 as PopupProps.Media.Image).let { m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale }
+            is PopupProps.Media.Video -> (m2 as PopupProps.Media.Video).let { m1.uri == it.uri && m1.scale == it.scale }
+            is PopupProps.Media.Web -> (m2 as PopupProps.Media.Web).let { m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale }
+            is PopupProps.Media.Whep -> (m2 as PopupProps.Media.Whep).let { m1.uri == it.uri && m1.scale == it.scale }
+            is PopupProps.Media.LocalFile -> m1.path == (m2 as PopupProps.Media.LocalFile).path
+            else -> m1 == m2
+        }
+    }
+
     private fun updateVisuals() {
-        layoutParams = layoutParams ?: LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+        if (layoutParams == null) {
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+        }
         alpha = 1.0f
-        background = null
+        if (background != null) background = null
         setPadding(0, 0, 0, 0)
 
         // 1. Padding
@@ -258,16 +309,32 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val textContainer = binding.textContainer
         val mediaFrame = binding.popupMediaFrame
 
-        if (textContainer in container &&
-            mediaFrame in container &&
-            container.tag == props.mediaPosition) {
-            return // Already in correct order
+        val pos = props.mediaPosition ?: 0
+        if (container.tag == pos && textContainer.parent == container && mediaFrame.parent == container) {
+            // Already in correct order. However, since props might have changed,
+            // update existing layout params to keep them in sync with targetMediaWidth/Height.
+            mediaFrame.layoutParams?.let { lp ->
+                if (targetMediaWidth > 0 && targetMediaHeight > 0) {
+                    lp.width = targetMediaWidth
+                    lp.height = targetMediaHeight
+                }
+            }
+            return
         }
 
-        container.removeAllViews()
-        val pos = props.mediaPosition ?: 0
-        container.tag = pos
+        // Extremely careful reordering: only detach if absolutely necessary
+        // to avoid WebView surface destruction.
+        if (textContainer.parent != null && textContainer.parent != container) {
+            (textContainer.parent as android.view.ViewGroup).removeView(textContainer)
+        }
+        if (mediaFrame.parent != null && mediaFrame.parent != container) {
+            (mediaFrame.parent as android.view.ViewGroup).removeView(mediaFrame)
+        }
 
+        if (textContainer.parent == container) container.removeView(textContainer)
+        if (mediaFrame.parent == container) container.removeView(mediaFrame)
+
+        container.tag = pos
         when (pos) {
             0 -> setupVertical(container, mediaFrame, textContainer, true) // Top
             1 -> setupVertical(container, textContainer, mediaFrame, false) // Bottom
@@ -280,12 +347,18 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         container.orientation = LinearLayout.VERTICAL
         val margin = context.dpToPx(8)
 
-        val firstParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+        val firstWidth = if (first == binding.popupMediaFrame && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val firstHeight = if (first == binding.popupMediaFrame && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+
+        val firstParams = LinearLayout.LayoutParams(firstWidth, firstHeight).apply {
             if (first != binding.textContainer && mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
             setMargins(0, 0, 0, if (mediaFirst) margin else 0)
         }
 
-        val secondParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+        val secondWidth = if (second == binding.popupMediaFrame && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val secondHeight = if (second == binding.popupMediaFrame && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+
+        val secondParams = LinearLayout.LayoutParams(secondWidth, secondHeight).apply {
             if (second != binding.textContainer && !mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
             setMargins(0, if (!mediaFirst) margin else 0, 0, 0)
         }
@@ -298,12 +371,18 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         container.orientation = LinearLayout.HORIZONTAL
         val margin = context.dpToPx(12)
 
-        val firstParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+        val firstWidth = if (first == binding.popupMediaFrame && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val firstHeight = if (first == binding.popupMediaFrame && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+
+        val firstParams = LinearLayout.LayoutParams(firstWidth, firstHeight).apply {
             gravity = Gravity.CENTER_VERTICAL
             setMargins(0, 0, if (mediaFirst) margin else 0, 0)
         }
 
-        val secondParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+        val secondWidth = if (second == binding.popupMediaFrame && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val secondHeight = if (second == binding.popupMediaFrame && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+
+        val secondParams = LinearLayout.LayoutParams(secondWidth, secondHeight).apply {
             gravity = Gravity.CENTER_VERTICAL
             setMargins(if (!mediaFirst) margin else 0, 0, 0, 0)
         }
@@ -313,10 +392,12 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     private val adjustHeightsRunnable = Runnable {
+        if (isCleanedUp) return@Runnable
         val screenHeight = resources.displayMetrics.heightPixels
         val maxPopupHeight = (screenHeight * 0.85).toInt()
 
-        if (binding.popupMediaFrame.isVisible && targetMediaHeight > 0) {
+        if (binding.popupMediaFrame.isVisible && targetMediaWidth > 0 && targetMediaHeight > 0) {
+            binding.popupMediaFrame.layoutParams.width = targetMediaWidth
             binding.popupMediaFrame.layoutParams.height = targetMediaHeight
             binding.popupMediaFrame.requestLayout()
         }
@@ -334,7 +415,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             binding.popupScrollView.requestLayout()
             if (!isScrolling) startAutoScroll()
         } else {
-            binding.popupScrollView.layoutParams.height = LayoutParams.WRAP_CONTENT
+            binding.popupScrollView.layoutParams.height = LinearLayout.LayoutParams.WRAP_CONTENT
             binding.popupScrollView.requestLayout()
         }
     }
@@ -380,6 +461,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         if (media == null) {
             frame.isVisible = false
+            cleanupMediaResources()
+            frame.removeAllViews()
             notifyReady()
             return
         }
@@ -391,8 +474,21 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
 
         frame.isVisible = true
-        // Important: clear frame before adding new media if we are updating
-        frame.removeAllViews()
+
+        // Clean up stale content if the media type has changed to avoid showing
+        // unrelated content from previous notifications during the loading phase.
+        val isSameType = if (frame.isNotEmpty()) {
+            val child = frame.getChildAt(0)
+            (media is PopupProps.Media.Image && child is ImageView) ||
+            (media is PopupProps.Media.Whep && child is WebView) ||
+            (media is PopupProps.Media.Web && child is WebView) ||
+            (media is PopupProps.Media.Video && child is TextureView)
+        } else false
+
+        if (!isSameType) {
+            cleanupMediaResources()
+            frame.removeAllViews()
+        }
 
         when (media) {
             is PopupProps.Media.Image -> renderImage(frame, media.uri, media.width, media.cache, media.scale)
@@ -404,14 +500,79 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
+    private fun removeStaleViews(keepView: android.view.View) {
+        val frame = binding.popupMediaFrame
+        val stale = mutableListOf<android.view.View>()
+        for (i in 0 until frame.childCount) {
+            val v = frame.getChildAt(i)
+            if (v != keepView) stale.add(v)
+        }
+
+        for (v in stale) {
+            if (v is WebView) {
+                try {
+                    v.stopLoading()
+                    v.loadUrl("about:blank")
+                    v.destroy()
+                } catch (_: Exception) {}
+            } else if (v is ImageView) {
+                try { Glide.with(context.applicationContext).clear(v) } catch (_: Exception) {}
+            }
+            frame.removeView(v)
+        }
+
+        // If the new view is NOT a video, we can safely release the player now
+        if (keepView !is TextureView) {
+            mPlayer?.stop()
+            mPlayer?.release()
+            mPlayer = null
+            mVideoView = null
+        }
+    }
+
+    private fun cleanupMediaResources() {
+        val frame = binding.popupMediaFrame
+        // Clear Glide loads for all image views in the frame
+        for (i in 0 until frame.childCount) {
+            val child = frame.getChildAt(i)
+            if (child is ImageView) {
+                try { Glide.with(context.applicationContext).clear(child) } catch (_: Exception) {}
+            }
+        }
+
+        mPlayer?.stop()
+        mPlayer?.release()
+        mPlayer = null
+        mVideoView = null
+
+        mWebView?.let { wv ->
+            try {
+                wv.onPause()
+                wv.stopLoading()
+                wv.webViewClient = WebViewClient()
+                wv.webChromeClient = WebChromeClient()
+                wv.removeJavascriptInterface("PiPup")
+                (wv.parent as? android.view.ViewGroup)?.removeView(wv)
+                wv.loadUrl("about:blank")
+                wv.post { try { wv.destroy() } catch (_: Exception) {} }
+            } catch (e: Exception) {
+                android.util.Log.d("PopupView", "WebView cleanup error: ${e.message}")
+            }
+        }
+        mWebView = null
+    }
+
     private fun renderImage(frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean) {
         android.util.Log.d("PopupView", "Rendering image (cache=$cache): $uri")
+        targetMediaWidth = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
         renderGlide(frame, uri, width, scale, if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE, !cache)
     }
 
     private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean, retryCount: Int = 0) {
         val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
         val th = (tw * 9) / 16
+        targetMediaWidth = tw
+        targetMediaHeight = th
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
 
@@ -435,6 +596,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                         frame.layoutParams.height = targetMediaHeight
                         frame.requestLayout()
                     }
+                    mVideoView?.let { removeStaleViews(it) }
                     notifyReady()
                     adjustHeights()
                 }
@@ -445,11 +607,17 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     if (retryCount < maxRetries && !isCleanedUp) {
                         val nextRetry = retryCount + 1
                         android.util.Log.w("PopupView", "Video load failed, retrying ($nextRetry/$maxRetries): ${error.message}")
-                        cleanup() // Reset player
-                        isCleanedUp = false // We want to reuse the view
+
+                        mPlayer?.stop()
+                        mPlayer?.release()
+                        mPlayer = null
+                        mVideoView = null
+
                         mainHandler.postDelayed({
-                            frame.removeAllViews()
-                            renderVideo(frame, uri, width, scale, nextRetry)
+                            if (!isCleanedUp) {
+                                frame.removeAllViews()
+                                renderVideo(frame, uri, width, scale, nextRetry)
+                            }
                         }, 1000L * nextRetry)
                         return
                     }
@@ -466,10 +634,16 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private fun renderWeb(frame: FrameLayout, uri: String, width: Int, height: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0) {
         val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
         val th = if (scale) context.getScaledPixels(height) else context.dpToPx(height)
+        targetMediaWidth = tw
         targetMediaHeight = th
-        frame.layoutParams.apply { this.width = tw; this.height = th }
+
+        // Apply dimensions immediately to avoid fullscreen flash before next layout pass
+        frame.layoutParams.width = tw
+        frame.layoutParams.height = th
 
         val wv = WebView(context).apply {
+            visibility = INVISIBLE // Hide until page finished
+            setBackgroundColor(android.graphics.Color.TRANSPARENT)
             if (BuildConfig.DEBUG) {
                 WebView.setWebContentsDebuggingEnabled(true)
             }
@@ -478,6 +652,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 var errorOccurred = false
                 override fun onPageFinished(v: WebView?, u: String?) {
                     if (!errorOccurred) {
+                        v?.visibility = VISIBLE
+                        mWebView?.let { removeStaleViews(it) }
                         notifyReady()
                         adjustHeights()
                     }
@@ -499,7 +675,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                         val nextRetry = retryCount + 1
                         android.util.Log.w("PopupView", "Web load failed, retrying ($nextRetry/$maxRetries): $description")
                         mainHandler.postDelayed({
-                            renderWeb(frame, uri, width, height, cache, scale, nextRetry)
+                            if (!isCleanedUp) {
+                                renderWeb(frame, uri, width, height, cache, scale, nextRetry)
+                            }
                         }, 1000L * nextRetry)
                     } else {
                         android.util.Log.e("PopupView", "Web load failed permanently after $retryCount retries")
@@ -528,7 +706,6 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 android.util.Log.d("PopupView", "WebView cache mode: ${if (cache) "LOAD_DEFAULT" else "LOAD_NO_CACHE"}")
             }
         }
-        frame.removeAllViews()
         frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         wv.onResume()
         wv.loadUrl(uri)
@@ -556,10 +733,16 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
             val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
             val th = if (scale) context.getScaledPixels(height) else context.dpToPx(height)
+            targetMediaWidth = tw
             targetMediaHeight = th
-            frame.layoutParams.apply { this.width = tw; this.height = th }
+
+            // Apply dimensions immediately to avoid fullscreen flash before next layout pass
+            frame.layoutParams.width = tw
+            frame.layoutParams.height = th
 
             val wv = WebView(context).apply {
+                visibility = INVISIBLE // Hide until WHEP signal received
+                setBackgroundColor(android.graphics.Color.TRANSPARENT)
                 if (BuildConfig.DEBUG) {
                     WebView.setWebContentsDebuggingEnabled(true)
                 }
@@ -567,8 +750,6 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 addJavascriptInterface(JsBridge(retryCount), "PiPup")
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(v: WebView?, u: String?) {
-                        // For WHEP, we don't call notifyReady here.
-                        // We wait for the JS bridge "onMediaPlaying" signal.
                         adjustHeights()
                     }
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -594,7 +775,6 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
                 }
             }
-            frame.removeAllViews()
             frame.addView(wv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
             wv.onResume()
             wv.loadDataWithBaseURL(finalUri, injectedHtml, "text/html", "UTF-8", null)
@@ -609,7 +789,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     private fun renderGlide(frame: FrameLayout, source: Any, width: Int, scale: Boolean, diskCache: DiskCacheStrategy, skipMemory: Boolean) {
         val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
+        targetMediaWidth = tw
         frame.layoutParams.width = tw
+        frame.requestLayout()
 
         // If caching is disabled (skipMemory is true), we use DiskCacheStrategy.DATA
         // with a unique signature instead of NONE. This ensures Glide buffers the
@@ -660,6 +842,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     if (resource.intrinsicWidth > 0) {
                         targetMediaHeight = (tw * resource.intrinsicHeight) / resource.intrinsicWidth
                     }
+                    removeStaleViews(iv)
                     notifyReady()
                     adjustHeights()
                     return false
@@ -676,14 +859,18 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             return
         }
         val tw = if (scale) context.getScaledPixels(width) else context.dpToPx(width)
+        targetMediaWidth = tw
         targetMediaHeight = (tw * bitmap.height) / bitmap.width
-        frame.layoutParams.apply { this.width = tw; this.height = targetMediaHeight }
+        frame.layoutParams.width = tw
+        frame.layoutParams.height = targetMediaHeight
+        frame.requestLayout()
 
         val iv = ImageView(context).apply {
             setImageBitmap(bitmap)
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
+        removeStaleViews(iv)
         frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         notifyReady()
     }
@@ -706,14 +893,19 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         isCleanedUp = true
 
         mainHandler.removeCallbacksAndMessages(null)
-        try {
-            Glide.with(context.applicationContext).clear(this)
-            val frame = binding.popupMediaFrame
-            for (i in 0 until frame.childCount) {
-                (frame.getChildAt(i) as? ImageView)?.let { Glide.with(context.applicationContext).clear(it); it.setImageDrawable(null) }
+        // Use post to avoid "You can't start or clear loads in RequestListener or Target callbacks"
+        // if cleanup is called from a Glide listener.
+        mainHandler.post {
+            try {
+                Glide.with(context.applicationContext).clear(this)
+                val frame = binding.popupMediaFrame
+                for (i in 0 until frame.childCount) {
+                    (frame.getChildAt(i) as? ImageView)?.let { Glide.with(context.applicationContext).clear(it); it.setImageDrawable(null) }
+                }
+                binding.popupMediaFrame.removeAllViews()
+            } catch (e: Exception) {
+                android.util.Log.d("PopupView", "Glide cleanup error: ${e.message}")
             }
-        } catch (e: Exception) {
-            android.util.Log.d("PopupView", "Glide cleanup error: ${e.message}")
         }
 
         // Note: Do NOT recycle Bitmap here if it's the shared preview placeholder!
@@ -750,12 +942,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }
         }
         mWebView = null
-        try {
-            binding.popupMediaFrame.removeAllViews()
-        } catch (_: Exception) {}
     }
 
     fun animateIn() {
+        if (isCleanedUp) return
+        if (!isFirstAnimateIn && alpha == 1.0f && scaleX == 1.0f && translationX == 0f && translationY == 0f) {
+            // Already visible and positioned correctly, skip entrance animation to avoid blinking on overwrite
+            return
+        }
+        isFirstAnimateIn = false
         val duration = props.animationDuration.toLong()
         resetAnimationProps()
         if (props.animationType == 0 || duration <= 0) return

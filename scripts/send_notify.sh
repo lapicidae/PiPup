@@ -83,8 +83,9 @@ readonly THEME_KEYS=("${!THEMES[@]}")
 
 # Test Assets
 readonly JPG_URL="https://picsum.photos/427/240.jpg"
-readonly PNG_URL="https://upload.wikimedia.org/wikipedia/commons/6/6a/PNG_Test.png"
-readonly SVG_URL="https://upload.wikimedia.org/wikipedia/commons/b/bd/Test.svg"
+PNG_URL=$(printf 'https://robohash.org/hash_%s.png?size=427x240' "$RANDOM")
+readonly PNG_URL
+readonly SVG_URL="https://upload.wikimedia.org/wikipedia/commons/1/16/Eye_svg.svg"
 readonly VIDEO_URL="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_5MB.mp4"
 readonly WEB_URL="https://opensource.org"
 readonly WEBP_URL="https://picsum.photos/427/240.webp"
@@ -1443,10 +1444,10 @@ main() {
         send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}"
       fi
     else
-      local radius border_w padding anim_type anim_dur fit
+      local radius border_w padding anim_type anim_dur fit title_s msg_s
       local style_data
       style_data=$(get_random_style "${type}")
-      read -r radius border_w padding anim_type anim_dur fit <<< "${style_data}"
+      read -r radius border_w padding anim_type anim_dur fit title_s msg_s <<< "${style_data}"
 
       local media
       media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
@@ -1597,7 +1598,7 @@ main() {
     for ((r = 1; r <= repeat_count; r++)); do
       [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
 
-      trigger_test "multipart" "Multipart Test" 0 "${target_ip}" "" "${overwrite}" "${suffix}" "false"
+      trigger_test "multipart" "Multipart Test" "$(( RANDOM % 5 ))" "${target_ip}" "" "${overwrite}" "${suffix}" "false"
       [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
     done
   elif [[ "${test_type}" == "cancel" ]]; then
@@ -1630,7 +1631,7 @@ main() {
     for ((r = 1; r <= repeat_count; r++)); do
       [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
 
-      trigger_test "${test_type}" "${test_type^^} Test" 0 "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "false"
+      trigger_test "${test_type}" "${test_type^^} Test" "$(( RANDOM % 5 ))" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "false"
       [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
     done
   fi

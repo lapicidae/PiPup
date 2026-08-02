@@ -43,54 +43,65 @@ class NotificationManager(
     fun enqueue(props: PopupProps) {
         handler.post {
             if (props.overwrite) {
-                // 1. Handle case where a popup is already visible -> Reuse it!
+                // 1. Handle case where a popup is already visible -> Smart Reuse!
                 currentPopup?.let {
-                    Log.d(TAG, "Overwrite: Updating existing visible popup")
-                    handler.removeCallbacksAndMessages(durationToken)
+                    if (canUpdateInPlace(it.props, props)) {
+                        Log.d(TAG, "Overwrite: Updating existing visible popup (Identical Media)")
+                        handler.removeCallbacksAndMessages(durationToken)
 
-                    it.updateFromProps(props)
-                    it.layoutParams = getLayoutParams(props)
-                    it.animateIn()
-                    it.startMedia()
+                        it.updateFromProps(props)
+                        applyPositionToLayoutParams(it.layoutParams as FrameLayout.LayoutParams, props)
+                        it.animateIn()
+                        it.startMedia()
 
-                    // Reset the duration timer
-                    handler.postAtTime({
-                        removeCurrentPopup()
-                    }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
+                        // Reset the duration timer
+                        handler.postAtTime({
+                            removeCurrentPopup()
+                        }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
 
-                    // Cleanup any pending next/preparing views as they are now irrelevant
-                    handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
-                    isPreparing = false
-                    preparingView?.cleanup()
-                    preparingView = null
-                    nextPopup?.cleanup()
-                    nextPopup = null
-                    nextProps = null
-                    return@post
+                        // Cleanup any pending next/preparing views
+                        cancelPendingPreparation()
+                        return@post
+                    } else {
+                        Log.d(TAG, "Overwrite: Media changed, preparing replacement in background")
+                    }
                 }
 
-                // 2. Handle case where a popup is being prepared -> Update it!
-                if (isPreparing && preparingView != null) {
-                    Log.d(TAG, "Overwrite: Updating popup currently in preparation")
-                    preparingView?.updateFromProps(props)
-                    // The existing ReadyListener will eventually trigger handlePopupReady with updated props
-                    return@post
-                }
-
-                // 3. Fallback: Standard overwrite behavior (interrupt and show new)
-                Log.d(TAG, "Overwrite requested, no active view to recycle, starting new")
-                handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
-                isPreparing = false
-                preparingView?.let { it.cleanup(); preparingView = null }
-                nextPopup?.let { it.cleanup(); nextPopup = null }
-                nextProps = null
-
-                removeCurrentPopup(immediate = true, triggerNext = false)
-                queue.addFirst(props)
+                // 2. Prepare replacement or update existing preparation
+                cancelPendingPreparation()
+                preparePopup(props)
             } else {
                 queue.addLast(props)
+                processNext()
             }
-            processNext()
+        }
+    }
+
+    private fun cancelPendingPreparation() {
+        handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
+        isPreparing = false
+        preparingView?.cleanup()
+        preparingView = null
+        nextPopup?.cleanup()
+        nextPopup = null
+        nextProps = null
+    }
+
+    private fun canUpdateInPlace(oldProps: PopupProps, newProps: PopupProps): Boolean {
+        val m1 = oldProps.media ?: oldProps.image?.let { PopupProps.Media.Image(it, oldProps.imageWidth ?: 480) }
+        val m2 = newProps.media ?: newProps.image?.let { PopupProps.Media.Image(it, newProps.imageWidth ?: 480) }
+
+        if (m1 == null && m2 == null) return true
+        if (m1 == null || m2 == null) return false
+        if (m1::class != m2::class) return false
+
+        return when (m1) {
+            is PopupProps.Media.Image -> (m2 as PopupProps.Media.Image).let { m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale }
+            is PopupProps.Media.Video -> (m2 as PopupProps.Media.Video).let { m1.uri == it.uri && m1.scale == it.scale }
+            is PopupProps.Media.Web -> (m2 as PopupProps.Media.Web).let { m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale }
+            is PopupProps.Media.Whep -> (m2 as PopupProps.Media.Whep).let { m1.uri == it.uri && m1.scale == it.scale }
+            is PopupProps.Media.LocalFile -> m1.path == (m2 as PopupProps.Media.LocalFile).path
+            else -> false
         }
     }
 
@@ -136,13 +147,18 @@ class NotificationManager(
         view.readyListener = object : PopupView.ReadyListener {
             override fun onReady() {
                 handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
-                handlePopupReady(view, props)
+                handlePopupReady(view)
             }
         }
         view.create()
     }
 
-    private fun handlePopupReady(view: PopupView, props: PopupProps) {
+    private fun handlePopupReady(view: PopupView) {
+        if (view == currentPopup) {
+            Log.d(TAG, "Visible popup update finished: $view")
+            return
+        }
+
         if (view != preparingView) {
             Log.d(TAG, "Ignoring ready signal from stale/cancelled view")
             view.cleanup()
@@ -151,12 +167,40 @@ class NotificationManager(
         isPreparing = false
         preparingView = null
 
-        if (currentPopup == null) {
+        val props = view.props // Use the latest props from the view itself
+
+        if (props.overwrite && currentPopup != null) {
+            replaceCurrentPopup(view, props)
+        } else if (currentPopup == null) {
             showPopup(view, props)
         } else {
             nextPopup = view
             nextProps = props
         }
+    }
+
+    private fun replaceCurrentPopup(newView: PopupView, props: PopupProps) {
+        val overlayView = ensureOverlay() ?: return
+        Log.d(TAG, "Overwrite: Swapping visible popup with new prepared one")
+
+        val oldView = currentPopup
+        val params = getLayoutParams(props)
+
+        // Seamless swap: Add new one first, then remove old
+        overlayView.addView(newView, params)
+        currentPopup = newView
+        newView.animateIn()
+        newView.startMedia()
+
+        oldView?.let {
+            overlayView.removeView(it)
+            it.cleanup()
+        }
+
+        handler.removeCallbacksAndMessages(durationToken)
+        handler.postAtTime({
+            removeCurrentPopup()
+        }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
     }
 
     private fun showPopup(view: PopupView, props: PopupProps) {
@@ -183,15 +227,25 @@ class NotificationManager(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply {
-            val margin = context.dpToPx(20)
-            when (props.getPositionEnum()) {
-                PopupProps.Position.TopRight -> { gravity = Gravity.TOP or Gravity.END; setMargins(0, margin, margin, 0) }
-                PopupProps.Position.TopLeft -> { gravity = Gravity.TOP or Gravity.START; setMargins(margin, margin, 0, 0) }
-                PopupProps.Position.BottomRight -> { gravity = Gravity.BOTTOM or Gravity.END; setMargins(0, 0, margin, margin) }
-                PopupProps.Position.BottomLeft -> { gravity = Gravity.BOTTOM or Gravity.START; setMargins(margin, 0, 0, margin) }
-                PopupProps.Position.Center -> { gravity = Gravity.CENTER }
-            }
+            applyPositionToLayoutParams(this, props)
         }
+    }
+
+    private fun applyPositionToLayoutParams(params: FrameLayout.LayoutParams, props: PopupProps) {
+        val margin = context.dpToPx(20)
+        params.gravity = when (props.getPositionEnum()) {
+            PopupProps.Position.TopRight -> Gravity.TOP or Gravity.END
+            PopupProps.Position.TopLeft -> Gravity.TOP or Gravity.START
+            PopupProps.Position.BottomRight -> Gravity.BOTTOM or Gravity.END
+            PopupProps.Position.BottomLeft -> Gravity.BOTTOM or Gravity.START
+            PopupProps.Position.Center -> Gravity.CENTER
+        }
+        params.setMargins(
+            if (props.getPositionEnum() in listOf(PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft)) margin else 0,
+            if (props.getPositionEnum() in listOf(PopupProps.Position.TopRight, PopupProps.Position.TopLeft)) margin else 0,
+            if (props.getPositionEnum() in listOf(PopupProps.Position.TopRight, PopupProps.Position.BottomRight)) margin else 0,
+            if (props.getPositionEnum() in listOf(PopupProps.Position.BottomRight, PopupProps.Position.BottomLeft)) margin else 0
+        )
     }
 
     private fun removeCurrentPopup(immediate: Boolean = false, triggerNext: Boolean = true) {

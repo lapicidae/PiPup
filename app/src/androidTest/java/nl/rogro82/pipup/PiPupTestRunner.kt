@@ -8,9 +8,10 @@ import androidx.test.runner.AndroidJUnitRunner
 /**
  * Custom Test Runner for PiPup.
  *
- * Gold Standard: Prepares the environment via Shell-Commands BEFORE the app starts.
+ * Prepares the environment via Shell-Commands BEFORE the app starts.
  * The application code remains 100% clean and unaware of the test environment.
  */
+@Suppress("unused")
 class PiPupTestRunner : AndroidJUnitRunner() {
     override fun onCreate(arguments: Bundle?) {
         val packageName = targetContext.packageName
