@@ -52,8 +52,6 @@ readonly WHEP_FALLBACK_PORT="${STREAM_WHEP_PORT}"
 readonly MOCK_SDP_ANSWER=$'v=0\r\no=- 1719830000 1719830000 IN IP4 127.0.0.1\r\ns=-\r\nc=IN IP4 127.0.0.1\r\nt=0 0\r\na=group:BUNDLE 0\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\na=mid:0\r\na=rtcp-mux\r\na=setup:active\r\na=sendonly\r\na=ice-ufrag:mockufrag\r\na=ice-pwd:mockpwd_at_least_22_chars_long\r\na=fingerprint:sha-256 00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00:00\r\na=rtpmap:96 H264/90000\r\n'
 
 # Style Variations
-readonly DEFAULT_TITLE_SIZE=24
-readonly DEFAULT_MSG_SIZE=14
 readonly MIN_PADDING=16
 
 readonly TEST_TYPES=("png" "jpg" "svg" "video" "whep" "web" "multipart" "message" "cancel")
@@ -77,12 +75,15 @@ THEMES=(
   ["glass_orchid"]="#CC25192B;#E9B9FB;#F8D8FF;#E9E0E7"
 )
 
+readonly POS_NAMES=("Top Right" "Top Left" "Bottom Right" "Bottom Left" "Center")
+readonly ALIGN_NAMES=("Left" "Center" "Right")
+
 # Extract keys for random selection
 readonly THEME_KEYS=("${!THEMES[@]}")
 
 # Test Assets
 readonly PNG_URL="https://upload.wikimedia.org/wikipedia/commons/6/6a/PNG_Test.png"
-readonly JPG_URL="https://upload.wikimedia.org/wikipedia/commons/2/28/JPG_Test.jpg"
+readonly JPG_URL="https://picsum.photos/427/240.jpg"
 readonly SVG_URL="https://upload.wikimedia.org/wikipedia/commons/b/bd/Test.svg"
 readonly VIDEO_URL="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_5MB.mp4"
 readonly WEB_URL="https://opensource.org"
@@ -439,6 +440,8 @@ get_random_style() {
   local rand_padding=$(( MIN_PADDING + (RANDOM % 25) ))
   local rand_anim_type=$(( RANDOM % 11 ))
   local rand_anim_duration=$(( 300 + RANDOM % 1201 ))
+  local rand_title_size=$(( 18 + RANDOM % 20 ))
+  local rand_msg_size=$(( 12 + RANDOM % 10 ))
 
   local fit="cover"
   if [[ "${type}" == "whep" ]]; then
@@ -446,7 +449,8 @@ get_random_style() {
     fit="${fits[$(( RANDOM % 3 ))]}"
   fi
 
-  printf '%s %s %s %s %s %s' "${rand_radius}" "${rand_border}" "${rand_padding}" "${rand_anim_type}" "${rand_anim_duration}" "${fit}"
+  printf '%s %s %s %s %s %s %s %s' "${rand_radius}" "${rand_border}" "${rand_padding}" \
+    "${rand_anim_type}" "${rand_anim_duration}" "${fit}" "${rand_title_size}" "${rand_msg_size}"
 }
 
 #######################################
@@ -946,6 +950,10 @@ send_json_notification() {
   local anim_type="${14}"
   local anim_duration="${15}"
   local overwrite="${16:-false}"
+  local title_align="${17:-0}"
+  local msg_align="${18:-0}"
+  local title_size="${19:-24}"
+  local msg_size="${20:-14}"
 
   local endpoint="http://${target_ip}:${PORT}/notify"
 
@@ -965,10 +973,12 @@ send_json_notification() {
   "position": ${position},
   "title": "${escaped_title}",
   "titleColor": "${title_color}",
-  "titleSize": ${DEFAULT_TITLE_SIZE},
+  "titleSize": ${title_size},
+  "titleAlignment": ${title_align},
   "message": "${escaped_message}",
   "messageColor": "${msg_color}",
-  "messageSize": ${DEFAULT_MSG_SIZE},
+  "messageSize": ${msg_size},
+  "messageAlignment": ${msg_align},
   "backgroundColor": "${bg_color}",
   "borderRadius": ${border_radius},
   "borderWidth": ${border_width},
@@ -1081,6 +1091,7 @@ Options:
   -o    Overwrite the current notification
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
+  -g    Gallery mode: Systematic walkthrough of all animations and positions
   -m    Monitor RAM usage in background. Optional: seconds (default: auto)
   -k    Stop the active WHEP pipeline and server
   -h, --help, -?  Show this help message and exit
@@ -1120,6 +1131,7 @@ main() {
   local use_long_text="false"
   local immediate_cancel="false"
   local run_stress="false"
+  local run_gallery="false"
   local kill_whep_pipeline="false"
   local force_start_webrtc="false"
   local server_only="false"
@@ -1129,7 +1141,7 @@ main() {
   local repeat_count=1
   local repeat_explicit="false"
 
-  while getopts "d:t:u:alockswmhr?" opt; do
+  while getopts "d:t:u:alockswmghr?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       t) test_type="${OPTARG}" ;;
@@ -1140,6 +1152,7 @@ main() {
       c) immediate_cancel="true" ;;
       k) kill_whep_pipeline="true" ;;
       s) run_stress="true" ;;
+      g) run_gallery="true" ;;
       r)
         repeat_count=5
         repeat_explicit="true"
@@ -1353,24 +1366,27 @@ main() {
     local bg border title_c msg_c
     IFS=';' read -r bg border title_c msg_c <<< "${theme_str}"
 
-    local radius border_w padding anim_type anim_dur target_fit
+    local radius border_w padding anim_type anim_dur target_fit title_s msg_s
     local style_data
     style_data=$(get_random_style "${type}")
-    read -r radius border_w padding anim_type anim_dur target_fit <<< "${style_data}"
+    read -r radius border_w padding anim_type anim_dur target_fit title_s msg_s <<< "${style_data}"
     [[ -z "${fit}" ]] && fit="${target_fit}"
 
     local rand_media_pos=$(( RANDOM % 4 ))
+    local rand_t_a=$(( RANDOM % 3 ))
+    local rand_m_a=$(( RANDOM % 3 ))
 
     local info_msg fit_label=""
     [[ -n "${fit}" ]] && fit_label=" | Fit: ${fit}"
-    info_msg=$(printf "Theme: %s\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)\nOverwrite: %s%b" \
+    info_msg=$(printf "Theme: %s\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
       "${theme_name}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${rand_media_pos}" "${padding}" \
-      "${anim_type}" "${anim_dur}" "${overwrite}" "${suffix}")
+      "${anim_type}" "${anim_dur}" "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${overwrite}" "${suffix}")
 
     local response
     response=$(send_json_notification "${target_ip}" "${title}" "${info_msg}" "${media}" \
       "${pos}" "${bg}" "${border_w}" "${border}" "${title_c}" "${msg_c}" \
-      "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}")
+      "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}" \
+      "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}")
 
     local table_type="${type^^}"
     [[ -n "${fit}" ]] && table_type="${table_type}(${fit:0:1})"
@@ -1524,6 +1540,44 @@ main() {
 
   if [[ "${run_stress}" == "true" ]]; then
     run_stress_test "${target_ip}" "${suffix}" "${recovery_time}"
+    return 0
+  fi
+
+  if [[ "${run_gallery}" == "true" ]]; then
+    printf "[SYSTEM] Starting Animation Gallery walkthrough (Randomized Positions)...\n"
+    print_table_header
+    local a e
+    for e in "false" "true"; do
+      for a in {0..10}; do
+        local rand_p=$(( RANDOM % 5 ))
+        local rand_t_a=$(( RANDOM % 3 ))
+        local rand_m_a=$(( RANDOM % 3 ))
+        local rand_t_s=$(( 18 + RANDOM % 15 ))
+        local rand_m_s=$(( 12 + RANDOM % 10 ))
+
+        local title="Gallery Anim ${a}"
+        local info="Pos: ${POS_NAMES[$rand_p]} | Exit: ${e}\nAlign: T=${ALIGN_NAMES[$rand_t_a]}, M=${ALIGN_NAMES[$rand_m_a]}\nSize: T=${rand_t_s}, M=${rand_m_s}"
+
+        local style_info
+        style_info=$(printf "Pos:%s Algn:%s/%s Size:%s/%s Anim:%s (%sms) Exit:%s" \
+            "${rand_p}" "${rand_t_a}" "${rand_m_a}" "${rand_t_s}" "${rand_m_s}" "${a}" "500" "${e}")
+
+        # Mix in some colors and borders from themes
+        local theme_str
+        theme_str=$(get_random_theme_colors)
+        local bg border title_c msg_c
+        IFS=';' read -r bg border title_c msg_c <<< "${theme_str}"
+
+        local response
+        response=$(send_json_notification "${target_ip}" "${title}" "${info}" "null" \
+          "${rand_p}" "${bg}" "2" "${border}" "${title_c}" "${msg_c}" \
+          "12" "0" "20" "${a}" "500" "true" \
+          "${rand_t_a}" "${rand_m_a}" "${rand_t_s}" "${rand_m_s}")
+
+        print_result_row "GALLERY" "Mixed" "${style_info}" "${target_ip}" "${response}"
+        sleep 2.2
+      done
+    done
     return 0
   fi
 

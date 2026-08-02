@@ -225,6 +225,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             binding.popupScrollView.isVisible = true
             (binding.popupScrollView.layoutParams as? LinearLayout.LayoutParams)?.gravity = gravity
 
+            // Additionally align the text container content block within the popup
+            (binding.textContainer.layoutParams as? LinearLayout.LayoutParams)?.gravity = gravity
+
             binding.popupContainer.post { adjustHeights() }
         } ?: run {
             binding.popupMessage.isVisible = false
@@ -260,11 +263,12 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val margin = context.dpToPx(8)
 
         val firstParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-            if (mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
+            if (first != binding.textContainer && mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
             setMargins(0, 0, 0, if (mediaFirst) margin else 0)
         }
+
         val secondParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-            if (!mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
+            if (second != binding.textContainer && !mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
             setMargins(0, if (!mediaFirst) margin else 0, 0, 0)
         }
 
@@ -280,6 +284,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             gravity = Gravity.CENTER_VERTICAL
             setMargins(0, 0, if (mediaFirst) margin else 0, 0)
         }
+
         val secondParams = LinearLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.CENTER_VERTICAL
             setMargins(if (!mediaFirst) margin else 0, 0, 0, 0)

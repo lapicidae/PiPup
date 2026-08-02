@@ -230,7 +230,8 @@ class PipUpService : Service() {
             NanoHTTPD.Method.POST -> {
                 val length = session.headers["content-length"]?.toIntOrNull() ?: 0
                 if (length > 0) {
-                    val data = Json.mapper.readValue(session.inputStream, AppSettings.SettingsData::class.java)
+                    val content = session.inputStream.readExactBytes(length)
+                    val data = Json.mapper.readValue(content, AppSettings.SettingsData::class.java)
                     handler.post {
                         settings.apply(data)
                         cachedLandingPage = null // Invalidate cache on settings change
@@ -242,7 +243,7 @@ class PipUpService : Service() {
         }
     }
 
-    private fun applySettingsDefaults(props: PopupProps): PopupProps {
+    internal fun applySettingsDefaults(props: PopupProps): PopupProps {
         return props.copy(
             backgroundColor = if (props.backgroundColor == "#CC000000") settings.getFullBackgroundColor() else props.backgroundColor,
             borderRadius = if (props.borderRadius == 0) settings.borderRadius else props.borderRadius,

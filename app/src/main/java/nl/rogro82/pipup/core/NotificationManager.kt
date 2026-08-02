@@ -47,8 +47,11 @@ class NotificationManager(
                 currentPopup?.let {
                     Log.d(TAG, "Overwrite: Updating existing visible popup")
                     handler.removeCallbacksAndMessages(durationToken)
+
                     it.updateFromProps(props)
-                    it.startMedia() // Restart/play if media was added/updated
+                    it.layoutParams = getLayoutParams(props)
+                    it.animateIn()
+                    it.startMedia()
 
                     // Reset the duration timer
                     handler.postAtTime({
@@ -164,7 +167,19 @@ class NotificationManager(
             return
         }
 
-        val params = FrameLayout.LayoutParams(
+        val params = getLayoutParams(props)
+        overlayView.addView(view, params)
+        currentPopup = view
+        view.animateIn()
+        view.startMedia()
+
+        handler.postAtTime({
+            removeCurrentPopup()
+        }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
+    }
+
+    private fun getLayoutParams(props: PopupProps): FrameLayout.LayoutParams {
+        return FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply {
@@ -177,15 +192,6 @@ class NotificationManager(
                 PopupProps.Position.Center -> { gravity = Gravity.CENTER }
             }
         }
-
-        overlayView.addView(view, params)
-        currentPopup = view
-        view.animateIn()
-        view.startMedia()
-
-        handler.postAtTime({
-            removeCurrentPopup()
-        }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
     }
 
     private fun removeCurrentPopup(immediate: Boolean = false, triggerNext: Boolean = true) {

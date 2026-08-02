@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Build
 import android.util.TypedValue
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import java.io.InputStream
 import java.net.Inet4Address
 import java.net.NetworkInterface.getNetworkInterfaces
 import java.net.SocketException
@@ -69,4 +70,18 @@ fun Context.getScaledPixels(pixels: Int): Int {
     val displayMetrics = resources.displayMetrics
     val scaleFactor = displayMetrics.widthPixels.toFloat() / 1920f
     return (pixels * scaleFactor).toInt()
+}
+
+/**
+ * Reads exactly [length] bytes from the given [InputStream].
+ */
+fun InputStream.readExactBytes(length: Int): ByteArray {
+    val buffer = ByteArray(length)
+    var totalRead = 0
+    while (totalRead < length) {
+        val read = read(buffer, totalRead, length - totalRead)
+        if (read <= 0) break
+        totalRead += read
+    }
+    return buffer
 }

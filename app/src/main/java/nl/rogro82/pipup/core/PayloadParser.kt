@@ -6,8 +6,8 @@ import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.readExactBytes
 import java.io.File
-import java.io.InputStream
 
 /**
  * Responsible for parsing incoming NanoHTTPD sessions into [PopupProps].
@@ -112,16 +112,5 @@ class PayloadParser(private val context: Context) {
     } catch (e: Exception) {
         Log.e(TAG, "Multipart parsing error", e)
         null
-    }
-
-    private fun InputStream.readExactBytes(length: Int): ByteArray {
-        val buffer = ByteArray(length)
-        var totalRead = 0
-        while (totalRead < length) {
-            val read = read(buffer, totalRead, length - totalRead)
-            if (read <= 0) break
-            totalRead += read
-        }
-        return buffer
     }
 }

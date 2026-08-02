@@ -77,6 +77,8 @@ android {
 
         targetSdk 37
 
+        testInstrumentationRunner "nl.rogro82.pipup.PiPupTestRunner"
+
         // Automatic versioning logic
         versionCode getTimestampVersion()
 
@@ -139,7 +141,6 @@ android {
             jvmTarget.set(JvmTarget.JVM_17)
         }
     }
-
 }
 
 /**
@@ -203,6 +204,10 @@ dependencies {
     implementation libs.media3.rtsp
 
     testImplementation libs.junit
+    androidTestImplementation libs.androidx.test.ext.junit
+    androidTestImplementation libs.androidx.test.runner
+    androidTestImplementation libs.espresso.core
+    androidTestImplementation libs.espresso.contrib
 }
 /**
  * File reference to the shell script responsible for sending PiPup test notifications.
