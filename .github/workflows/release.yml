@@ -36,7 +36,7 @@ jobs:
       # Sets up JDK 21 with Temurin and configures server-id for
       # potential publication to Maven-style repositories.
       - name: Set up JDK 21
-        uses: actions/setup-java@v5.6.0
+        uses: actions/setup-java@v5.7.0
         with:
           java-version: '21'
           distribution: 'temurin'
