@@ -3,6 +3,8 @@ package nl.rogro82.pipup
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.core.content.edit
+import androidx.core.graphics.toColorInt
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
@@ -75,6 +77,7 @@ class AppSettings(context: Context) {
         }
     }
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     data class SettingsData(
         val positionIndex: Int,
         val backgroundColor: String,
@@ -125,30 +128,30 @@ class AppSettings(context: Context) {
     fun apply(data: SettingsData) {
         prefs.edit {
             putInt("position_index", data.positionIndex)
-            putString("background_color", data.backgroundColor)
-            putInt("background_alpha", data.backgroundAlpha)
-            putString("title_color", data.titleColor)
-            putFloat("title_size", data.titleSize)
-            putString("message_color", data.messageColor)
-            putFloat("message_size", data.messageSize)
-            putInt("border_radius", data.borderRadius)
-            putInt("border_width", data.borderWidth)
-            putString("border_color", data.borderColor)
-            putInt("content_padding", data.contentPadding)
-            putInt("title_alignment", data.titleAlignment)
-            putInt("message_alignment", data.messageAlignment)
-            putInt("media_position", data.mediaPosition)
-            putInt("animation_type", data.animationType)
-            putInt("animation_duration", data.animationDuration)
+            putString("background_color", validateHexColor(data.backgroundColor, DEFAULT_BG_COLOR))
+            putInt("background_alpha", data.backgroundAlpha.coerceIn(0, 255))
+            putString("title_color", validateHexColor(data.titleColor, DEFAULT_TITLE_COLOR))
+            putFloat("title_size", data.titleSize.coerceIn(10f, 100f))
+            putString("message_color", validateHexColor(data.messageColor, DEFAULT_MSG_COLOR))
+            putFloat("message_size", data.messageSize.coerceIn(8f, 80f))
+            putInt("border_radius", data.borderRadius.coerceIn(0, 200))
+            putInt("border_width", data.borderWidth.coerceIn(0, 50))
+            putString("border_color", validateHexColor(data.borderColor, DEFAULT_BORDER_COLOR))
+            putInt("content_padding", data.contentPadding.coerceIn(0, 200))
+            putInt("title_alignment", data.titleAlignment.coerceIn(0, 2))
+            putInt("message_alignment", data.messageAlignment.coerceIn(0, 2))
+            putInt("media_position", data.mediaPosition.coerceIn(0, 3))
+            putInt("animation_type", data.animationType.coerceIn(0, 10))
+            putInt("animation_duration", data.animationDuration.coerceIn(0, 5000))
             putBoolean("animation_exit", data.animationExit)
-            putInt("media_timeout", data.mediaTimeout)
-            putInt("media_retries", data.mediaRetries)
+            putInt("media_timeout", data.mediaTimeout.coerceIn(1, 60))
+            putInt("media_retries", data.mediaRetries.coerceIn(0, 10))
             putBoolean("pre_warm_webview", data.preWarmWebView)
-            putInt("app_theme", data.appTheme)
+            putInt("app_theme", data.appTheme.coerceIn(0, 1))
             putBoolean("advanced_mode", data.advancedMode)
-            putInt("update_channel", data.updateChannel)
-            putInt("update_interval", data.updateInterval)
-            putInt("update_notification_style", data.updateNotificationStyle)
+            putInt("update_channel", data.updateChannel.coerceIn(-1, 1))
+            putInt("update_interval", data.updateInterval.coerceIn(0, 4))
+            putInt("update_notification_style", data.updateNotificationStyle.coerceIn(0, 2))
             putLong("last_update_check", data.lastUpdateCheck)
             putString("update_available_tag", data.updateAvailableTag)
             putBoolean("update_repeat", data.updateRepeat)
@@ -159,6 +162,17 @@ class AppSettings(context: Context) {
             putString("language", data.language)
         }
         cachedFullBgColor = null
+    }
+
+    private fun validateHexColor(hex: String, fallback: String): String {
+        return try {
+            val clean = if (hex.startsWith("#")) hex else "#$hex"
+            clean.toColorInt()
+            if (clean.length != 4 && clean.length != 7 && clean.length != 9) return fallback
+            clean
+        } catch (_: Exception) {
+            fallback
+        }
     }
 
     private var cachedFullBgColor: String? = null

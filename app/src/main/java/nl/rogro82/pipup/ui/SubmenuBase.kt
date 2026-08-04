@@ -198,7 +198,12 @@ abstract class SubmenuBase(
     ) {
         val spinner = root.findViewById<Spinner>(resId) ?: return
         spinner.adapter = adapter
-        spinner.setSelection(initialSelection)
+
+        // Safety: Clamp the initial selection to avoid IndexOutOfBoundsException if
+        // settings were updated via API with out-of-range values.
+        val safeSelection = initialSelection.coerceIn(0, (adapter.count - 1).coerceAtLeast(0))
+        spinner.setSelection(safeSelection)
+
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             private var initialCall = true
             override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {

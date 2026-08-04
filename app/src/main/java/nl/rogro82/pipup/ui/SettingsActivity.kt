@@ -1,8 +1,11 @@
 package nl.rogro82.pipup.ui
 
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.ColorStateList
 import android.graphics.Paint
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -48,6 +51,15 @@ class SettingsActivity : AppCompatActivity() {
         R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_updates, R.id.nav_item_advanced,
     )
 
+    private val settingsReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "nl.rogro82.pipup.SETTINGS_CHANGED") {
+                android.util.Log.d("SettingsActivity", "Remote settings change detected, refreshing UI")
+                recreate()
+            }
+        }
+    }
+
     val materialColors = listOf(
         ColorEntry(R.string.color_deep_slate,    "#0F1417"), // Deep Slate (Basis-Hintergrund)
         ColorEntry(R.string.color_midnight_violet,   "#312B3F"), // Midnight Violet (Tonal Tone 20)
@@ -91,6 +103,13 @@ class SettingsActivity : AppCompatActivity() {
         setupNavRail()
         loadSubmenu(R.layout.submenu_general, R.id.nav_item_general)
         findViewById<View>(R.id.nav_item_general).requestFocus()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"))
+        }
     }
 
     private fun setupNavRail() {
@@ -339,6 +358,9 @@ class SettingsActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            unregisterReceiver(settingsReceiver)
+        } catch (_: Exception) {}
         cachedPlaceholder?.recycle()
         cachedPlaceholder = null
     }

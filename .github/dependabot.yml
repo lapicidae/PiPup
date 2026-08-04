@@ -7,7 +7,7 @@
 version: 2
 updates:
 
-  # Keep GitHub Actions up to date
+  # Keep GitHub Actions up-to-date
   # Checks for new versions of workflow steps (e.g., checkout, setup-java) daily.
   - package-ecosystem: "github-actions"
     directory: "/"

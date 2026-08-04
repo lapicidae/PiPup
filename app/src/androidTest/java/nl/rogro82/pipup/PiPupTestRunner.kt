@@ -11,7 +11,6 @@ import androidx.test.runner.AndroidJUnitRunner
  * Prepares the environment via Shell-Commands BEFORE the app starts.
  * The application code remains 100% clean and unaware of the test environment.
  */
-@Suppress("unused")
 class PiPupTestRunner : AndroidJUnitRunner() {
     override fun onCreate(arguments: Bundle?) {
         val packageName = targetContext.packageName

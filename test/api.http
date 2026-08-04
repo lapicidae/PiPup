@@ -1,0 +1,71 @@
+# PiPup API Testing
+# -----------------
+#
+# To use your own IP without changing this file, create a private file in the project root:
+# http-client.private.env.json
+#
+# NOTE: For Emulator testing, run this command in your terminal first:
+# adb forward tcp:7979 tcp:7979
+
+### Send a standard notification
+POST {{baseUrl}}/notify
+Content-Type: application/json
+
+{
+  "duration": 30,
+  "position": 0,
+  "title": "API Test",
+  "titleColor": "#0066cc",
+  "titleSize": 20,
+  "message": "Testing the HTTP Client connection...",
+  "messageColor": "#000000",
+  "messageSize": 14,
+  "backgroundColor": "#ffffff",
+  "media": {
+    "image": {
+      "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png",
+      "width": 480
+    }
+  }
+}
+
+### Test Settings Transfer (with invalid values but valid JSON)
+POST {{baseUrl}}/settings
+Content-Type: application/json
+
+{
+  "positionIndex": 1,
+  "backgroundColor": "#FF0000",
+  "backgroundAlpha": 1000,
+  "titleColor": "#FFFFFF",
+  "titleSize": 24.0,
+  "messageColor": "NOT_A_COLOR",
+  "messageSize": 16.0,
+  "borderRadius": 9999,
+  "borderWidth": 2,
+  "borderColor": "#00FF00",
+  "contentPadding": 25,
+  "titleAlignment": 1,
+  "messageAlignment": 1,
+  "mediaPosition": 1,
+  "animationType": 2,
+  "animationDuration": 750,
+  "animationExit": true,
+  "mediaTimeout": 15,
+  "mediaRetries": 5,
+  "preWarmWebView": true,
+  "appTheme": 1,
+  "advancedMode": true,
+  "updateChannel": 1,
+  "updateInterval": 4,
+  "updateNotificationStyle": 0,
+  "lastUpdateCheck": 123456789,
+  "updateAvailableTag": "v9.9.9",
+  "updateRepeat": true,
+  "lastNotifiedTag": "v8.8.8",
+  "pendingUpdateId": 999,
+  "pendingUpdateDigest": "abcdef",
+  "pendingUpdateTagName": "v9.9.9",
+  "language": "en",
+  "unknown_future_setting": "This unknown field should be ignored by the app without crashing"
+}

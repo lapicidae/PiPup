@@ -14,7 +14,9 @@ import android.os.Looper
 import android.util.Log
 import android.view.WindowManager
 import androidx.annotation.OptIn
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.NotificationCompat
+import androidx.core.os.LocaleListCompat
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.*
 import nl.rogro82.pipup.core.NotificationManager
@@ -234,13 +236,35 @@ class PipUpService : Service() {
                     val data = Json.mapper.readValue(content, AppSettings.SettingsData::class.java)
                     handler.post {
                         settings.apply(data)
+                        applyGlobalSettings(data)
                         cachedLandingPage = null // Invalidate cache on settings change
+                        // Notify UI about settings change
+                        val intent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED").apply {
+                            setPackage(packageName)
+                        }
+                        sendBroadcast(intent)
                     }
                     ok("Settings updated")
                 } else invalidRequest("Empty")
             }
             else -> NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
         }
+    }
+
+    private fun applyGlobalSettings(data: AppSettings.SettingsData) {
+        // 1. App Theme
+        val nightMode = if (data.appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+        if (AppCompatDelegate.getDefaultNightMode() != nightMode) {
+            AppCompatDelegate.setDefaultNightMode(nightMode)
+        }
+
+        // 2. Language
+        val appLocale: LocaleListCompat = if (data.language == "default") {
+            LocaleListCompat.getEmptyLocaleList()
+        } else {
+            LocaleListCompat.forLanguageTags(data.language)
+        }
+        AppCompatDelegate.setApplicationLocales(appLocale)
     }
 
     internal fun applySettingsDefaults(props: PopupProps): PopupProps {
