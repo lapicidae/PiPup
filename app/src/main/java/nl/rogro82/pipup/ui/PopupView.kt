@@ -31,6 +31,7 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import com.bumptech.glide.Glide
 import com.bumptech.glide.load.engine.DiskCacheStrategy
+import java.lang.ref.WeakReference
 import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
@@ -63,26 +64,33 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     @Keep
     inner class JsBridge(private val retryCount: Int = 0) {
+        // Use WeakReference to avoid memory leaks if WebView outlives the View
+        private val viewRef = WeakReference(this@PopupView)
+
         @JavascriptInterface
         fun onMediaPlaying() {
-            mainHandler.post {
-                if (isCleanedUp) return@post
-                android.util.Log.d("PopupView", "WHEP video playing signal received from JS")
-                mWebView?.let {
-                    it.visibility = VISIBLE
-                    removeStaleViews(it)
+            viewRef.get()?.let { popup ->
+                popup.mainHandler.post {
+                    if (popup.isCleanedUp) return@post
+                    android.util.Log.d("PopupView", "WHEP video playing signal received from JS")
+                    popup.mWebView?.let {
+                        it.visibility = VISIBLE
+                        popup.removeStaleViews(it)
+                    }
+                    popup.notifyReady()
+                    popup.adjustHeights()
                 }
-                notifyReady()
-                adjustHeights()
             }
         }
 
         @JavascriptInterface
         fun onMediaError(error: String) {
-            mainHandler.post {
-                if (isCleanedUp) return@post
-                android.util.Log.e("PopupView", "WHEP error signal received from JS: $error")
-                handleWhepRetry(error, retryCount)
+            viewRef.get()?.let { popup ->
+                popup.mainHandler.post {
+                    if (popup.isCleanedUp) return@post
+                    android.util.Log.e("PopupView", "WHEP error signal received from JS: $error")
+                    popup.handleWhepRetry(error, retryCount)
+                }
             }
         }
     }

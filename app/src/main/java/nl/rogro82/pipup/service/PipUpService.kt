@@ -77,6 +77,8 @@ class PipUpService : Service() {
                     @SuppressLint("SetJavaScriptEnabled")
                     val wv = android.webkit.WebView(applicationContext).apply {
                         settings.javaScriptEnabled = true
+                        settings.domStorageEnabled = true // Required for some WebRTC players
+                        settings.mediaPlaybackRequiresUserGesture = false
                         webViewClient = android.webkit.WebViewClient()
                         loadUrl("about:blank")
                     }
@@ -169,7 +171,7 @@ class PipUpService : Service() {
     }
 
     private fun handleLandingPage(): NanoHTTPD.Response {
-        cachedLandingPage?.let { return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/html", it) }
+        cachedLandingPage?.let { return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/html", it).apply { setGzipEncoding(false) } }
 
         val versionName = try {
             packageManager.getPackageInfo(packageName, 0).versionName
@@ -220,14 +222,14 @@ class PipUpService : Service() {
         """.trimIndent()
 
         cachedLandingPage = html
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/html", html)
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/html", html).apply { setGzipEncoding(false) }
     }
 
     private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         return when (session.method) {
             NanoHTTPD.Method.GET -> {
                 val json = Json.mapper.writeValueAsString(settings.getAll())
-                NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json)
+                NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json).apply { setGzipEncoding(false) }
             }
             NanoHTTPD.Method.POST -> {
                 val length = session.headers["content-length"]?.toIntOrNull() ?: 0
@@ -290,11 +292,11 @@ class PipUpService : Service() {
 
     private fun ok(msg: String): NanoHTTPD.Response {
         val json = Json.mapper.writeValueAsString(mapOf("status" to "OK", "message" to msg))
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json)
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json).apply { setGzipEncoding(false) }
     }
 
     private fun invalidRequest(msg: String?): NanoHTTPD.Response {
         val json = Json.mapper.writeValueAsString(mapOf("status" to "Error", "message" to (msg ?: "Invalid")))
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "application/json", json)
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "application/json", json).apply { setGzipEncoding(false) }
     }
 }

@@ -88,6 +88,11 @@ class NotificationManager(
     }
 
     private fun canUpdateInPlace(oldProps: PopupProps, newProps: PopupProps): Boolean {
+        // Only update in-place if media type, URI, and animation remain identical.
+        // Changing the animation style usually feels more natural with a fresh popup.
+        if (oldProps.animationType != newProps.animationType ||
+            oldProps.animationDuration != newProps.animationDuration) return false
+
         val m1 = oldProps.media ?: oldProps.image?.let { PopupProps.Media.Image(it, oldProps.imageWidth ?: 480) }
         val m2 = newProps.media ?: newProps.image?.let { PopupProps.Media.Image(it, newProps.imageWidth ?: 480) }
 

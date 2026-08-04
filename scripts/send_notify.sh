@@ -1275,6 +1275,15 @@ main() {
 
   # Ensure WebServer is listening before starting tests (robust readiness check)
   if [[ "${target_ip}" =~ ^(localhost|127\.0\.0\.1)$ ]]; then
+    if ! (printf '' > "/dev/tcp/127.0.0.1/${PORT}") >/dev/null 2>&1; then
+       printf "[SYSTEM] Port %s closed. Attempting auto-forward... " "${PORT}"
+       if command -v adb >/dev/null 2>&1 && adb devices | grep -q "device$"; then
+          adb forward "tcp:${PORT}" "tcp:${PORT}" >/dev/null 2>&1 && printf "OK\n" || printf "FAILED\n"
+       else
+          printf "FAILED (No device found)\n"
+       fi
+    fi
+
     printf "[SYSTEM] Waiting for PiPup WebServer on port %s... " "${PORT}"
     local ready=false
     for ((i=1; i<=15; i++)); do
