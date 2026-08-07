@@ -6,6 +6,7 @@ import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.readExactBytes
 import java.io.File
 
@@ -64,12 +65,12 @@ class PayloadParser(private val context: Context) {
         val scale = getVal("scale")?.toBoolean() ?: true
 
         val titleSize = getVal("titleSize")?.toFloatOrNull() ?: AppSettings.DEFAULT_TITLE_SIZE
-        val titleColor = getVal("titleColor") ?: AppSettings.DEFAULT_TITLE_COLOR
+        val titleColor = getVal("titleColor") ?: context.colorToHex(nl.rogro82.pipup.R.color.preset_platinum)
         val messageSize = getVal("messageSize")?.toFloatOrNull() ?: AppSettings.DEFAULT_MSG_SIZE
-        val messageColor = getVal("messageColor") ?: AppSettings.DEFAULT_MSG_COLOR
+        val messageColor = getVal("messageColor") ?: context.colorToHex(nl.rogro82.pipup.R.color.preset_silver)
         val borderRadius = getVal("borderRadius")?.toIntOrNull() ?: AppSettings.DEFAULT_RADIUS
         val borderWidth = getVal("borderWidth")?.toIntOrNull() ?: AppSettings.DEFAULT_BORDER_WIDTH
-        val borderColor = getVal("borderColor") ?: AppSettings.DEFAULT_BORDER_COLOR
+        val borderColor = getVal("borderColor") ?: context.colorToHex(nl.rogro82.pipup.R.color.preset_gunmetal)
         val titleAlignment = getVal("titleAlignment")?.toIntOrNull() ?: 0
         val messageAlignment = getVal("messageAlignment")?.toIntOrNull() ?: 0
         val mediaPosition = getVal("mediaPosition")?.toIntOrNull()

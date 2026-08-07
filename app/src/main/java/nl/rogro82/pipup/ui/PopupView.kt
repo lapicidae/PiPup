@@ -61,6 +61,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var isReadyCalled = false
     private var isCleanedUp = false
     private var isFirstAnimateIn = true
+    private var lastMediaError: String? = null
 
     @Keep
     inner class JsBridge(private val retryCount: Int = 0) {
@@ -96,6 +97,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     private fun handleWhepRetry(error: String, currentRetry: Int) {
+        lastMediaError = error
         val maxRetries = this@PopupView.settings.mediaRetries
         if (currentRetry < maxRetries && !isCleanedUp) {
             val nextRetry = currentRetry + 1
@@ -109,15 +111,18 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }, 1000L * nextRetry)
         } else {
             android.util.Log.e("PopupView", "WHEP load failed permanently after $currentRetry retries")
-            showPlaceholder(error)
-            notifyReady()
+            mainHandler.post {
+                showPlaceholder(error)
+                notifyReady()
+            }
         }
     }
 
     private val timeoutRunnable = Runnable {
         if (!isReadyCalled) {
-            android.util.Log.w("PopupView", "Media loading timed out, showing placeholder")
-            showPlaceholder(context.getString(nl.rogro82.pipup.R.string.media_error_timeout))
+            android.util.Log.w("PopupView", "Media loading timed out, showing placeholder (last error: $lastMediaError)")
+            // Use the specific error message if available, otherwise fallback to generic timeout
+            showPlaceholder(lastMediaError ?: context.getString(nl.rogro82.pipup.R.string.media_error_timeout))
             notifyReady()
         }
     }
@@ -130,13 +135,18 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     fun showPlaceholder(errorMessage: String? = null) {
+        // Ensure visibility is restored if we were in an invisible pre-loading state
+        mWebView?.visibility = VISIBLE
+
         val frame = binding.popupMediaFrame
         frame.removeAllViews()
         val iv = ImageView(context).apply {
-            setImageResource(nl.rogro82.pipup.R.mipmap.ic_banner)
+            setImageResource(nl.rogro82.pipup.R.drawable.ic_banner)
             alpha = 0.5f
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
+
+        // Determine width once to keep layout stable
         val width = when (val m = props.media) {
             is PopupProps.Media.Image -> m.width
             is PopupProps.Media.Video -> m.width
@@ -147,26 +157,47 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             else -> props.imageWidth ?: 480
         }
         val tw = if (props.scale) context.getScaledPixels(width) else context.dpToPx(width)
-        targetMediaHeight = (tw * 9) / 16
+
+        // Preserve original target height if already set (e.g. from WHEP props)
+        // to prevent jumps during error state transitions.
+        if (targetMediaHeight <= 0) {
+            targetMediaHeight = (tw * 9) / 16
+        }
+
         frame.layoutParams.width = tw
         frame.layoutParams.height = targetMediaHeight
         frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         frame.isVisible = true
 
-        errorMessage?.let { msg ->
-            val errorDetails = context.getString(nl.rogro82.pipup.R.string.media_error_prefix, msg)
+        errorMessage?.let { rawMsg ->
+            val prettyError = beautifyErrorMessage(rawMsg)
             val mainMessage = props.message
 
             binding.popupMessage.text = if (mainMessage.isNullOrBlank()) {
-                context.getString(nl.rogro82.pipup.R.string.media_error_only, errorDetails)
+                context.getString(nl.rogro82.pipup.R.string.media_error_only, prettyError)
             } else {
-                context.getString(nl.rogro82.pipup.R.string.media_error_with_message, mainMessage, errorDetails)
+                context.getString(nl.rogro82.pipup.R.string.media_error_with_message, mainMessage, prettyError)
             }
             binding.popupMessage.isVisible = true
             binding.popupScrollView.isVisible = true
         }
 
-        adjustHeights()
+        // Apply final heights but avoid re-calculation jumps
+        mainHandler.post { adjustHeights() }
+    }
+
+    private fun beautifyErrorMessage(rawError: String): String {
+        return when {
+            rawError.contains("codecs not matched", ignoreCase = true) ->
+                context.getString(nl.rogro82.pipup.R.string.media_error_codec_mismatch)
+            rawError.contains("404") || rawError.contains("not found", ignoreCase = true) ->
+                context.getString(nl.rogro82.pipup.R.string.media_error_not_found)
+            rawError.contains("ICE", ignoreCase = true) || rawError.contains("connection", ignoreCase = true) ->
+                context.getString(nl.rogro82.pipup.R.string.media_error_connection)
+            rawError.contains("timeout", ignoreCase = true) ->
+                context.getString(nl.rogro82.pipup.R.string.media_error_timeout)
+            else -> rawError
+        }
     }
 
     interface ReadyListener {
@@ -202,7 +233,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         calculateTargetDimensions(newMedia, newProps)
         updateVisuals()
 
-        if (contentChanged) {
+        if (contentChanged || newMedia is PopupProps.Media.Bitmap) {
             setupMediaContent()
         } else {
             // Handle property-only updates (e.g. WHEP videoFit) without full reload
@@ -488,6 +519,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val isSameType = if (frame.isNotEmpty()) {
             val child = frame.getChildAt(0)
             (media is PopupProps.Media.Image && child is ImageView) ||
+            (media is PopupProps.Media.Bitmap && child is ImageView) ||
             (media is PopupProps.Media.Whep && child is WebView) ||
             (media is PopupProps.Media.Web && child is WebView) ||
             (media is PopupProps.Media.Video && child is TextureView)
@@ -584,6 +616,14 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
 
+        // Clean up previous player if this is a retry, but keep placeholders
+        mPlayer?.let {
+            it.stop()
+            it.release()
+        }
+        mPlayer = null
+        mVideoView?.let { frame.removeView(it) }
+
         val player = ExoPlayer.Builder(context)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(500, 1000, 250, 500).build())
             .build().also { mPlayer = it }
@@ -649,6 +689,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
 
+        // Clean up previous WebView if this is a retry, but keep placeholders
+        mWebView?.let { oldWv ->
+            oldWv.stopLoading()
+            oldWv.loadUrl("about:blank")
+            frame.removeView(oldWv)
+            oldWv.destroy()
+        }
+        mWebView = null
+
         val wv = WebView(context).apply {
             visibility = INVISIBLE // Hide until page finished
             setBackgroundColor(android.graphics.Color.TRANSPARENT)
@@ -677,6 +726,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 }
 
                 private fun handleWebError(description: String) {
+                    lastMediaError = description
                     errorOccurred = true
                     val maxRetries = this@PopupView.settings.mediaRetries
                     if (retryCount < maxRetries && !isCleanedUp) {
@@ -747,6 +797,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             // Apply dimensions immediately to avoid fullscreen flash before next layout pass
             frame.layoutParams.width = tw
             frame.layoutParams.height = th
+
+            // Clean up previous WebView if this is a retry, but keep placeholders
+            mWebView?.let { oldWv ->
+                oldWv.stopLoading()
+                oldWv.loadUrl("about:blank")
+                frame.removeView(oldWv)
+                oldWv.destroy()
+            }
+            mWebView = null
 
             val wv = WebView(context).apply {
                 visibility = INVISIBLE // Hide until WHEP signal received
@@ -833,6 +892,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
             builder.listener(object : com.bumptech.glide.request.RequestListener<Drawable> {
                 override fun onLoadFailed(e: com.bumptech.glide.load.engine.GlideException?, model: Any?, target: com.bumptech.glide.request.target.Target<Drawable>, isFirstResource: Boolean): Boolean {
+                    val errorMsg = e?.message ?: "Glide load failed"
+                    lastMediaError = errorMsg
+
                     val maxRetries = this@PopupView.settings.mediaRetries
                     if (retryCount < maxRetries && !isCleanedUp) {
                         val nextRetry = retryCount + 1
@@ -873,13 +935,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         frame.layoutParams.height = targetMediaHeight
         frame.requestLayout()
 
-        val iv = ImageView(context).apply {
-            setImageBitmap(bitmap)
+        // Reuse existing ImageView if available to prevent flickering
+        val iv = (if (frame.isNotEmpty()) frame.getChildAt(0) else null) as? ImageView ?: ImageView(context).apply {
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
+            frame.addView(this, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         }
+
+        iv.setImageBitmap(bitmap)
         removeStaleViews(iv)
-        frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         notifyReady()
     }
 

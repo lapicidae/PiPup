@@ -9,8 +9,11 @@ import android.view.Gravity
 import android.view.WindowManager
 import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.dpToPx
+import nl.rogro82.pipup.getLocalizedContext
+import nl.rogro82.pipup.showToast
 import nl.rogro82.pipup.ui.PopupView
 import java.util.*
 
@@ -147,7 +150,9 @@ class NotificationManager(
             processNext()
         }, SAFETY_TIMEOUT_TOKEN, android.os.SystemClock.uptimeMillis() + 45000)
 
-        val view = PopupView(context, props)
+        // Ensure the popup uses the currently selected language
+        val localizedContext = context.getLocalizedContext(PiPupApp.settings.language)
+        val view = PopupView(localizedContext, props)
         preparingView = view
         view.readyListener = object : PopupView.ReadyListener {
             override fun onReady() {
@@ -185,7 +190,11 @@ class NotificationManager(
     }
 
     private fun replaceCurrentPopup(newView: PopupView, props: PopupProps) {
-        val overlayView = ensureOverlay() ?: return
+        val overlayView = ensureOverlay() ?: run {
+            val localizedContext = context.getLocalizedContext(PiPupApp.settings.language)
+            context.showToast(localizedContext.getString(nl.rogro82.pipup.R.string.error_permission_denied_overlay), android.widget.Toast.LENGTH_LONG)
+            return
+        }
         Log.d(TAG, "Overwrite: Swapping visible popup with new prepared one")
 
         val oldView = currentPopup
@@ -211,6 +220,8 @@ class NotificationManager(
     private fun showPopup(view: PopupView, props: PopupProps) {
         val overlayView = ensureOverlay() ?: run {
             Log.e(TAG, "Aborting popup: could not create overlay (check SYSTEM_ALERT_WINDOW permission)")
+            val localizedContext = context.getLocalizedContext(PiPupApp.settings.language)
+            context.showToast(localizedContext.getString(nl.rogro82.pipup.R.string.error_permission_denied_overlay), android.widget.Toast.LENGTH_LONG)
             view.cleanup()
             checkNextAfterRemoval()
             return

@@ -7,6 +7,7 @@ import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.colorToHex
 
 @UnstableApi
 class BorderSubmenu(
@@ -21,7 +22,7 @@ class BorderSubmenu(
         setupSeekBar(root, R.id.seekbar_border_width, R.id.text_border_width_value, settings.borderWidth) { settings.borderWidth = it }
 
         val colors = settingsActivity?.materialColors ?: emptyList()
-        val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, AppSettings.DEFAULT_BORDER_COLOR)
+        val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_gunmetal))
         setupSpinner(root, R.id.spinner_border_color, adapter, 0) {
             val color = adapter.colors[it].hex
             settings.borderColor = color

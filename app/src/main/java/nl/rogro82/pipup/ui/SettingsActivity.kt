@@ -31,6 +31,7 @@ import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.databinding.ActivitySettingsBinding
 
 @UnstableApi
@@ -54,30 +55,34 @@ class SettingsActivity : AppCompatActivity() {
     private val settingsReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "nl.rogro82.pipup.SETTINGS_CHANGED") {
-                android.util.Log.d("SettingsActivity", "Remote settings change detected, refreshing UI")
-                recreate()
+                if (intent.getStringExtra("origin") == "remote") {
+                    android.util.Log.d("SettingsActivity", "Remote settings change detected, refreshing UI")
+                    recreate()
+                }
             }
         }
     }
 
-    val materialColors = listOf(
-        ColorEntry(R.string.color_deep_slate,    "#0F1417"), // Deep Slate (Basis-Hintergrund)
-        ColorEntry(R.string.color_midnight_violet,   "#312B3F"), // Midnight Violet (Tonal Tone 20)
-        ColorEntry(R.string.color_black_plum,     "#492532"), // Black Plum (Tonal Tone 20)
-        ColorEntry(R.string.color_rosewood,      "#601410"), // Rosewood (Tonal Tone 20)
-        ColorEntry(R.string.color_forest_green,    "#0A3915"), // Forest Green (Tonal Tone 20)
-        ColorEntry(R.string.color_deep_umber,   "#4D2B00"), // Deep Umber (Tonal Tone 20)
-        ColorEntry(R.string.color_gunmetal,     "#2F3033"), // Gunmetal (Tonal Tone 20)
-        ColorEntry(R.string.color_navy_blue,    "#002F54"), // Navy Blue (Tonal Tone 20)
-        ColorEntry(R.string.color_platinum,    "#DFE3E7"), // Platinum (Basis-Text)
-        ColorEntry(R.string.color_sweet_lavender, "#D0BCFF"), // Sweet Lavender (Tonal Tone 80)
-        ColorEntry(R.string.color_cotton_candy,"#FFB2C5"),// Cotton Candy (Tonal Tone 80)
-        ColorEntry(R.string.color_peach_blossom,"#F2B8B5"), // Peach Blossom (Tonal Tone 80)
-        ColorEntry(R.string.color_celadon_pastel,     "#B6E3B3"), // Celadon Pastel (Tonal Tone 80)
-        ColorEntry(R.string.color_peach_cream,     "#FFDCBE"), // Peach Cream (Tonal Tone 80)
-        ColorEntry(R.string.color_silver,       "#C6C6C9"), // Silver (Tonal Tone 80)
-        ColorEntry(R.string.color_sky_blue,     "#D1E4FF")  // Sky Blue (Tonal Tone 80)
-    )
+    val materialColors by lazy {
+        listOf(
+            ColorEntry(R.string.color_deep_slate,    colorToHex(R.color.preset_deep_slate)),
+            ColorEntry(R.string.color_midnight_violet,   colorToHex(R.color.preset_midnight_violet)),
+            ColorEntry(R.string.color_black_plum,     colorToHex(R.color.preset_black_plum)),
+            ColorEntry(R.string.color_rosewood,      colorToHex(R.color.preset_rosewood)),
+            ColorEntry(R.string.color_forest_green,    colorToHex(R.color.preset_forest_green)),
+            ColorEntry(R.string.color_deep_umber,   colorToHex(R.color.preset_deep_umber)),
+            ColorEntry(R.string.color_gunmetal,     colorToHex(R.color.preset_gunmetal)),
+            ColorEntry(R.string.color_navy_blue,    colorToHex(R.color.preset_navy_blue)),
+            ColorEntry(R.string.color_platinum,    colorToHex(R.color.preset_platinum)),
+            ColorEntry(R.string.color_sweet_lavender, colorToHex(R.color.preset_sweet_lavender)),
+            ColorEntry(R.string.color_cotton_candy, colorToHex(R.color.preset_cotton_candy)),
+            ColorEntry(R.string.color_peach_blossom, colorToHex(R.color.preset_peach_blossom)),
+            ColorEntry(R.string.color_celadon_pastel,     colorToHex(R.color.preset_celadon_pastel)),
+            ColorEntry(R.string.color_peach_cream,     colorToHex(R.color.preset_peach_cream)),
+            ColorEntry(R.string.color_silver,       colorToHex(R.color.preset_silver)),
+            ColorEntry(R.string.color_sky_blue,     colorToHex(R.color.preset_sky_blue))
+        )
+    }
 
     private var cachedPlaceholder: android.graphics.Bitmap? = null
 
@@ -361,7 +366,8 @@ class SettingsActivity : AppCompatActivity() {
         try {
             unregisterReceiver(settingsReceiver)
         } catch (_: Exception) {}
-        cachedPlaceholder?.recycle()
+        // Note: We don't manually recycle the placeholder here to avoid "recycled bitmap" errors
+        // if the UI performs a final layout pass after activity destruction.
         cachedPlaceholder = null
     }
 

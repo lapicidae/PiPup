@@ -1,26 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Semantic Material You Palette - LIGHT -->
+    <!-- Material 3 Semantic Palette - Primary Theme Colors (Light) -->
     <color name="colorPrimary">#196584</color>
     <color name="colorOnPrimary">#FFFFFF</color>
     <color name="colorPrimaryContainer">#C2E8FF</color>
     <color name="colorOnPrimaryContainer">#004D67</color>
-    <color name="colorSecondaryContainer">#D1E5F3</color>
+    <color name="colorSecondaryContainer">#BDE9FF</color>
     <color name="colorSurface">#F6FAFE</color>
     <color name="colorOnSurface">#171C1F</color>
     <color name="colorSurfaceVariant">#EAEEF2</color>
     <color name="colorOnSurfaceVariant">#40484D</color>
     <color name="colorOutline">#71787D</color>
 
+    <!-- App Branding & Identity -->
+    <color name="brand_background">#5599BB</color> <!-- Primary PiPup Blue used for Icons and Banners -->
+    <color name="main_background">#5599BB</color>  <!-- Main Activity Background (Light) -->
+    <color name="main_logo_tint">#FFFFFF</color>   <!-- Logo Color on Main Activity -->
+    <color name="main_on_background">#001d34</color> <!-- Text Color on Main Activity -->
+
+    <!-- Functional UI & Feedback Colors -->
     <color name="status_green">#388E3C</color>
     <color name="status_red">#B3261E</color>
+    <color name="toast_background">#E6212121</color> <!-- System-style dark semi-transparent for Toasts -->
+    <color name="popup_text_default">#FFFFFF</color> <!-- Default Text Color for Notification Popups -->
 
-    <!-- Activity Main Theme Overrides -->
-    <color name="main_background">#5599BB</color>
-    <color name="main_logo_tint">#FFFFFF</color>
-    <color name="main_on_background">#001d34</color>
-
-    <!-- Helper Colors -->
+    <!-- Settings & Previews -->
     <color name="preview_placeholder_bg">#DCE3E9</color>
     <color name="preview_placeholder_text">#40484D</color>
+
+    <!-- Material Design Tonal Presets for Color Selection -->
+    <color name="preset_deep_slate">#0F1417</color> <!-- Deep Slate (Basis-Hintergrund) -->
+    <color name="preset_midnight_violet">#312B3F</color> <!-- Midnight Violet (Tonal Tone 20) -->
+    <color name="preset_black_plum">#492532</color> <!-- Black Plum (Tonal Tone 20) -->
+    <color name="preset_rosewood">#601410</color> <!-- Rosewood (Tonal Tone 20) -->
+    <color name="preset_forest_green">#0A3915</color> <!-- Forest Green (Tonal Tone 20) -->
+    <color name="preset_deep_umber">#4D2B00</color> <!-- Deep Umber (Tonal Tone 20) -->
+    <color name="preset_gunmetal">#2F3033</color> <!-- Gunmetal (Tonal Tone 20) -->
+    <color name="preset_navy_blue">#002F54</color> <!-- Navy Blue (Tonal Tone 20) -->
+    <color name="preset_platinum">#DFE3E7</color> <!-- Platinum (Basis-Text) -->
+    <color name="preset_sweet_lavender">#D0BCFF</color> <!-- Sweet Lavender (Tonal Tone 80) -->
+    <color name="preset_cotton_candy">#FFB2C5</color> <!-- Cotton Candy (Tonal Tone 80) -->
+    <color name="preset_peach_blossom">#F2B8B5</color> <!-- Peach Blossom (Tonal Tone 80) -->
+    <color name="preset_celadon_pastel">#B6E3B3</color> <!-- Celadon Pastel (Tonal Tone 80) -->
+    <color name="preset_peach_cream">#FFDCBE</color> <!-- Peach Cream (Tonal Tone 80) -->
+    <color name="preset_silver">#C6C6C9</color> <!-- Silver (Tonal Tone 80) -->
+    <color name="preset_sky_blue">#D1E4FF</color> <!-- Sky Blue (Tonal Tone 80) -->
 </resources>

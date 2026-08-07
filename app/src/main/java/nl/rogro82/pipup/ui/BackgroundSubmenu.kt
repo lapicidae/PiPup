@@ -7,6 +7,7 @@ import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.colorToHex
 
 @UnstableApi
 class BackgroundSubmenu(
@@ -18,7 +19,7 @@ class BackgroundSubmenu(
 
     override fun onBind(root: View) {
         val colors = settingsActivity?.materialColors ?: emptyList()
-        val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, AppSettings.DEFAULT_BG_COLOR)
+        val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_deep_slate))
         setupSpinner(root, R.id.spinner_bg_color, adapter, 0) {
             val color = adapter.colors[it].hex
             settings.backgroundColor = color

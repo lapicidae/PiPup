@@ -55,6 +55,11 @@ class GeneralSubmenu(
                 }
                 AppCompatDelegate.setApplicationLocales(appLocale)
 
+                // Notify service to clear web cache and update notification
+                val settingsIntent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED")
+                settingsIntent.setPackage(context.packageName)
+                context.sendBroadcast(settingsIntent)
+
                 // The above might already recreate activities, but we ensure a clean state
                 (context as? SettingsActivity)?.let { activity ->
                     val intent = Intent(activity, MainActivity::class.java)
@@ -72,7 +77,14 @@ class GeneralSubmenu(
                 settings.appTheme = it
                 val mode = if (it == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
                 AppCompatDelegate.setDefaultNightMode(mode)
-                (context as? SettingsActivity)?.recreate()
+
+                // Notify service to clear web cache
+                val settingsIntent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED")
+                settingsIntent.setPackage(context.packageName)
+                context.sendBroadcast(settingsIntent)
+
+                // AppCompatDelegate.setDefaultNightMode already triggers activity recreation
+                // if the mode has changed, so we don't need a manual recreate() call here.
             }
         }
 

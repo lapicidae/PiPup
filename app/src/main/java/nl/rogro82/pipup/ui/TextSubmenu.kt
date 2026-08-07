@@ -8,6 +8,7 @@ import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.colorToHex
 
 @UnstableApi
 class TextSubmenu(
@@ -21,7 +22,7 @@ class TextSubmenu(
         val colors = settingsActivity?.materialColors ?: emptyList()
 
         // Title Color
-        val titleAdapter = SettingsActivity.ColorSpinnerAdapter(context, colors, AppSettings.DEFAULT_TITLE_COLOR)
+        val titleAdapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_platinum))
         setupSpinner(root, R.id.spinner_title_color, titleAdapter, 0) {
             val color = titleAdapter.colors[it].hex
             settings.titleColor = color
@@ -37,7 +38,7 @@ class TextSubmenu(
         }
 
         // Message Color
-        val msgAdapter = SettingsActivity.ColorSpinnerAdapter(context, colors, AppSettings.DEFAULT_MSG_COLOR)
+        val msgAdapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_silver))
         setupSpinner(root, R.id.spinner_message_color, msgAdapter, 0) {
             val color = msgAdapter.colors[it].hex
             settings.messageColor = color

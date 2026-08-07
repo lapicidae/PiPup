@@ -9,7 +9,6 @@ import android.util.Log
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -205,7 +204,7 @@ class MainActivity : AppCompatActivity() {
                         Log.d("MainActivity", "Opening system settings main page.")
                     }
                     startActivity(intent)
-                    Toast.makeText(this, R.string.energy_optimization_instructions, Toast.LENGTH_LONG).show()
+                    showToast(getString(R.string.energy_optimization_instructions), android.widget.Toast.LENGTH_LONG)
                 } catch (e: Exception) {
                     Log.e("MainActivity", "Failed to open settings", e)
                     showEnergyInstructionsDialog()
@@ -237,7 +236,7 @@ class MainActivity : AppCompatActivity() {
                 overlayPermissionLauncher.launch(intent)
             } catch (e: Exception) {
                 Log.e("MainActivity", "Failed to launch overlay permission settings", e)
-                Toast.makeText(this, "Please grant overlay permission via ADB if settings are unavailable.", Toast.LENGTH_LONG).show()
+                showToast(getString(R.string.settings_overlay_adb_hint), android.widget.Toast.LENGTH_LONG)
             }
         }
     }

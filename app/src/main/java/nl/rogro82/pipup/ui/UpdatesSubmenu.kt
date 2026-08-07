@@ -8,7 +8,6 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
@@ -118,13 +117,13 @@ class UpdatesSubmenu(
                     settings.lastUpdateCheck = System.currentTimeMillis()
                     btn?.let { updateButtonText(it) }
                     progress.dismiss()
-                    Toast.makeText(context, R.string.settings_update_none, Toast.LENGTH_SHORT).show()
+                    context.showToast(context.getString(R.string.settings_update_none))
                 }
             }
             override fun onError(message: String) {
                 (context as? SettingsActivity)?.runOnUiThread {
                     progress.dismiss()
-                    Toast.makeText(context, context.getString(R.string.settings_update_error, message), Toast.LENGTH_LONG).show()
+                    context.showToast(context.getString(R.string.settings_update_error, message), android.widget.Toast.LENGTH_LONG)
                 }
             }
         })
@@ -170,14 +169,14 @@ class UpdatesSubmenu(
             .setView(container)
             .setPositiveButton(R.string.settings_update_install) { _, _ ->
                 val mgr = UpdateManager(context)
-                Toast.makeText(context, R.string.settings_update_verifying, Toast.LENGTH_SHORT).show()
+                context.showToast(context.getString(R.string.settings_update_verifying))
 
                 mgr.checkForUpdates(settings.updateChannel == 1, object : UpdateManager.UpdateCallback {
                     override fun onUpdateAvailable(release: GitHubRelease) {
                         (context as? SettingsActivity)?.runOnUiThread {
                             if (release.tagName == targetRelease.tagName) {
                                 mgr.downloadAndInstall(release)
-                                Toast.makeText(context, R.string.settings_update_downloading, Toast.LENGTH_LONG).show()
+                                context.showToast(context.getString(R.string.settings_update_downloading), android.widget.Toast.LENGTH_LONG)
                             } else {
                                 // A different (likely newer) update was found during the re-check
                                 showUpdateDialog(release)
@@ -188,7 +187,7 @@ class UpdatesSubmenu(
                     override fun onNoUpdate() {
                         (context as SettingsActivity).run {
                             runOnUiThread {
-                                Toast.makeText(context, R.string.settings_update_no_longer_available, Toast.LENGTH_LONG).show()
+                                context.showToast(context.getString(R.string.settings_update_no_longer_available), android.widget.Toast.LENGTH_LONG)
                                 // Refresh UI state
                                 availableRelease = null
                                 settings.updateAvailableTag = ""
@@ -199,7 +198,7 @@ class UpdatesSubmenu(
 
                     override fun onError(message: String) {
                         (context as SettingsActivity).runOnUiThread {
-                            Toast.makeText(context, "Verification failed: $message", Toast.LENGTH_LONG).show()
+                            context.showToast("Verification failed: $message", android.widget.Toast.LENGTH_LONG)
                         }
                     }
                 })

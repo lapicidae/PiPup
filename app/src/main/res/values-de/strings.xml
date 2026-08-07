@@ -123,11 +123,14 @@
     <string name="update_installer_failed">Installer konnte nicht gestartet werden: %1$s</string>
 
     <string name="service_listening">Warten auf Benachrichtigungen…</string>
-    <string name="media_error_prefix">Medienfehler: %1$s</string>
-    <string name="media_error_timeout">Zeitüberschreitung</string>
+    <string name="media_error_timeout">Ladezeit überschritten</string>
     <string name="media_error_load_failed">Laden fehlgeschlagen</string>
-    <string name="media_error_with_message">%1$s\n\n[%2$s]</string>
-    <string name="media_error_only">[%1$s]</string>
+    <string name="media_error_with_message">%1$s\n\n%2$s</string>
+    <string name="media_error_only">%1$s</string>
+    <string name="media_error_codec_mismatch">Inkompatibles Videoformat (Codec-Fehler)</string>
+    <string name="media_error_not_found">Medium nicht gefunden (404)</string>
+    <string name="media_error_connection">Netzwerkverbindung fehlgeschlagen (ICE-Fehler)</string>
+    <string name="error_permission_denied_overlay">Keine Berechtigung zum Anzeigen von Overlays</string>
     <string name="address_placeholder">---.---.---.---</string>
     <string name="version_placeholder">v?.?.?</string>
 
@@ -142,6 +145,7 @@
     <string name="settings_import_ip_hint">z.B. 192.168.1.50</string>
     <string name="settings_import_success">Einstellungen erfolgreich importiert</string>
     <string name="settings_import_error">Import fehlgeschlagen: %1$s</string>
+    <string name="settings_overlay_adb_hint">Bitte erteilen Sie die Overlay-Berechtigung über ADB, falls die Einstellungen nicht verfügbar sind.</string>
     <string name="settings_preview_media">Medien</string>
     <string name="settings_preview_title">Live-Vorschau</string>
     <string name="settings_preview_message">Das Overlay wird in Echtzeit aktualisiert.</string>

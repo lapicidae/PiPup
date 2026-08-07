@@ -22,11 +22,11 @@ data class PopupProps(
     val position: Int = 0,
     val title: String? = null,
     val titleSize: Float = 24f,
-    val titleColor: String = "#FFFFFF",
+    val titleColor: String = DEFAULT_TEXT_COLOR,
     val message: String? = null,
     val messageSize: Float = 16f,
-    val messageColor: String = "#FFFFFF",
-    val backgroundColor: String = "#CC000000",
+    val messageColor: String = DEFAULT_TEXT_COLOR,
+    val backgroundColor: String = DEFAULT_BG_COLOR,
 
     val media: Media? = null,
     val mediaPosition: Int? = null, // 0: Top, 1: Bottom, 2: Left, 3: Right
@@ -38,7 +38,7 @@ data class PopupProps(
     // Advanced Styling (from Settings)
     val borderRadius: Int = 0,
     val borderWidth: Int = 0,
-    val borderColor: String = "#00000000",
+    val borderColor: String = DEFAULT_BORDER_COLOR,
 
     // Internal/Extra
     val contentPadding: Int? = null,
@@ -49,6 +49,12 @@ data class PopupProps(
     val cache: Boolean = true,
     val scale: Boolean = true
 ) {
+    companion object {
+        private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
+        private const val DEFAULT_BG_COLOR = "#CC000000"
+        private const val DEFAULT_BORDER_COLOR = "#00000000"
+    }
+
     @JsonTypeInfo(
         use = JsonTypeInfo.Id.NAME,
         include = JsonTypeInfo.As.WRAPPER_OBJECT)
@@ -118,7 +124,7 @@ data class PopupProps(
         }
     }
 
-    fun getBackgroundColorInt(): Int = safeParseColor(backgroundColor, "#CC000000".toColorInt())
+    fun getBackgroundColorInt(): Int = safeParseColor(backgroundColor, DEFAULT_BG_COLOR.toColorInt())
     fun getBorderColorInt(): Int = safeParseColor(borderColor, Color.TRANSPARENT)
     fun getTitleColorInt(): Int = safeParseColor(titleColor, Color.WHITE)
     fun getMessageColorInt(): Int = safeParseColor(messageColor, Color.WHITE)

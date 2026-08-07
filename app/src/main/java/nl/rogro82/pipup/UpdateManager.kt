@@ -7,8 +7,6 @@ import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.widget.Toast
-import nl.rogro82.pipup.service.PipUpService
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
@@ -19,6 +17,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
 import kotlin.concurrent.thread
+import nl.rogro82.pipup.service.PipUpService
 
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class GitHubRelease(
@@ -157,14 +156,7 @@ class UpdateManager(context: Context) {
     }
 
     private fun showToastNotification(release: GitHubRelease) {
-        val handler = Handler(Looper.getMainLooper())
-        handler.post {
-            Toast.makeText(
-                appContext,
-                appContext.getString(R.string.notification_update_msg, release.tagName),
-                Toast.LENGTH_LONG
-            ).show()
-        }
+        appContext.showToast(appContext.getString(R.string.notification_update_msg, release.tagName), android.widget.Toast.LENGTH_LONG)
     }
 
     fun isNewer(remoteTag: String): Boolean {
@@ -311,9 +303,7 @@ class UpdateManager(context: Context) {
                     val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
                     val reason = if (reasonIdx != -1) cursor.getInt(reasonIdx) else -1
                     Log.e("UpdateManager", "Download failed. Reason: $reason")
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(appContext, appContext.getString(R.string.update_download_failed, reason), Toast.LENGTH_LONG).show()
-                    }
+                    appContext.showToast(appContext.getString(R.string.update_download_failed, reason), android.widget.Toast.LENGTH_LONG)
                     // Clear pending state on failure
                     appSettings.pendingUpdateId = -1L
                     appSettings.pendingUpdateDigest = ""
@@ -341,9 +331,7 @@ class UpdateManager(context: Context) {
                     Handler(Looper.getMainLooper()).post { installApk(appContext) }
                 } else {
                     Log.e("UpdateManager", "SHA-256 mismatch!")
-                    Handler(Looper.getMainLooper()).post {
-                        Toast.makeText(appContext, appContext.getString(R.string.update_verification_failed), Toast.LENGTH_LONG).show()
-                    }
+                    appContext.showToast(appContext.getString(R.string.update_verification_failed), android.widget.Toast.LENGTH_LONG)
                 }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "Error during checksum verification", e)
@@ -396,9 +384,7 @@ class UpdateManager(context: Context) {
         } catch (e: Exception) {
             Log.e("UpdateManager", "Error launching APK installer", e)
             val ctx = installContext.applicationContext
-            Handler(Looper.getMainLooper()).post {
-                Toast.makeText(ctx, ctx.getString(R.string.update_installer_failed, e.message), Toast.LENGTH_LONG).show()
-            }
+            ctx.showToast(ctx.getString(R.string.update_installer_failed, e.message), android.widget.Toast.LENGTH_LONG)
         }
     }
 

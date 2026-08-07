@@ -16,7 +16,6 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.SwitchCompat
@@ -24,6 +23,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.showToast
 
 @UnstableApi
 class AdvancedSubmenu(
@@ -102,7 +102,7 @@ class AdvancedSubmenu(
     private fun openEnergySettings() {
         val powerManager = context.getSystemService(Context.POWER_SERVICE) as PowerManager
         if (powerManager.isIgnoringBatteryOptimizations(context.packageName)) {
-            Toast.makeText(context, R.string.energy_status_unrestricted, Toast.LENGTH_SHORT).show()
+            context.showToast(context.getString(R.string.energy_status_unrestricted))
             return
         }
 
@@ -225,16 +225,16 @@ class AdvancedSubmenu(
                     settingsActivity?.runOnUiThread {
                         if (data != null) settings.apply(data)
                         settingsActivity?.recreate()
-                        Toast.makeText(context, R.string.settings_import_success, Toast.LENGTH_SHORT).show()
+                        context.showToast(context.getString(R.string.settings_import_success))
                     }
                 } else {
                     settingsActivity?.runOnUiThread {
-                        Toast.makeText(context, context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), Toast.LENGTH_LONG).show()
+                        context.showToast(context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), android.widget.Toast.LENGTH_LONG)
                     }
                 }
             } catch (e: Exception) {
                 settingsActivity?.runOnUiThread {
-                    Toast.makeText(context, context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), Toast.LENGTH_LONG).show()
+                    context.showToast(context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), android.widget.Toast.LENGTH_LONG)
                 }
             }
         }.start()

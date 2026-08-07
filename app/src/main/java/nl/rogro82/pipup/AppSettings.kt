@@ -18,15 +18,15 @@ class AppSettings(context: Context) {
 
     // Styling
     var positionIndex by IntPref("position_index", 0)
-    var backgroundColor by StringPref("background_color", DEFAULT_BG_COLOR) { cachedFullBgColor = null }
+    var backgroundColor by ColorPref("background_color", R.color.preset_deep_slate) { cachedFullBgColor = null }
     var backgroundAlpha by IntPref("background_alpha", DEFAULT_BG_ALPHA) { cachedFullBgColor = null }
-    var titleColor by StringPref("title_color", DEFAULT_TITLE_COLOR)
+    var titleColor by ColorPref("title_color", R.color.preset_platinum)
     var titleSize by FloatPref("title_size", DEFAULT_TITLE_SIZE)
-    var messageColor by StringPref("message_color", DEFAULT_MSG_COLOR)
+    var messageColor by ColorPref("message_color", R.color.preset_silver)
     var messageSize by FloatPref("message_size", DEFAULT_MSG_SIZE)
     var borderRadius by IntPref("border_radius", DEFAULT_RADIUS)
     var borderWidth by IntPref("border_width", DEFAULT_BORDER_WIDTH)
-    var borderColor by StringPref("border_color", DEFAULT_BORDER_COLOR)
+    var borderColor by ColorPref("border_color", R.color.preset_gunmetal)
     var contentPadding by IntPref("content_padding", DEFAULT_PADDING)
     var titleAlignment by IntPref("title_alignment", 0)
     var messageAlignment by IntPref("message_alignment", 0)
@@ -128,15 +128,15 @@ class AppSettings(context: Context) {
     fun apply(data: SettingsData) {
         prefs.edit {
             putInt("position_index", data.positionIndex)
-            putString("background_color", validateHexColor(data.backgroundColor, DEFAULT_BG_COLOR))
+            putString("background_color", validateHexColor(data.backgroundColor, appContext.colorToHex(R.color.preset_deep_slate)))
             putInt("background_alpha", data.backgroundAlpha.coerceIn(0, 255))
-            putString("title_color", validateHexColor(data.titleColor, DEFAULT_TITLE_COLOR))
+            putString("title_color", validateHexColor(data.titleColor, appContext.colorToHex(R.color.preset_platinum)))
             putFloat("title_size", data.titleSize.coerceIn(10f, 100f))
-            putString("message_color", validateHexColor(data.messageColor, DEFAULT_MSG_COLOR))
+            putString("message_color", validateHexColor(data.messageColor, appContext.colorToHex(R.color.preset_silver)))
             putFloat("message_size", data.messageSize.coerceIn(8f, 80f))
             putInt("border_radius", data.borderRadius.coerceIn(0, 200))
             putInt("border_width", data.borderWidth.coerceIn(0, 50))
-            putString("border_color", validateHexColor(data.borderColor, DEFAULT_BORDER_COLOR))
+            putString("border_color", validateHexColor(data.borderColor, appContext.colorToHex(R.color.preset_gunmetal)))
             putInt("content_padding", data.contentPadding.coerceIn(0, 200))
             putInt("title_alignment", data.titleAlignment.coerceIn(0, 2))
             putInt("message_alignment", data.messageAlignment.coerceIn(0, 2))
@@ -206,6 +206,17 @@ class AppSettings(context: Context) {
         }
     }
 
+    private class ColorPref(val key: String, val defaultValueRes: Int, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, String> {
+        override fun getValue(thisRef: AppSettings, property: KProperty<*>): String {
+            val default = thisRef.appContext.colorToHex(defaultValueRes)
+            return thisRef.prefs.getString(key, default) ?: default
+        }
+        override fun setValue(thisRef: AppSettings, property: KProperty<*>, value: String) {
+            thisRef.prefs.edit { putString(key, value) }
+            onSet?.invoke()
+        }
+    }
+
     private class IntPref(val key: String, val defaultValue: Int, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, Int> {
         override fun getValue(thisRef: AppSettings, property: KProperty<*>): Int {
             return thisRef.prefs.getInt(key, defaultValue)
@@ -248,15 +259,11 @@ class AppSettings(context: Context) {
     }
 
     companion object {
-        const val DEFAULT_BG_COLOR = "#0F1417"
         const val DEFAULT_BG_ALPHA = 225
-        const val DEFAULT_TITLE_COLOR = "#DFE3E7"
         const val DEFAULT_TITLE_SIZE = 22f
-        const val DEFAULT_MSG_COLOR = "#C6C6C9" // Silver instead of old #C0C7CD
         const val DEFAULT_MSG_SIZE = 16f
         const val DEFAULT_RADIUS = 16
         const val DEFAULT_BORDER_WIDTH = 0
-        const val DEFAULT_BORDER_COLOR = "#2F3033" // Gunmetal instead of old Teal-ish #625B71
         const val DEFAULT_PADDING = 20
     }
 }

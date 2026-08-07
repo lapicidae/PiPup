@@ -20,7 +20,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:textStyle="bold"
-                android:textColor="#FFFFFF"
+                android:textColor="@color/popup_text_default"
                 android:textSize="20sp"
                 android:visibility="gone"/>
 
@@ -38,7 +38,7 @@
                     android:id="@+id/popup_message"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textColor="#FFFFFF"
+                    android:textColor="@color/popup_text_default"
                     android:textSize="14sp"/>
             </ScrollView>
         </LinearLayout>

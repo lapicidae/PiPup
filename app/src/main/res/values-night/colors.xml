@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Semantic Material You Palette - DARK -->
+    <!-- Material 3 Semantic Palette - Primary Theme Colors (Dark Overrides) -->
     <color name="colorPrimary">#8ECFF2</color>
     <color name="colorOnPrimary">#003548</color>
     <color name="colorPrimaryContainer">#004D67</color>
@@ -12,15 +12,14 @@
     <color name="colorOnSurfaceVariant">#C0C7CD</color>
     <color name="colorOutline">#8A9297</color>
 
-    <color name="status_green">#388E3C</color>
-    <color name="status_red">#B3261E</color>
-
-    <!-- Activity Main Theme Overrides -->
+    <!-- App Branding & Identity Overrides -->
     <color name="main_background">#0F1417</color>
     <color name="main_logo_tint">#8ECFF2</color>
     <color name="main_on_background">#DFE3E7</color>
 
-    <!-- Helper Colors -->
+    <!-- Settings & Previews Overrides -->
     <color name="preview_placeholder_bg">#40484D</color>
     <color name="preview_placeholder_text">#C0C7CD</color>
+
+    <!-- Note: Functional UI Colors and Presets are inherited from base values/colors.xml -->
 </resources>
