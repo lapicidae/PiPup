@@ -35,12 +35,18 @@ The most common use-case for this application is for sending notifications, from
 
 #### Sideloading:
 
-On Android TV (8.0+), when sideloading, you will need to set the permission for SYSTEM_ALERT_WINDOW manually (using adb) as there is no interface on Android TV to do this.
+On Android TV (8.0+), when sideloading, you may need to grant the `SYSTEM_ALERT_WINDOW` permission manually via ADB, as many Android TV devices lack a UI setting for this.
 
-To give the application the required permission to draw overlays you will need to run:
+To grant the application the required permission to draw overlays, run:
 
 ```
 adb shell appops set nl.rogro82.pipup SYSTEM_ALERT_WINDOW allow
+```
+
+Disabling battery optimisation is optional, but is recommended:
+
+```
+adb shell dumpsys deviceidle whitelist +nl.rogro82.pipup
 ```
 
 ## Integrating

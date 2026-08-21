@@ -3,12 +3,15 @@ package nl.rogro82.pipup
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -17,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.lifecycle.Lifecycle
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.service.PipUpService
 import nl.rogro82.pipup.ui.SettingsActivity
@@ -185,30 +189,16 @@ class MainActivity : AppCompatActivity() {
             Log.d("MainActivity", "Battery optimization status - isIgnoring: $isIgnoring, dismissed: ${appSettings.dismissBatteryOptimization}")
         }
 
+        // Only show dialog if not already ignoring/dismissed
         if (isIgnoring || appSettings.dismissBatteryOptimization) return
 
         isEnergyDialogOpen = true
         val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.energy_optimization_title)
-            .setMessage(getString(R.string.energy_optimization_message) + "\n\n" + getString(R.string.energy_optimization_instructions))
-            .setPositiveButton(R.string.settings_yes) { _, _ ->
+            .setMessage(R.string.energy_optimization_message)
+            .setPositiveButton(R.string.energy_optimization_show_instructions) { _, _ ->
                 appSettings.dismissBatteryOptimization = true
-
-                // Open the main settings page, trying to avoid the last active sub-page
-                val intent = Intent(Settings.ACTION_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                }
-
-                try {
-                    if (BuildConfig.DEBUG) {
-                        Log.d("MainActivity", "Opening system settings main page.")
-                    }
-                    startActivity(intent)
-                    showToast(getString(R.string.energy_optimization_instructions), android.widget.Toast.LENGTH_LONG)
-                } catch (e: Exception) {
-                    Log.e("MainActivity", "Failed to open settings", e)
-                    showEnergyInstructionsDialog()
-                }
+                showEnergyInstructionsDialog()
             }
             .setNegativeButton(R.string.energy_optimization_later) { _, _ ->
                 appSettings.dismissBatteryOptimization = true
@@ -222,11 +212,40 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showEnergyInstructionsDialog() {
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle(R.string.energy_optimization_title)
-            .setMessage(R.string.energy_optimization_manual)
-            .setPositiveButton(android.R.string.ok, null)
-            .show()
+            .setMessage(getString(R.string.energy_optimization_manual, packageName))
+            .setPositiveButton(R.string.settings_open) { _, _ ->
+                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                }
+                try {
+                    startActivity(intent)
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                            showToast(getString(R.string.energy_menu_not_found), Toast.LENGTH_LONG)
+                            // Fallback to Apps settings if the specific one failed to open
+                            try {
+                                startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } catch (_: Exception) {}
+                        }
+                    }, 1500)
+                } catch (_: Exception) {
+                    showToast(getString(R.string.energy_menu_not_found), Toast.LENGTH_LONG)
+                    try {
+                        startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (_: Exception) {}
+                }
+            }
+            .setNegativeButton(android.R.string.ok, null)
+            .create()
+
+        dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.requestFocus()
     }
 
     private fun askPermission() {
@@ -236,7 +255,7 @@ class MainActivity : AppCompatActivity() {
                 overlayPermissionLauncher.launch(intent)
             } catch (e: Exception) {
                 Log.e("MainActivity", "Failed to launch overlay permission settings", e)
-                showToast(getString(R.string.settings_overlay_adb_hint), android.widget.Toast.LENGTH_LONG)
+                showToast(getString(R.string.settings_overlay_adb_hint), Toast.LENGTH_LONG)
             }
         }
     }

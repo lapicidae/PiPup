@@ -195,12 +195,13 @@
 
     <!-- Energy Optimization -->
     <string name="energy_optimization_title">Background Activity</string>
-    <string name="energy_optimization_message">To ensure PiPup can receive notifications reliably, the app should be allowed to run without energy restrictions. Would you like to configure this now?</string>
-    <string name="energy_optimization_instructions">Please select \"Apps\" -> \"Special app access\" -> \"Energy optimization\" and set PiPup to \"Don\'t optimize\".</string>
-    <string name="energy_optimization_manual">To configure manually:\n\n1. Open System Settings\n2. Go to Apps -> Special app access\n3. Select \"Energy optimization\"\n4. Set PiPup to \"Don\'t optimize\"</string>
+    <string name="energy_optimization_message">To ensure reliable notifications, PiPup should be excluded from battery optimization. Would you like to see the instructions for manual or ADB configuration?</string>
+    <string name="energy_optimization_manual">To configure manually:\n\n1. Open System Settings\n2. Go to Apps -> Special app access\n3. Select \"Energy optimization\"\n4. Set PiPup to \"Don\'t optimize\"\n\nAlternatively, use ADB:\nadb shell dumpsys deviceidle whitelist +%1$s</string>
+    <string name="energy_optimization_show_instructions">Instructions</string>
     <string name="energy_optimization_later">Later</string>
     <string name="energy_status_optimized">Optimized (problematic)</string>
     <string name="energy_status_unrestricted">Unrestricted (recommended)</string>
+    <string name="energy_menu_not_found">The energy menu could not be opened automatically. Please follow the manual instructions or use ADB.</string>
 
     <!-- Web Server Landing Page -->
     <string name="server_landing_title">%1$s Server</string>

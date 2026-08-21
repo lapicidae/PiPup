@@ -1,12 +1,16 @@
 package nl.rogro82.pipup.ui
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
 import android.graphics.Rect
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
@@ -16,10 +20,13 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
@@ -108,12 +115,9 @@ class AdvancedSubmenu(
 
         val dialog = AlertDialog.Builder(context)
             .setTitle(R.string.energy_optimization_title)
-            .setMessage(context.getString(R.string.energy_optimization_message) + "\n\n" + context.getString(R.string.energy_optimization_instructions))
-            .setPositiveButton(R.string.settings_yes) { _, _ ->
-                val intent = Intent(Settings.ACTION_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                }
-                try { context.startActivity(intent) } catch (_: Exception) {}
+            .setMessage(context.getString(R.string.energy_optimization_message))
+            .setPositiveButton(R.string.energy_optimization_show_instructions) { _, _ ->
+                showEnergyInstructionsDialog()
             }
             .setNegativeButton(R.string.energy_optimization_later, null)
             .create()
@@ -121,6 +125,67 @@ class AdvancedSubmenu(
         dialog.show()
         // Pre-select "Later" (Cancel)
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus()
+    }
+
+    private fun showEnergyInstructionsDialog() {
+        val dialog = AlertDialog.Builder(context)
+            .setTitle(R.string.energy_optimization_title)
+            .setMessage(context.getString(R.string.energy_optimization_manual, context.packageName))
+            .setPositiveButton(R.string.settings_open) { _, _ ->
+                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                }
+                Log.d("AdvancedSubmenu", "Click: Open Settings")
+
+                try {
+                    // Try to start from activity context if possible
+                    val activity = settingsActivity ?: (context as? Activity)
+                    if (activity != null) {
+                        Log.d("AdvancedSubmenu", "Starting activity from activity context")
+                        activity.startActivity(intent)
+                    } else {
+                        Log.d("AdvancedSubmenu", "Starting activity from general context")
+                        context.startActivity(intent)
+                    }
+
+                    // Check if we stayed in the app
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        val currentActivity = settingsActivity ?: (context as? Activity)
+                        val isResumed = currentActivity?.let {
+                            val resumed = (it as? AppCompatActivity)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) ?: true
+                            Log.d("AdvancedSubmenu", "Lifecycle check: $resumed")
+                            resumed
+                        } ?: true
+
+                        if (isResumed) {
+                            Log.w("AdvancedSubmenu", "App still in foreground, showing error toast")
+                            context.showToast(context.getString(R.string.energy_menu_not_found), Toast.LENGTH_LONG)
+
+                            // Fallback to Apps settings
+                            try {
+                                context.startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS).apply {
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                })
+                            } catch (_: Exception) {}
+                        } else {
+                            Log.d("AdvancedSubmenu", "App lost focus, assuming success")
+                        }
+                    }, 1500)
+                } catch (e: Exception) {
+                    Log.e("AdvancedSubmenu", "Error starting activity: ${e.message}", e)
+                    context.showToast(context.getString(R.string.energy_menu_not_found), Toast.LENGTH_LONG)
+                    try {
+                        context.startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        })
+                    } catch (_: Exception) {}
+                }
+            }
+            .setNegativeButton(android.R.string.ok, null)
+            .create()
+
+        dialog.show()
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.requestFocus()
     }
 
     private fun showResetConfirmation() {
@@ -229,12 +294,12 @@ class AdvancedSubmenu(
                     }
                 } else {
                     settingsActivity?.runOnUiThread {
-                        context.showToast(context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), android.widget.Toast.LENGTH_LONG)
+                        context.showToast(context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), Toast.LENGTH_LONG)
                     }
                 }
             } catch (e: Exception) {
                 settingsActivity?.runOnUiThread {
-                    context.showToast(context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), android.widget.Toast.LENGTH_LONG)
+                    context.showToast(context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), Toast.LENGTH_LONG)
                 }
             }
         }.start()

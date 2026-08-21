@@ -192,12 +192,13 @@
 
     <!-- Energie-Optimierung -->
     <string name="energy_optimization_title">Hintergrund-Aktivität</string>
-    <string name="energy_optimization_message">Um sicherzustellen, dass PiPup Benachrichtigungen zuverlässig empfangen kann, sollte die App ohne Energieeinschränkungen laufen dürfen. Möchten Sie dies jetzt konfigurieren?</string>
-    <string name="energy_optimization_instructions">Bitte wählen Sie \"Apps\" -> \"Spezieller App-Zugriff\" -> \"Optimierter Energieverbrauch\" und setzen Sie PiPup auf \"Nicht optimieren\".</string>
-    <string name="energy_optimization_manual">Manuelle Konfiguration:\n\n1. Systemeinstellungen öffnen\n2. Gehen Sie zu Apps -> Spezieller App-Zugriff\n3. Wählen Sie \"Optimierter Energieverbrauch\"\n4. Setzen Sie PiPup auf \"Nicht optimieren\"</string>
+    <string name="energy_optimization_message">Für eine zuverlässige Funktion sollte PiPup von der Energieoptimierung ausgeschlossen werden. Möchten Sie die Anleitung für die manuelle Konfiguration oder den ADB-Befehl sehen?</string>
+    <string name="energy_optimization_manual">Manuelle Konfiguration:\n\n1. Systemeinstellungen öffnen\n2. Apps -> Spezieller App-Zugriff\n3. Optimierter Energieverbrauch wählen\n4. PiPup auf \"Nicht optimieren\" setzen\n\nAlternativ über ADB:\nadb shell dumpsys deviceidle whitelist +%1$s</string>
+    <string name="energy_optimization_show_instructions">Anleitung</string>
     <string name="energy_optimization_later">Später</string>
     <string name="energy_status_optimized">Optimiert (problematisch)</string>
     <string name="energy_status_unrestricted">Uneingeschränkt (empfohlen)</string>
+    <string name="energy_menu_not_found">Das Energiemenü konnte nicht automatisch geöffnet werden. Bitte folgen Sie der manuellen Anleitung oder nutzen Sie ADB.</string>
 
     <!-- Web Server Landing Page -->
     <string name="server_landing_title">%1$s Server</string>
