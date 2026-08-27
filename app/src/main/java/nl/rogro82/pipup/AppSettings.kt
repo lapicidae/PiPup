@@ -17,47 +17,84 @@ class AppSettings(context: Context) {
     private val prefs = appContext.getSharedPreferences("pipup_settings", Context.MODE_PRIVATE)
 
     // Styling
+    /** The index of the popup position on the screen. */
     var positionIndex by IntPref("position_index", 0)
+    /** The background color of the popup in hex format. */
     var backgroundColor by ColorPref("background_color", R.color.preset_deep_slate) { cachedFullBgColor = null }
+    /** The transparency level of the popup background (0-255). */
     var backgroundAlpha by IntPref("background_alpha", DEFAULT_BG_ALPHA) { cachedFullBgColor = null }
+    /** The text color of the popup title in hex format. */
     var titleColor by ColorPref("title_color", R.color.preset_platinum)
+    /** The font size of the popup title. */
     var titleSize by FloatPref("title_size", DEFAULT_TITLE_SIZE)
+    /** The text color of the popup message in hex format. */
     var messageColor by ColorPref("message_color", R.color.preset_silver)
+    /** The font size of the popup message. */
     var messageSize by FloatPref("message_size", DEFAULT_MSG_SIZE)
+    /** The corner radius of the popup background. */
     var borderRadius by IntPref("border_radius", DEFAULT_RADIUS)
+    /** The width of the popup border. */
     var borderWidth by IntPref("border_width", DEFAULT_BORDER_WIDTH)
+    /** The color of the popup border in hex format. */
     var borderColor by ColorPref("border_color", R.color.preset_gunmetal)
+    /** The internal padding of the popup content. */
     var contentPadding by IntPref("content_padding", DEFAULT_PADDING)
+    /** The alignment of the title text (0: Start, 1: Center, 2: End). */
     var titleAlignment by IntPref("title_alignment", 0)
+    /** The alignment of the message text (0: Start, 1: Center, 2: End). */
     var messageAlignment by IntPref("message_alignment", 0)
+    /** The position of the media relative to the text. */
     var mediaPosition by IntPref("media_position", 0)
+    /** The type of entrance animation. */
     var animationType by IntPref("animation_type", 0)
+    /** The duration of the entrance and exit animations in milliseconds. */
     var animationDuration by IntPref("animation_duration", 500)
+    /** Whether to play an exit animation when the popup is dismissed. */
     var animationExit by BooleanPref("animation_exit", false)
+    /** The timeout in seconds for loading remote media. */
     var mediaTimeout by IntPref("media_timeout", 10)
+    /** The number of retries for failed media loads. */
     var mediaRetries by IntPref("media_retries", 3)
+    /** Whether to initialize the WebView engine in the background for faster loading. */
     var preWarmWebView by BooleanPref("pre_warm_webview", false)
 
     // System / App
+    /** Whether the user has dismissed the battery optimization warning. */
     var dismissBatteryOptimization by BooleanPref("dismiss_battery_optimization", false)
+    /** Enables additional technical settings and information. */
     var advancedMode by BooleanPref("advanced_mode", false)
+    /** The application theme (0: Dark, 1: Light). */
     var appTheme by IntPref("app_theme", 0)
+    /** The preferred language for the application UI. */
     var language by StringPref("language", "default")
 
     // Updates
+    /** The update channel (0: Stable, 1: Beta). */
     var updateChannel by IntPref("update_channel", -1)
+    /** The frequency of update checks. */
     var updateInterval by IntPref("update_interval", 4)
+    /** The style of update notifications. */
     var updateNotificationStyle by IntPref("update_notification_style", 1)
+    /** The timestamp of the last successful update check. */
     var lastUpdateCheck by LongPref("last_update_check", 0L)
+    /** The tag name of the latest available update found. */
     var updateAvailableTag by StringPref("update_available_tag", "")
+    /** Whether to re-notify the user about an available update. */
     var updateRepeat by BooleanPref("update_repeat", false)
+    /** The tag name for which the user was last notified. */
     var lastNotifiedTag by StringPref("last_notified_tag", "")
 
     // Pending Update State
+    /** The ID of a currently downloading or pending update. */
     var pendingUpdateId by LongPref("pending_update_id", -1L)
+    /** The expected digest (SHA) of a pending update file. */
     var pendingUpdateDigest by StringPref("pending_update_digest", "")
+    /** The tag name associated with a pending update. */
     var pendingUpdateTagName by StringPref("pending_update_tag_name", "")
 
+    /**
+     * Determines if the current application is a beta or pre-release build.
+     */
     val isBetaBuild: Boolean by lazy {
         val versionName = try {
             appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
@@ -77,6 +114,9 @@ class AppSettings(context: Context) {
         }
     }
 
+    /**
+     * Data class representing a snapshot of all application settings.
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     data class SettingsData(
         val positionIndex: Int,
@@ -114,6 +154,9 @@ class AppSettings(context: Context) {
         val language: String
     )
 
+    /**
+     * Retrieves all current settings as a [SettingsData] object.
+     */
     fun getAll() = SettingsData(
         positionIndex, backgroundColor, backgroundAlpha, titleColor, titleSize,
         messageColor, messageSize, borderRadius, borderWidth, borderColor,
@@ -125,6 +168,9 @@ class AppSettings(context: Context) {
         language
     )
 
+    /**
+     * Applies new settings from a [SettingsData] object.
+     */
     fun apply(data: SettingsData) {
         prefs.edit {
             putInt("position_index", data.positionIndex)
@@ -177,6 +223,10 @@ class AppSettings(context: Context) {
 
     private var cachedFullBgColor: String? = null
 
+    /**
+     * Calculates the full background color including the alpha channel.
+     * Returns a hex string in #AARRGGBB format.
+     */
     fun getFullBackgroundColor(): String {
         cachedFullBgColor?.let { return it }
 
@@ -188,6 +238,9 @@ class AppSettings(context: Context) {
         return result
     }
 
+    /**
+     * Resets all settings to their default values.
+     */
     fun resetToDefaults() {
         prefs.edit {
             clear()

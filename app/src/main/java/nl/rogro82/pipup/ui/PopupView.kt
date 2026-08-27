@@ -42,6 +42,9 @@ import nl.rogro82.pipup.isEmulator
 
 /**
  * Modern PopupView using ViewBinding and modular rendering logic.
+ *
+ * This view handles the display of notifications, including text and various media types
+ * like images, videos, and WebRTC streams (WHEP).
  */
 @SuppressLint("ViewConstructor")
 @UnstableApi
@@ -50,6 +53,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private val binding: PopupBinding = PopupBinding.inflate(LayoutInflater.from(context), this)
     private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private val settings = PiPupApp.settings
+    /** The listener to be notified when the media is fully loaded and ready to be displayed. */
     var readyListener: ReadyListener? = null
 
     private var mPlayer: ExoPlayer? = null
@@ -134,6 +138,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         readyListener?.onReady()
     }
 
+    /**
+     * Displays a placeholder image and an error message in case media loading fails.
+     * @param errorMessage The error message to display.
+     */
     fun showPlaceholder(errorMessage: String? = null) {
         // Ensure visibility is restored if we were in an invisible pre-loading state
         mWebView?.visibility = VISIBLE
@@ -200,7 +208,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
+    /**
+     * Interface for listening to the readiness state of the popup.
+     */
     interface ReadyListener {
+        /**
+         * Called when the popup and its media are ready to be shown.
+         */
         fun onReady()
     }
 
@@ -209,12 +223,20 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         clipToPadding = false
     }
 
+    /**
+     * Initializes the view, updates visuals, and sets up the media content.
+     * @return The initialized [PopupView] instance.
+     */
     fun create(): PopupView {
         updateVisuals()
         setupMediaContent()
         return this
     }
 
+    /**
+     * Updates the popup with new properties, intelligently reloading media only if necessary.
+     * @param newProps The new [PopupProps] to apply.
+     */
     fun updateFromProps(newProps: PopupProps) {
         if (isCleanedUp) {
             android.util.Log.w("PopupView", "updateFromProps called on cleaned up view")
@@ -947,6 +969,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         notifyReady()
     }
 
+    /**
+     * Starts media playback if the popup contains a video.
+     */
     fun startMedia() {
         if (isCleanedUp) {
             android.util.Log.w("PopupView", "startMedia() called on cleaned up view, ignoring")
@@ -960,6 +985,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
+    /**
+     * Cleans up resources, including stopping players and destroying WebViews.
+     */
     fun cleanup() {
         if (isCleanedUp) return
         isCleanedUp = true
@@ -1016,6 +1044,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         mWebView = null
     }
 
+    /**
+     * Plays the entrance animation for the popup based on the configured animation type.
+     */
     fun animateIn() {
         if (isCleanedUp) return
         if (!isFirstAnimateIn && alpha == 1.0f && scaleX == 1.0f && translationX == 0f && translationY == 0f) {
@@ -1068,6 +1099,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         alpha = 1f; scaleX = 1f; scaleY = 1f; translationX = 0f; translationY = 0f; rotationY = 0f; rotation = 0f
     }
 
+    /**
+     * Plays the exit animation for the popup and executes a completion callback.
+     * @param completion The callback to execute when the animation finishes.
+     */
     fun animateOut(completion: () -> Unit) {
         val duration = props.animationDuration.toLong()
         if (props.animationType == 0 || duration <= 0 || !props.animationExit) {
@@ -1117,6 +1152,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     companion object {
+        /**
+         * Convenience builder method to create and initialize a [PopupView].
+         */
         fun build(context: Context, props: PopupProps, listener: ReadyListener? = null): PopupView {
             return PopupView(context, props).apply { readyListener = listener }.create()
         }

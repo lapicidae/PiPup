@@ -24,6 +24,12 @@ import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.core.WebServer
 import androidx.media3.common.util.UnstableApi
 
+/**
+ * Main background service responsible for hosting the WebServer and managing the notification queue.
+ *
+ * This service runs as a foreground service to ensure it remains active for incoming requests.
+ * It handles localized notifications, pre-warming the WebView engine, and processing API requests.
+ */
 @OptIn(UnstableApi::class)
 class PipUpService : Service() {
 
@@ -31,6 +37,7 @@ class PipUpService : Service() {
         private const val TAG = "PipUpService"
         private const val CHANNEL_ID = "pipup_service"
         private const val NOTIFICATION_ID = 1001
+        /** The port on which the internal WebServer listens. */
         const val SERVER_PORT = 7979
     }
 

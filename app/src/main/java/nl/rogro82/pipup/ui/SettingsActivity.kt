@@ -34,6 +34,12 @@ import nl.rogro82.pipup.R
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.databinding.ActivitySettingsBinding
 
+/**
+ * Main settings activity providing a multi-pane interface for TV configuration.
+ *
+ * Manages various submenus for styling, animations, and system updates
+ * using a navigation rail and pivot-scrolling focus management.
+ */
 @UnstableApi
 class SettingsActivity : AppCompatActivity() {
 
@@ -208,6 +214,11 @@ class SettingsActivity : AppCompatActivity() {
         updatePreview(animate = false)
     }
 
+    /**
+     * Retrieves or creates the controller for the specified submenu layout.
+     * @param layoutRes The layout resource ID of the submenu.
+     * @return The corresponding [SubmenuController].
+     */
     fun getController(layoutRes: Int): SubmenuController {
         return submenuControllers.getOrPut(layoutRes) {
             when (layoutRes) {
@@ -269,10 +280,16 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * Moves focus back to the navigation rail.
+     */
     fun focusRail() {
         findViewById<View>(currentNavId)?.requestFocus()
     }
 
+    /**
+     * Focuses the first focusable child in the currently active submenu.
+     */
     fun focusFirstInSubmenu() {
         val container = binding.submenuContainer.getChildAt(0) as? ViewGroup ?: return
         (0 until container.childCount).map { container.getChildAt(it) }.firstOrNull { it.isFocusable && it.isVisible }?.requestFocus()
@@ -371,8 +388,14 @@ class SettingsActivity : AppCompatActivity() {
         cachedPlaceholder = null
     }
 
+    /**
+     * Data class representing a color preset.
+     */
     data class ColorEntry(val nameRes: Int, val hex: String)
 
+    /**
+     * Custom adapter for the color selection spinner in submenus.
+     */
     class ColorSpinnerAdapter(context: Context, val colors: List<ColorEntry>, val defaultHex: String) : ArrayAdapter<ColorEntry>(context, 0, colors) {
         override fun getView(p: Int, v: View?, g: ViewGroup): View = create(p, v, g)
         override fun getDropDownView(p: Int, v: View?, g: ViewGroup): View = create(p, v, g)

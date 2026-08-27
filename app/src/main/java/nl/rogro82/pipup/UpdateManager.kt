@@ -19,6 +19,9 @@ import java.security.MessageDigest
 import kotlin.concurrent.thread
 import nl.rogro82.pipup.service.PipUpService
 
+/**
+ * Data class representing a release on GitHub.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class GitHubRelease(
     @get:JsonProperty("tag_name") val tagName: String,
@@ -28,6 +31,9 @@ data class GitHubRelease(
     val assets: List<GitHubAsset>
 )
 
+/**
+ * Data class representing an asset within a GitHub release.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class GitHubAsset(
     val name: String,
@@ -36,16 +42,39 @@ data class GitHubAsset(
     val digest: String? = null
 )
 
+/**
+ * Manages the application update process, including checking for new releases,
+ * downloading APKs, and triggering the installation.
+ */
 class UpdateManager(context: Context) {
 
     private val appContext = context.applicationContext
 
+    /**
+     * Interface for update check callbacks.
+     */
     interface UpdateCallback {
+        /**
+         * Called when a newer version is available.
+         * @param release The information about the available release.
+         */
         fun onUpdateAvailable(release: GitHubRelease)
+        /**
+         * Called when no update is available (already on the latest version).
+         */
         fun onNoUpdate()
+        /**
+         * Called when an error occurs during the update check.
+         * @param message The error message.
+         */
         fun onError(message: String)
     }
 
+    /**
+     * Checks for new updates asynchronously.
+     * @param includeBeta Whether to include pre-release (beta) versions in the check.
+     * @param callback The callback to handle the results.
+     */
     fun checkForUpdates(includeBeta: Boolean, callback: UpdateCallback) {
         thread {
             try {
@@ -114,6 +143,9 @@ class UpdateManager(context: Context) {
         }
     }
 
+    /**
+     * Displays an update notification according to the user's preference (Popup or Toast).
+     */
     fun showUpdateNotification(release: GitHubRelease) {
         val appSettings = PiPupApp.settings
         when (appSettings.updateNotificationStyle) {
@@ -159,6 +191,9 @@ class UpdateManager(context: Context) {
         appContext.showToast(appContext.getString(R.string.notification_update_msg, release.tagName), android.widget.Toast.LENGTH_LONG)
     }
 
+    /**
+     * Checks if a remote tag version is newer than the currently installed version.
+     */
     fun isNewer(remoteTag: String): Boolean {
         val currentVersion = try {
             appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
@@ -202,6 +237,9 @@ class UpdateManager(context: Context) {
         }
     }
 
+    /**
+     * Enqueues a download for the suitable APK from the release and prepares for installation.
+     */
     fun downloadAndInstall(release: GitHubRelease) {
         val appSettings = PiPupApp.settings
         val isBetaChannel = appSettings.updateChannel == 1
@@ -268,6 +306,7 @@ class UpdateManager(context: Context) {
 
     /**
      * Handles the completion of a download, verifying and installing if successful.
+     * @param downloadId The ID of the completed download.
      */
     fun handleDownloadComplete(downloadId: Long) {
         val appSettings = PiPupApp.settings
