@@ -1,0 +1,90 @@
+package nl.rogro82.pipup.core.modules
+
+import android.content.Context
+import android.util.Log
+import fi.iki.elonen.NanoHTTPD
+import nl.rogro82.pipup.Json
+import nl.rogro82.pipup.Permissions
+import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.PiPupModule
+import nl.rogro82.pipup.core.PowerController
+import nl.rogro82.pipup.showToast
+
+/**
+ * Module responsible for remote power management (screen wake/sleep).
+ */
+class PowerModule(private val context: Context) : PiPupModule {
+
+    companion object {
+        private const val TAG = "PowerModule"
+    }
+
+    override val id: String = "power"
+    override val name: String = "Power Control"
+
+    override fun onEnable() {
+        Log.d(TAG, "Power module enabled")
+    }
+
+    override fun onDisable() {
+        Log.d(TAG, "Power module disabled")
+    }
+
+    override fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? {
+        val uri = session.uri.lowercase()
+        if (uri == "/power" && session.method == NanoHTTPD.Method.POST) {
+            return handlePowerRequest(session)
+        }
+        return null
+    }
+
+    private fun handlePowerRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val requested = session.parameters["state"]?.firstOrNull()?.lowercase()
+        val target = when (requested) {
+            "on", "wake", "true", "1" -> true
+            "off", "sleep", "false", "0" -> false
+            "toggle" -> !PowerController.isScreenOn(context)
+            else -> return NanoHTTPD.newFixedLengthResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                "text/plain",
+                "State must be on, off or toggle"
+            )
+        }
+
+        val success = if (target) PowerController.wake(context) else PowerController.sleep(context)
+        val method = if (target) "wake_activity" else PowerController.getSleepMethod(context)
+
+        if (!success && !target && method == null) {
+            // Visual feedback on TV (Logic in showToast ensures it only shows when app is visible)
+            context.showToast(context.getString(R.string.error_power_permission_missing))
+        }
+
+        // Exact JSON structure from fork: /mnt/OpenMediaVault/Daten/github/_fork-PiPup/
+        val body = Json.writeValueAsString(mapOf(
+            "state" to if (target) "on" else "off",
+            "ok" to success,
+            "method" to method,
+            "screenOn" to PowerController.isScreenOn(context)
+        ))
+
+        return NanoHTTPD.newFixedLengthResponse(
+            if (success) NanoHTTPD.Response.Status.OK else NanoHTTPD.Response.Status.NOT_IMPLEMENTED,
+            "application/json",
+            body
+        )
+    }
+
+    override fun augmentState(state: MutableMap<String, Any?>) {
+        state["power"] = mapOf(
+            "canWake" to true,
+            "canSleep" to (PowerController.getSleepMethod(context) != null),
+            "sleepMethod" to PowerController.getSleepMethod(context),
+            "screenOn" to PowerController.isScreenOn(context)
+        )
+    }
+
+    override fun getRequiredPermissions(): List<String> = listOf(
+        Permissions.KEY_ADMIN,
+        Permissions.KEY_ACCESSIBILITY
+    )
+}

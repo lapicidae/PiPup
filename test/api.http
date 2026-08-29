@@ -7,7 +7,19 @@
 # NOTE: For Emulator testing, run this command in your terminal first:
 # adb forward tcp:7979 tcp:7979
 
-### Send a standard notification
+### 1. Get Server State (JSON structure check)
+GET {{baseUrl}}/state
+
+### 2. Power Control: Turn ON
+POST {{baseUrl}}/power?state=on
+
+### 3. Power Control: Turn OFF
+POST {{baseUrl}}/power?state=off
+
+### 4. Diagnostics: Permissions Report
+GET {{baseUrl}}/permissions/diagnose
+
+### 5. Send a standard notification (Image)
 POST {{baseUrl}}/notify
 Content-Type: application/json
 
@@ -29,7 +41,25 @@ Content-Type: application/json
   }
 }
 
-### Test Settings Transfer (with invalid values but valid JSON)
+### 6. Send a standard notification (Web)
+POST {{baseUrl}}/notify
+Content-Type: application/json
+
+{
+  "duration": 15,
+  "position": 2,
+  "title": "Web Preview",
+  "message": "Opening a website in PiP",
+  "media": {
+    "web": {
+      "uri": "https://www.wikipedia.org",
+      "width": 640,
+      "height": 480
+    }
+  }
+}
+
+### 7. Test Settings Transfer (STABILITY TEST - DO NOT CHANGE VALUES)
 POST {{baseUrl}}/settings
 Content-Type: application/json
 
@@ -69,3 +99,9 @@ Content-Type: application/json
   "language": "en",
   "unknown_future_setting": "This unknown field should be ignored by the app without crashing"
 }
+
+### 8. Pull Current Settings
+GET {{baseUrl}}/settings
+
+### 9. Cancel current popup
+POST {{baseUrl}}/cancel

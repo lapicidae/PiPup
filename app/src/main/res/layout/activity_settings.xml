@@ -50,6 +50,8 @@
                 <include android:id="@+id/nav_item_border" layout="@layout/nav_item" />
                 <include android:id="@+id/nav_item_animation" layout="@layout/nav_item" />
                 <include android:id="@+id/nav_item_updates" layout="@layout/nav_item" />
+                <include android:id="@+id/nav_item_modules" layout="@layout/nav_item" />
+                <include android:id="@+id/nav_item_permissions" layout="@layout/nav_item" />
                 <include android:id="@+id/nav_item_advanced" layout="@layout/nav_item" />
 
             </LinearLayout>

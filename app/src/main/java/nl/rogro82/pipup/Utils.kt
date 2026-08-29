@@ -25,6 +25,12 @@ import java.util.Locale
  */
 object Json {
     val mapper = jacksonObjectMapper()
+
+    fun writeValueAsString(value: Any): String = try {
+        mapper.writeValueAsString(value)
+    } catch (_: Exception) {
+        ""
+    }
 }
 
 /**
@@ -129,11 +135,21 @@ fun Context.colorToHex(colorRes: Int): String {
 
 /**
  * Displays a custom Toast with the PiPup icon.
+ * Automatically falls back to native system toast if overlay permissions are missing
+ * or if the app is in the background (where custom toast views are restricted by Android).
  */
 @SuppressLint("InflateParams")
 fun Context.showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
     val mainHandler = Handler(Looper.getMainLooper())
     mainHandler.post {
+        // Fallback to standard system toast if:
+        // 1. Overlay permission is missing (custom views require it)
+        // 2. OR the app is in the background (Android 11+ blocks custom toast views in background)
+        if (!Permissions.overlay(this) || !Permissions.activityVisible) {
+            Toast.makeText(applicationContext, message, duration).show()
+            return@post
+        }
+
         try {
             val inflater = LayoutInflater.from(this)
             val layout = inflater.inflate(R.layout.toast_custom, null)
@@ -145,7 +161,7 @@ fun Context.showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
             toast.view = layout
             toast.show()
         } catch (_: Exception) {
-            // Fallback to standard toast if custom view fails (e.g. background restrictions on newer Android)
+            // Final fallback to system toast
             Toast.makeText(applicationContext, message, duration).show()
         }
     }

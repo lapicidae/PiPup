@@ -1,29 +1,29 @@
 package nl.rogro82.pipup
 
-import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.os.Handler
 import android.os.Looper
-import android.os.PowerManager
-import android.provider.Settings
-import android.util.Log
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.net.toUri
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
-import androidx.lifecycle.Lifecycle
 import androidx.media3.common.util.UnstableApi
+import nl.rogro82.pipup.core.PowerController
 import nl.rogro82.pipup.service.PipUpService
 import nl.rogro82.pipup.ui.SettingsActivity
+import java.util.Calendar
 
 /**
  * Main Activity displaying server status and version information.
@@ -34,11 +34,23 @@ import nl.rogro82.pipup.ui.SettingsActivity
 class MainActivity : AppCompatActivity() {
 
     private val appSettings = PiPupApp.settings
-    private var isEnergyDialogOpen = false
+    private val handler = Handler(Looper.getMainLooper())
 
-    private val overlayPermissionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        if (!Settings.canDrawOverlays(this)) {
-            Log.w("MainActivity", "Overlay permission not granted!")
+    private val settingsReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "nl.rogro82.pipup.SETTINGS_CHANGED") {
+                if (intent.getStringExtra("origin") == "remote") {
+                    Log.d("MainActivity", "Remote settings change detected, refreshing UI")
+                    recreate()
+                }
+            }
+        }
+    }
+
+    private val refreshTask = object : Runnable {
+        override fun run() {
+            updateNotificationArea()
+            handler.postDelayed(this, 5000)
         }
     }
 
@@ -57,7 +69,6 @@ class MainActivity : AppCompatActivity() {
         // Server Status
         val statusLabel = findViewById<TextView>(R.id.textViewConnection)
         val addressLabel = findViewById<TextView>(R.id.textViewServerAddress)
-        val infoLabel = findViewById<TextView>(R.id.textViewInfo)
 
         // IP Address retrieval is moved to a background thread to prevent UI stutter
         Thread {
@@ -73,7 +84,7 @@ class MainActivity : AppCompatActivity() {
             }
         }.start()
 
-        infoLabel.text = getString(R.string.more_information)
+        findViewById<TextView>(R.id.textViewInfo).text = getString(R.string.more_information)
 
         // Settings Button
         findViewById<ImageButton>(R.id.btn_open_settings).setOnClickListener {
@@ -84,30 +95,124 @@ class MainActivity : AppCompatActivity() {
         val serviceIntent = Intent(this, PipUpService::class.java)
         startForegroundService(serviceIntent)
 
-        askPermission()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("UnspecifiedRegisterReceiverFlag")
+            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"))
+        }
     }
 
     override fun onResume() {
         super.onResume()
+        Permissions.onActivityResumed()
         refreshVersionAndUpdates()
+        updateNotificationArea()
+        handler.post(refreshTask)
 
         // Check for finished update downloads that might have been missed
         if (appSettings.pendingUpdateId != -1L) {
             UpdateManager(this).resumePendingUpdate()
         }
 
-        // Only request battery exemption if overlay permission is granted
-        // to avoid double dialogs during the onboarding flow.
-        if (Settings.canDrawOverlays(this)) {
-            requestBatteryOptimizationExemption()
+        // Daily Nag handles all required permissions (including Overlay after first start)
+        checkAndShowPermissionNag()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Permissions.onActivityPaused()
+        handler.removeCallbacks(refreshTask)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(settingsReceiver)
+        } catch (_: Exception) {}
+    }
+
+    /**
+     * Lists required permissions that are currently missing.
+     * Note: Battery optimization and install permissions are considered optional.
+     */
+    private fun getMissingRequiredPermissions(): List<String> {
+        val missing = mutableListOf<String>()
+
+        if (!Permissions.overlay(this)) {
+            missing.add(getString(R.string.permission_overlay))
         }
+
+        if (appSettings.powerModuleEnabled && PowerController.getSleepMethod(this) == null) {
+            missing.add(getString(R.string.settings_module_power))
+        }
+
+        return missing
+    }
+
+    /**
+     * Updates the status area below the version number with relevant notices.
+     */
+    private fun updateNotificationArea() {
+        val area = findViewById<TextView>(R.id.textViewNotificationArea) ?: return
+        val missing = getMissingRequiredPermissions()
+
+        if (missing.isNotEmpty()) {
+            // Priority 1: Required Permissions Missing (Detailed, not clickable)
+            area.visibility = View.VISIBLE
+            area.text = getString(R.string.permission_missing, missing.joinToString(", "))
+            area.setTextColor(ContextCompat.getColor(this, R.color.status_red))
+        } else if (appSettings.updateAvailableTag.isNotEmpty() && UpdateManager(this).isNewer(appSettings.updateAvailableTag)) {
+            // Priority 2: App Update Available (Informational only)
+            area.visibility = View.VISIBLE
+            area.text = getString(R.string.settings_update_found_indicator)
+            area.setTextColor(ContextCompat.getColor(this, R.color.status_green))
+        } else {
+            area.visibility = View.GONE
+        }
+
+        // Ensure it's never focusable or clickable as per Gold Standard lock logic
+        area.isFocusable = false
+        area.isClickable = false
+        area.setOnClickListener(null)
+    }
+
+    /**
+     * Shows a popup redirecting to the permissions menu, but at most once per day.
+     */
+    private fun checkAndShowPermissionNag() {
+        val missing = getMissingRequiredPermissions()
+        if (missing.isEmpty()) return
+
+        // Daily nag logic
+        val today = Calendar.getInstance()
+        val lastNag = Calendar.getInstance().apply { timeInMillis = appSettings.lastPermissionNagDate }
+
+        val isSameDay = appSettings.lastPermissionNagDate != 0L &&
+                        today.get(Calendar.YEAR) == lastNag.get(Calendar.YEAR) &&
+                        today.get(Calendar.DAY_OF_YEAR) == lastNag.get(Calendar.DAY_OF_YEAR)
+
+        if (isSameDay) return
+
+        val appName = getString(R.string.app_name)
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.nag_title)
+            .setMessage(getString(R.string.nag_message, appName))
+            .setPositiveButton(R.string.settings_nav_permissions) { _, _ ->
+                val intent = Intent(this, SettingsActivity::class.java)
+                intent.putExtra(SettingsActivity.EXTRA_NAV_ID, R.id.nav_item_permissions)
+                startActivity(intent)
+            }
+            .setNegativeButton(android.R.string.cancel) { _, _ ->
+                appSettings.lastPermissionNagDate = System.currentTimeMillis()
+            }
+            .show()
+            .getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
     }
 
     private fun refreshVersionAndUpdates() {
         val versionText = findViewById<TextView>(R.id.textViewVersion)
-        val updateIndicator = findViewById<TextView>(R.id.textViewUpdateAvailable)
-        val updateManager = UpdateManager(this)
-
         try {
             val pInfo = packageManager.getPackageInfo(packageName, 0)
             val version = pInfo.versionName
@@ -116,147 +221,8 @@ class MainActivity : AppCompatActivity() {
             } else {
                 getString(R.string.version_number, version)
             }
-
-            // Show update indicator if a newer version was found by background worker
-            val hasUpdateTag = appSettings.updateAvailableTag.isNotEmpty()
-            val updateAvailable = hasUpdateTag && updateManager.isNewer(appSettings.updateAvailableTag)
-
-            if (hasUpdateTag && !updateAvailable) {
-                // We have a stored update tag, but we are already on that version or newer.
-                // Clear the tag to avoid unnecessary checks or confusing state.
-                appSettings.updateAvailableTag = ""
-            }
-
-            Log.d("MainActivity", "Update check: tag=${appSettings.updateAvailableTag}, available=$updateAvailable")
-
-            if (updateAvailable) {
-                updateIndicator.visibility = View.VISIBLE
-                updateIndicator.text = getString(R.string.settings_update_found_indicator)
-            } else {
-                updateIndicator.visibility = View.GONE
-            }
-
-            // If interval is set to "On App Open" (1), trigger a check now with cooldown
-            if (appSettings.updateInterval == 1) {
-                val cooldownMs = 300000L // 5 minutes cooldown for app open check
-                val timeSinceLastCheck = System.currentTimeMillis() - appSettings.lastUpdateCheck
-
-                if (timeSinceLastCheck > cooldownMs || appSettings.updateRepeat) {
-                    updateManager.checkForUpdates(appSettings.updateChannel == 1, object : UpdateManager.UpdateCallback {
-                        override fun onUpdateAvailable(release: GitHubRelease) {
-                            appSettings.updateAvailableTag = release.tagName
-                            appSettings.lastUpdateCheck = System.currentTimeMillis()
-
-                            if (appSettings.updateRepeat || appSettings.lastNotifiedTag != release.tagName) {
-                                updateManager.showUpdateNotification(release)
-                                appSettings.lastNotifiedTag = release.tagName
-                            }
-
-                            runOnUiThread {
-                                updateIndicator.visibility = View.VISIBLE
-                            }
-                        }
-                        override fun onNoUpdate() {
-                            runOnUiThread {
-                                appSettings.updateAvailableTag = ""
-                                appSettings.lastUpdateCheck = System.currentTimeMillis()
-                                updateIndicator.visibility = View.GONE
-                            }
-                        }
-                        override fun onError(message: String) {
-                            Log.e("MainActivity", "Auto update check failed: $message")
-                        }
-                    })
-                } else {
-                    Log.d("MainActivity", "Skipping auto update check (cooldown active). Last check: ${timeSinceLastCheck / 1000 / 60} min ago")
-                }
-            }
-
         } catch (_: Exception) {
             versionText.text = getString(R.string.version_placeholder)
-            updateIndicator.visibility = View.GONE
-        }
-    }
-
-    @SuppressLint("BatteryLife")
-    private fun requestBatteryOptimizationExemption() {
-        if (isEnergyDialogOpen) return
-
-        val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        val isIgnoring = powerManager.isIgnoringBatteryOptimizations(packageName)
-
-        if (BuildConfig.DEBUG) {
-            Log.d("MainActivity", "Battery optimization status - isIgnoring: $isIgnoring, dismissed: ${appSettings.dismissBatteryOptimization}")
-        }
-
-        // Only show dialog if not already ignoring/dismissed
-        if (isIgnoring || appSettings.dismissBatteryOptimization) return
-
-        isEnergyDialogOpen = true
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.energy_optimization_title)
-            .setMessage(R.string.energy_optimization_message)
-            .setPositiveButton(R.string.energy_optimization_show_instructions) { _, _ ->
-                appSettings.dismissBatteryOptimization = true
-                showEnergyInstructionsDialog()
-            }
-            .setNegativeButton(R.string.energy_optimization_later) { _, _ ->
-                appSettings.dismissBatteryOptimization = true
-            }
-            .setOnDismissListener { isEnergyDialogOpen = false }
-            .create()
-
-        dialog.show()
-        // Pre-select "Later" for better TV navigation
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
-    }
-
-    private fun showEnergyInstructionsDialog() {
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.energy_optimization_title)
-            .setMessage(getString(R.string.energy_optimization_manual, packageName))
-            .setPositiveButton(R.string.settings_open) { _, _ ->
-                val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                }
-                try {
-                    startActivity(intent)
-                    Handler(Looper.getMainLooper()).postDelayed({
-                        if (lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-                            showToast(getString(R.string.energy_menu_not_found), Toast.LENGTH_LONG)
-                            // Fallback to Apps settings if the specific one failed to open
-                            try {
-                                startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS).apply {
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                })
-                            } catch (_: Exception) {}
-                        }
-                    }, 1500)
-                } catch (_: Exception) {
-                    showToast(getString(R.string.energy_menu_not_found), Toast.LENGTH_LONG)
-                    try {
-                        startActivity(Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        })
-                    } catch (_: Exception) {}
-                }
-            }
-            .setNegativeButton(android.R.string.ok, null)
-            .create()
-
-        dialog.show()
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.requestFocus()
-    }
-
-    private fun askPermission() {
-        if (!Settings.canDrawOverlays(this)) {
-            try {
-                val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:$packageName".toUri())
-                overlayPermissionLauncher.launch(intent)
-            } catch (e: Exception) {
-                Log.e("MainActivity", "Failed to launch overlay permission settings", e)
-                showToast(getString(R.string.settings_overlay_adb_hint), Toast.LENGTH_LONG)
-            }
         }
     }
 }

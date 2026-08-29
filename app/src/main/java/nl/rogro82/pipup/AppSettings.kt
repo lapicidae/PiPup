@@ -59,14 +59,16 @@ class AppSettings(context: Context) {
     var preWarmWebView by BooleanPref("pre_warm_webview", false)
 
     // System / App
-    /** Whether the user has dismissed the battery optimization warning. */
-    var dismissBatteryOptimization by BooleanPref("dismiss_battery_optimization", false)
     /** Enables additional technical settings and information. */
     var advancedMode by BooleanPref("advanced_mode", false)
     /** The application theme (0: Dark, 1: Light). */
     var appTheme by IntPref("app_theme", 0)
+    /** Whether the power control module is enabled. */
+    var powerModuleEnabled by BooleanPref("power_module_enabled", false)
     /** The preferred language for the application UI. */
     var language by StringPref("language", "default")
+    /** The timestamp of the last daily permission nag. */
+    var lastPermissionNagDate by LongPref("last_permission_nag_date", 0L)
 
     // Updates
     /** The update channel (0: Stable, 1: Beta). */
@@ -244,8 +246,6 @@ class AppSettings(context: Context) {
     fun resetToDefaults() {
         prefs.edit {
             clear()
-            // Explicitly reset non-styling flag for parity and clarity
-            putBoolean("dismiss_battery_optimization", false)
         }
     }
 

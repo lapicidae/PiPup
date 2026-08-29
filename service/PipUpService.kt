@@ -20,8 +20,6 @@ import android.view.WindowManager
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
 import fi.iki.elonen.NanoHTTPD
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
 import nl.rogro82.pipup.*
 import nl.rogro82.pipup.core.NotificationManager
 import nl.rogro82.pipup.core.PayloadParser
@@ -48,6 +46,10 @@ class PipUpService : Service() {
         private const val NOTIFICATION_ID = 1001
         /** The port on which the internal WebServer listens. */
         const val SERVER_PORT = 7979
+
+        @SuppressLint("StaticFieldLeak")
+        private var instance: PipUpService? = null
+        fun getInstance(): PipUpService? = instance
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -56,9 +58,11 @@ class PipUpService : Service() {
     private lateinit var webServer: WebServer
     private lateinit var notificationManager: NotificationManager
     private lateinit var payloadParser: PayloadParser
+
     private lateinit var moduleManager: ModuleManager
 
     private val mPopupsShown = java.util.concurrent.atomic.AtomicLong(0)
+    private val mWatchdogCleanups = java.util.concurrent.atomic.AtomicLong(0)
     private val mStartedAt = SystemClock.elapsedRealtime()
     private var mLastPopup: PopupProps? = null
     private var mLastPopupAt: Long = 0L
@@ -68,30 +72,10 @@ class PipUpService : Service() {
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == "nl.rogro82.pipup.SETTINGS_CHANGED") {
-                Log.d(TAG, "Settings change detected, applying global states")
+                Log.d(TAG, "Settings change detected, clearing web cache")
                 cachedLandingPage = null
-
-                // 1. Re-apply Locale
-                val lang = settings.language
-                val appLocale: LocaleListCompat = if (lang == "default") {
-                    LocaleListCompat.getEmptyLocaleList()
-                } else {
-                    LocaleListCompat.forLanguageTags(lang)
-                }
-                AppCompatDelegate.setApplicationLocales(appLocale)
-
-                // 2. Re-apply Theme
-                val appTheme = settings.appTheme
-                val mode = if (appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-                AppCompatDelegate.setDefaultNightMode(mode)
-
-                // 3. Update Worker schedule
-                UpdateWorker.schedule(applicationContext, settings.updateInterval)
-
-                // 4. Update Modules
                 moduleManager.setModuleEnabled("power", settings.powerModuleEnabled)
-
-                // 5. Update Notification
+                // Also update foreground notification in case language changed
                 updateForegroundNotification(settings.language)
             }
         }
@@ -101,6 +85,7 @@ class PipUpService : Service() {
     internal var warmWebView: android.webkit.WebView? = null
 
     override fun onCreate() {
+        instance = this
         super.onCreate()
         initNotificationChannel()
 
@@ -183,6 +168,7 @@ class PipUpService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "Service destroying, cleaning up resources...")
+        instance = null
         try {
             unregisterReceiver(settingsReceiver)
         } catch (_: Exception) {}
@@ -211,18 +197,16 @@ class PipUpService : Service() {
         val uri = session.uri.lowercase()
         val method = session.method
 
-        // 1. Check if power module is enabled before processing its request
+        // Check if power module is enabled before processing its request
         if (uri == "/power" && !settings.powerModuleEnabled) {
              val localizedContext = getLocalizedContext(settings.language)
              showToast(localizedContext.getString(R.string.error_module_disabled, "Power Control"))
              return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Module disabled")
         }
 
-        // 2. Dispatch to ModuleManager
         val moduleResponse = moduleManager.handleRequest(session)
         if (moduleResponse != null) return moduleResponse
 
-        // 3. Core API Fallback
         return try {
             when (uri) {
                 "/" -> {
@@ -235,16 +219,10 @@ class PipUpService : Service() {
                 }
                 "/notify", "/api/notify" -> processNotify(session)
                 "/state" -> stateResponse()
+                "/diagnose" -> diagnoseResponse()
                 "/cancel" -> {
-                    val id = session.parameters["id"]?.firstOrNull()
-                    val current = notificationManager.getCurrentProps()
-
-                    if (id != null && current != null && current.id != id) {
-                        ok("id mismatch: visible popup is ${current.id}")
-                    } else {
-                        notificationManager.cancelAll()
-                        ok("Queue cleared")
-                    }
+                    notificationManager.cancelAll()
+                    ok("Queue cleared")
                 }
                 "/settings" -> handleSettingsRequest(session)
                 "/favicon.svg", "/favicon.ico" -> handleFavicon()
@@ -272,23 +250,22 @@ class PipUpService : Service() {
             mLastPopup = finalProps
             mLastPopupAt = SystemClock.elapsedRealtime()
             notificationManager.enqueue(finalProps)
-            ok(finalProps.toString())
-        } ?: invalidRequest("failed to parse input")
+            ok("Enqueued")
+        } ?: invalidRequest("Invalid payload")
     }
 
     private fun stateResponse(): NanoHTTPD.Response {
         val current = notificationManager.getCurrentProps()
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        val appName = getString(R.string.app_name)
         val state = mutableMapOf<String, Any?>(
-            "app" to appName,
+            "app" to "PiPup",
             "version" to BuildConfig.VERSION_NAME,
             "id" to deviceId(),
             "name" to deviceName(),
             "visible" to notificationManager.isDisplaying(),
             "screenOn" to powerManager.isInteractive,
             "popupsShown" to mPopupsShown.get(),
-            "watchdogCleanups" to notificationManager.watchdogCleanups.get(),
+            "watchdogCleanups" to mWatchdogCleanups.get(),
             "uptime" to (SystemClock.elapsedRealtime() - mStartedAt) / 1000,
             "device" to mapOf(
                 "model" to Build.MODEL,
@@ -298,31 +275,19 @@ class PipUpService : Service() {
         )
         if (current != null) {
             state["popup"] = mapOf(
-                "title" to current.title,
+                "id" to current.id,
                 "duration" to current.duration,
                 "elapsed" to ((SystemClock.elapsedRealtime() - mLastPopupAt) / 1000)
             )
         }
         state["permissions"] = Permissions.asMap(this)
-        state["update"] = mapOf(
-            "available" to UpdateManager.updateAvailable(this),
-            "latest" to UpdateManager.latestVersion,
-            "installing" to UpdateManager.isInstalling,
-            "silent" to UpdateManager.silentInstall,
-            "checkedSecondsAgo" to UpdateManager.lastCheckedAt.takeIf { it > 0 }
-                ?.let { (System.currentTimeMillis() - it) / 1000 },
-            "error" to UpdateManager.lastError
-        )
         moduleManager.augmentState(state)
 
         val last = mLastPopup
         if (last != null) {
             state["lastPopup"] = mapOf(
-                "title" to last.title,
+                "id" to last.id,
                 "duration" to last.duration,
-                "position" to last.getPositionEnum().name,
-                "muted" to mediaMuted(last),
-                "media" to mediaInfo(last),
                 "secondsAgo" to ((SystemClock.elapsedRealtime() - mLastPopupAt) / 1000)
             )
         }
@@ -333,19 +298,11 @@ class PipUpService : Service() {
         )
     }
 
-    private fun mediaInfo(p: PopupProps): Map<String, Any?>? = when (val m = p.media) {
-        is PopupProps.Media.Web -> mapOf("type" to "web", "width" to m.width, "height" to m.height)
-        is PopupProps.Media.Video -> mapOf("type" to "video", "width" to m.width)
-        is PopupProps.Media.Image -> mapOf("type" to "image", "width" to m.width)
-        is PopupProps.Media.Bitmap -> mapOf("type" to "bitmap", "width" to m.width)
-        else -> null
-    }
-
-    private fun mediaMuted(p: PopupProps): Boolean? = when (val m = p.media) {
-        is PopupProps.Media.Web -> m.muted
-        is PopupProps.Media.Video -> m.muted
-        else -> null
-    }
+    private fun diagnoseResponse(): NanoHTTPD.Response = NanoHTTPD.newFixedLengthResponse(
+        NanoHTTPD.Response.Status.OK,
+        "application/json",
+        Json.writeValueAsString(Permissions.diagnose(this))
+    )
 
     private fun deviceId(): String {
         val prefs = getSharedPreferences("pipup_id", MODE_PRIVATE)
@@ -372,7 +329,6 @@ class PipUpService : Service() {
             }
         }
 
-        val appName = getString(R.string.app_name)
         val versionName = try {
             packageManager.getPackageInfo(packageName, 0).versionName
         } catch (_: Exception) { "Unknown" }
@@ -404,7 +360,7 @@ class PipUpService : Service() {
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
                 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-                <title>${getString(R.string.server_landing_title, appName)}</title>
+                <title>${getString(R.string.server_landing_title, getString(R.string.app_name))}</title>
                 <style>
                     body { font-family: sans-serif; background-color: $bg; color: $text; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
                     .card { background-color: $cardBg; padding: 2.5rem; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); text-align: center; max-width: 450px; border: 1px solid $outline; }
@@ -424,11 +380,11 @@ class PipUpService : Service() {
             <body>
                 <div class="card">
                     <div class="status">${getString(R.string.server_landing_status)}</div>
-                    ${if (logoSvg.isNotEmpty()) "<div class=\"logo-container\">$logoSvg</div>" else "<h1>$appName</h1>"}
+                    ${if (logoSvg.isNotEmpty()) "<div class=\"logo-container\">$logoSvg</div>" else "<h1>${getString(R.string.app_name)}</h1>"}
                     <p>${getString(R.string.server_landing_description)}</p>
                     <p><a href="https://github.com/lapicidae/PiPup" target="_blank">${getString(R.string.server_landing_docs)}</a></p>
                     <div class="version">
-                        $appName v$versionName<br>
+                        ${getString(R.string.app_name)} v$versionName<br>
                         ${getString(R.string.server_landing_running_on, Build.MODEL, Build.VERSION.RELEASE)}
                     </div>
                 </div>
@@ -457,10 +413,8 @@ class PipUpService : Service() {
                     val content = session.inputStream.readExactBytes(length)
                     val data = Json.mapper.readValue(content, AppSettings.SettingsData::class.java)
                     handler.post {
-                        if (data != null) {
-                            settings.apply(data)
-                            applyGlobalSettings(data)
-                        }
+                        settings.apply(data)
+                        applyGlobalSettings(data)
                         // Notify UI about settings change
                         val intent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED").apply {
                             setPackage(packageName)
@@ -476,10 +430,10 @@ class PipUpService : Service() {
     }
 
     private fun applyGlobalSettings(data: AppSettings.SettingsData) {
-        // Invalidate cache to ensure the latest theme/language is used for landing page
+        // 1. Invalidate cache to ensure the latest theme/language is used for landing page
         cachedLandingPage = null
 
-        // Update Foreground Notification (respects current language settings)
+        // 2. Update Foreground Notification (respects current language settings)
         updateForegroundNotification(data.language)
     }
 
@@ -531,6 +485,6 @@ class PipUpService : Service() {
     }
 
     private fun invalidRequest(message: String?): NanoHTTPD.Response {
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: ${message ?: "unknown error"}")
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", message ?: "Invalid Request")
     }
 }

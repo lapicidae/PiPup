@@ -11,6 +11,7 @@ import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.R
 import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.getLocalizedContext
 import nl.rogro82.pipup.showToast
@@ -42,6 +43,17 @@ class NotificationManager(
     private var isPreparing = false
 
     private val durationToken = Any()
+    val watchdogCleanups = java.util.concurrent.atomic.AtomicLong(0)
+
+    /**
+     * Checks if a notification is currently being displayed on the screen.
+     */
+    fun isDisplaying(): Boolean = currentPopup != null
+
+    /**
+     * Returns the properties of the currently displayed notification, or null if none.
+     */
+    fun getCurrentProps(): PopupProps? = currentPopup?.props
 
     fun enqueue(props: PopupProps) {
         handler.post {
@@ -92,7 +104,6 @@ class NotificationManager(
 
     private fun canUpdateInPlace(oldProps: PopupProps, newProps: PopupProps): Boolean {
         // Only update in-place if media type, URI, and animation remain identical.
-        // Changing the animation style usually feels more natural with a fresh popup.
         if (oldProps.animationType != newProps.animationType ||
             oldProps.animationDuration != newProps.animationDuration) return false
 
@@ -144,6 +155,7 @@ class NotificationManager(
         // Safety timeout (longer than any media timeout)
         handler.postAtTime({
             Log.w(TAG, "Popup preparation timed out (hard safety)")
+            watchdogCleanups.incrementAndGet()
             isPreparing = false
             preparingView?.cleanup()
             preparingView = null
@@ -192,7 +204,7 @@ class NotificationManager(
     private fun replaceCurrentPopup(newView: PopupView, props: PopupProps) {
         val overlayView = ensureOverlay() ?: run {
             val localizedContext = context.getLocalizedContext(PiPupApp.settings.language)
-            context.showToast(localizedContext.getString(nl.rogro82.pipup.R.string.error_permission_denied_overlay), android.widget.Toast.LENGTH_LONG)
+            context.showToast(localizedContext.getString(R.string.error_permission_denied_overlay))
             return
         }
         Log.d(TAG, "Overwrite: Swapping visible popup with new prepared one")
@@ -221,7 +233,7 @@ class NotificationManager(
         val overlayView = ensureOverlay() ?: run {
             Log.e(TAG, "Aborting popup: could not create overlay (check SYSTEM_ALERT_WINDOW permission)")
             val localizedContext = context.getLocalizedContext(PiPupApp.settings.language)
-            context.showToast(localizedContext.getString(nl.rogro82.pipup.R.string.error_permission_denied_overlay), android.widget.Toast.LENGTH_LONG)
+            context.showToast(localizedContext.getString(R.string.error_permission_denied_overlay))
             view.cleanup()
             checkNextAfterRemoval()
             return

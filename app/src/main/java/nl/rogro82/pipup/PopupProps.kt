@@ -19,6 +19,7 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 @JsonIgnoreProperties(ignoreUnknown = true)
 data class PopupProps(
     val duration: Int = 10,
+    val id: String? = null,
     val position: Int = 0,
     val title: String? = null,
     val titleSize: Float = 24f,
@@ -68,7 +69,8 @@ data class PopupProps(
         data class Video(
             val uri: String,
             val width: Int = 480,
-            val scale: Boolean = true
+            val scale: Boolean = true,
+            val muted: Boolean = true
         ) : Media()
         data class Image(
             val uri: String,
@@ -81,7 +83,8 @@ data class PopupProps(
             val width: Int = 640,
             val height: Int = 480,
             val cache: Boolean = true,
-            val scale: Boolean = true
+            val scale: Boolean = true,
+            val muted: Boolean = true
         ) : Media()
         data class Whep(
             val uri: String,

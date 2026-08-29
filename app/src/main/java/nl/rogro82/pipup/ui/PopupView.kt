@@ -75,6 +75,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         @JavascriptInterface
         fun onMediaPlaying() {
             viewRef.get()?.let { popup ->
+                if (popup.isReadyCalled || popup.isCleanedUp) return@let
                 popup.mainHandler.post {
                     if (popup.isCleanedUp) return@post
                     android.util.Log.d("PopupView", "WHEP video playing signal received from JS")
@@ -143,6 +144,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
      * @param errorMessage The error message to display.
      */
     fun showPlaceholder(errorMessage: String? = null) {
+        // Stop any active media loading to prevent late success callbacks from overriding the placeholder.
+        cleanupMediaResources()
+
         // Ensure visibility is restored if we were in an invisible pre-loading state
         mWebView?.visibility = VISIBLE
 
@@ -661,6 +665,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             override fun onPlaybackStateChanged(state: Int) {
                 if (!ready && state == Player.STATE_READY) {
                     ready = true
+                    if (isReadyCalled || isCleanedUp) return
+
                     player.videoFormat?.let { if (it.width > 0) targetMediaHeight = (tw * it.height) / it.width }
                     if (targetMediaHeight > 0 && targetMediaHeight != th) {
                         frame.layoutParams.height = targetMediaHeight
@@ -730,7 +736,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             webViewClient = object : WebViewClient() {
                 var errorOccurred = false
                 override fun onPageFinished(v: WebView?, u: String?) {
-                    if (!errorOccurred) {
+                    if (!errorOccurred && !isReadyCalled && !isCleanedUp) {
                         v?.visibility = VISIBLE
                         mWebView?.let { removeStaleViews(it) }
                         notifyReady()
@@ -839,7 +845,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 addJavascriptInterface(JsBridge(retryCount), "PiPup")
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(v: WebView?, u: String?) {
-                        adjustHeights()
+                        if (!isReadyCalled && !isCleanedUp) {
+                            adjustHeights()
+                        }
                     }
                     override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
                         if (request?.isForMainFrame == true) {
@@ -931,6 +939,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 }
 
                 override fun onResourceReady(resource: Drawable, model: Any, target: com.bumptech.glide.request.target.Target<Drawable>?, dataSource: com.bumptech.glide.load.DataSource, isFirstResource: Boolean): Boolean {
+                    if (isReadyCalled || isCleanedUp) return false
+
                     if (resource.intrinsicWidth > 0) {
                         targetMediaHeight = (tw * resource.intrinsicHeight) / resource.intrinsicWidth
                     }

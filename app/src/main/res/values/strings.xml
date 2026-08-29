@@ -1,44 +1,54 @@
 <resources>
+    <!-- Base App Strings -->
     <string name="app_name">PiPup</string>
     <string name="settings_title">Settings</string>
     <string name="settings_open">Open Settings</string>
+    <!-- %1$s: Version Name -->
     <string name="version_number_debug">v%1$s (debug)</string>
     <string name="version_number">v%1$s</string>
     <string name="server_running">The server is reachable at:</string>
+    <!-- %1$s: IP Address, %2$d: Port -->
     <string name="server_address">%1$s:%2$d</string>
     <string name="no_network_connection">No network connection found.</string>
     <string name="more_information">For more information please read the documentation @ https://github.com/lapicidae/PiPup</string>
 
-    <!-- Navigation & Sections -->
-
+    <!-- Navigation Rail Items -->
     <string name="settings_nav_general">General</string>
     <string name="settings_nav_background">Background</string>
     <string name="settings_nav_text">Text Style</string>
     <string name="settings_nav_border">Border</string>
     <string name="settings_nav_animation">Animation</string>
-    <string name="settings_nav_advanced">Advanced</string>
     <string name="settings_nav_updates">Updates</string>
+    <string name="settings_nav_modules">Modules</string>
+    <string name="settings_nav_permissions">Permissions</string>
+    <string name="settings_nav_advanced">Advanced</string>
+
+    <!-- App UI & Themes -->
     <string name="settings_language">Language</string>
     <string name="settings_app_theme">App Theme</string>
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_light">Light</string>
 
-    <!-- General Settings -->
+    <!-- General Settings: Layout & Media -->
     <string name="settings_position">Popup Position</string>
     <string name="settings_padding">Content Padding</string>
     <string name="settings_media_position">Media Position</string>
     <string name="settings_media_timeout">Media Loading Timeout</string>
     <string name="settings_media_retries">Media Loading Retries</string>
+    <!-- %1$d: Retry Count -->
     <plurals name="settings_media_retries_count">
         <item quantity="one">%1$d retry</item>
         <item quantity="other">%1$d retries</item>
     </plurals>
     <string name="settings_pre_warm_webview">Pre-warm WebView</string>
     <string name="settings_pre_warm_webview_desc">Initializes and keeps the WebView engine active in the background to ensure immediate loading of Web/WHEP content. Increases background RAM usage (~50MB).</string>
+    <!-- %1$d: Seconds -->
     <plurals name="settings_media_timeout_seconds">
         <item quantity="one">%1$d second</item>
         <item quantity="other">%1$d seconds</item>
     </plurals>
+
+    <!-- Animation Settings -->
     <string name="settings_animation_type">Animation Type</string>
     <string name="settings_animation_duration">Animation Duration</string>
     <string name="settings_animation_none">None</string>
@@ -55,11 +65,11 @@
     <string name="settings_exit_animation">Exit Animation</string>
     <string name="settings_exit_animation_desc">Inverts the entrance animation when the popup is dismissed.</string>
 
-    <!-- Background Settings -->
+    <!-- Background Appearance -->
     <string name="settings_bg_color">Background Color</string>
     <string name="settings_opacity">Background Opacity</string>
 
-    <!-- Text Settings -->
+    <!-- Text Appearance -->
     <string name="settings_title_color">Title Color</string>
     <string name="settings_title_size">Title Font Size</string>
     <string name="settings_message_color">Message Color</string>
@@ -67,22 +77,23 @@
     <string name="settings_title_alignment">Title Alignment</string>
     <string name="settings_message_alignment">Message Alignment</string>
 
-    <!-- Border Settings -->
+    <!-- Border Appearance -->
     <string name="settings_border_radius">Corner Radius</string>
     <string name="settings_border_width">Border Width</string>
     <string name="settings_border_color">Border Color</string>
 
-    <!-- Advanced Settings -->
-    <string name="settings_stability">Stability</string>
+    <!-- Advanced Tools & Migration -->
+    <!-- %1$s: App Name -->
     <string name="settings_migration">Migration &amp; Sync</string>
     <string name="settings_tools">Expert Tools</string>
     <string name="settings_danger_zone">Danger Zone</string>
     <string name="settings_advanced_mode">Advanced Mode</string>
     <string name="settings_advanced_mode_desc">Enables manual HEX code input and displays precise numeric slider values.</string>
-    <string name="settings_import_network">Import from another PiPup</string>
+    <!-- %1$s: App Name -->
+    <string name="settings_import_network">Import from another %1$s</string>
     <string name="settings_reset_settings">Reset Settings</string>
 
-    <!-- Update Settings -->
+    <!-- Self-Update Engine -->
     <string name="settings_update_channel">Update Channel</string>
     <string name="settings_update_stable">Stable</string>
     <string name="settings_update_beta">Beta</string>
@@ -90,14 +101,16 @@
     <string name="settings_checking_update">Checking for updates…</string>
     <string name="settings_update_available">Update Available</string>
     <string name="settings_update_none">You are using the latest version.</string>
+    <!-- %1$s: Error Message -->
     <string name="settings_update_error">Update check failed: %1$s</string>
+    <!-- %1$s: New Version Name -->
     <string name="settings_update_dialog_msg">A new version (%1$s) is available. Would you like to download and install it now?</string>
     <string name="settings_update_downloading">Downloading update…</string>
     <string name="settings_update_verifying">Preparing download…</string>
     <string name="settings_update_no_longer_available">This update is no longer available online. Please check again.</string>
     <string name="settings_update_install">Install</string>
+    <!-- %1$s: Target Version -->
     <string name="settings_update_to">Update to %1$s</string>
-    <string name="settings_update_later">Later</string>
 
     <string name="settings_update_interval">Automatic Check</string>
     <string name="settings_update_off">Off</string>
@@ -107,37 +120,83 @@
     <string name="settings_update_monthly">Monthly</string>
     <string name="settings_update_notification_style">Notification Style</string>
     <string name="settings_update_style_silent">Silent (Main Menu only)</string>
-    <string name="settings_update_style_pipup">PiPup Overlay</string>
+    <!-- %1$s: App Name -->
+    <string name="settings_update_style_pipup">%1$s Overlay</string>
     <string name="settings_update_style_toast">Toast (Mini-Popup)</string>
     <string name="settings_update_found_indicator">Update Available!</string>
     <string name="settings_update_repeat">Repeat notification</string>
     <string name="settings_update_repeat_desc">Reminds you on every check until the update is installed.</string>
-    <string name="notification_update_title">PiPup Update Available</string>
+    <!-- %1$s: App Name -->
+    <string name="notification_update_title">%1$s Update Available</string>
+    <!-- %1$s: New Version Name -->
     <string name="notification_update_msg">Version %1$s is ready to download.</string>
 
     <string name="update_error_invalid_api">Invalid API response</string>
     <string name="update_error_network">Network error</string>
-    <string name="update_download_title">PiPup Update %1$s</string>
+    <!-- %1$s: App Name, %2$s: Version Name -->
+    <string name="update_download_title">%1$s Update %2$s</string>
     <string name="update_download_desc">Downloading new version…</string>
+    <!-- %1$d: HTTP/Error Code -->
     <string name="update_download_failed">Download failed (Code: %1$d)</string>
     <string name="update_verification_failed">Update verification failed</string>
+    <!-- %1$s: Detail message -->
     <string name="update_installer_failed">Failed to launch installer: %1$s</string>
 
+    <!-- Background Service & Media Errors -->
     <string name="service_listening">Listening for notifications…</string>
-    <string name="media_error_timeout">Loading timed out</string>
-    <string name="media_error_load_failed">Loading failed</string>
+    <string name="media_error_timeout">Media loading timed out</string>
+    <string name="media_error_load_failed">Media loading failed</string>
+    <!-- %1$s: Simple Error, %2$s: Detailed Message -->
     <string name="media_error_with_message">%1$s\n\n%2$s</string>
+    <!-- %1$s: Error Message -->
     <string name="media_error_only">%1$s</string>
     <string name="media_error_codec_mismatch">Incompatible video format (Codec mismatch)</string>
     <string name="media_error_not_found">Stream or image not found (404)</string>
     <string name="media_error_connection">Network connection failed (ICE/Link error)</string>
-    <string name="error_permission_denied_overlay">No permission to display overlays</string>
+    <string name="error_power_permission_missing">Permission for remote sleep is missing.</string>
+    <!-- %1$s: Module Name -->
+    <string name="error_module_disabled">Module \"%1$s\" is currently disabled.</string>
+    <string name="error_permission_denied_overlay">Overlay permission is missing.</string>
     <string name="address_placeholder">---.---.---.---</string>
     <string name="version_placeholder">v?.?.?</string>
 
+    <!-- Modules & System Integration -->
+    <string name="settings_module_power">Power Control</string>
+    <string name="settings_module_power_desc">Allows remote waking and sleeping of the TV screen via API.</string>
+    <string name="admin_enabled">Device Administrator enabled</string>
+    <string name="admin_disabled">Device Administrator disabled</string>
+    <string name="permission_admin_explanation">Required to put the TV screen into standby remotely.</string>
 
+    <!-- Centralized Permission System -->
+    <string name="permission_header_required">Required</string>
+    <string name="permission_header_optional">Optional</string>
+    <string name="permission_overlay">Overlay Permission</string>
+    <string name="permission_install">Install Permission</string>
+    <string name="permission_admin">Device Administrator</string>
+    <string name="permission_admin_desc">Enables instant screen sleep via system-level control. (Recommended)</string>
+    <string name="permission_accessibility">Accessibility Service</string>
+    <string name="permission_accessibility_desc">Alternative method using global actions. Good fallback if Admin is blocked.</string>
 
-    <!-- Dialogs & UI -->
+    <!-- %1$s: Permission Name -->
+    <string name="permission_missing">Missing Permission: %1$s</string>
+    <!-- %1$s: Permission Name -->
+    <string name="permission_granted">Permission Granted: %1$s</string>
+    <string name="permission_adb_hint">Alternative via ADB:</string>
+    <!-- %1$s: ADB Command -->
+    <string name="permission_adb_format">Alternative via ADB:\n%1$s</string>
+    <string name="permission_overlay_why">Show notifications over other applications.</string>
+    <string name="permission_install_why">Install application updates automatically.</string>
+    <string name="permission_power_why">Remotely wake or sleep the TV screen.</string>
+    <string name="permission_blocked_device">This device blocks this setting; use ADB.</string>
+    <string name="permission_restricted_hint">If the button is disabled: Go to App Info -> 3-dot menu -> Allow restricted settings.</string>
+    <string name="permission_ask_open_settings">Would you like to open the system settings now to fix this?</string>
+
+    <!-- Onboarding & Daily Nag -->
+    <string name="nag_title">Permissions Required</string>
+    <!-- %1$s: App Name -->
+    <string name="nag_message">Some required permissions are missing. To ensure %1$s runs correctly, please review them in the Permissions menu to ensure full functionality.</string>
+
+    <!-- Standard UI Dialogs -->
     <string name="settings_yes">Yes</string>
     <string name="settings_no">No</string>
     <string name="settings_reset_confirm_title">Reset Settings?</string>
@@ -147,11 +206,16 @@
     <string name="settings_import_ip_title">Enter Source IP</string>
     <string name="settings_import_ip_hint">e.g. 192.168.1.50</string>
     <string name="settings_import_success">Settings imported successfully</string>
+    <!-- %1$s: Error Detail -->
     <string name="settings_import_error">Import failed: %1$s</string>
-    <string name="settings_overlay_adb_hint">Please grant overlay permission via ADB if settings are unavailable.</string>
+
+    <!-- Preview Components -->
     <string name="settings_preview_media">Media</string>
     <string name="settings_preview_title">Live Preview</string>
     <string name="settings_preview_message">The overlay updates in real-time.</string>
+
+    <!-- UI Formatting -->
+    <!-- %1$d: Current Value, %2$d: Maximum Value -->
     <string name="settings_slider_value_format">%1$d / %2$d</string>
     <string name="settings_default_suffix">(default)</string>
     <string name="settings_alignment_left">Left</string>
@@ -167,15 +231,13 @@
     <string name="settings_pos_bottom_left">Bottom Left</string>
     <string name="settings_pos_center">Center</string>
 
-    <!-- Language Names -->
+    <!-- Supported Languages (Managed dynamically) -->
     <string name="language_default">System Default</string>
-    <string name="language_en">English</string>
-    <string name="language_de">Deutsch</string>
 
-    <!-- Credits -->
+    <!-- Translation Credits (Internal) -->
     <string name="translator_credits" />
 
-    <!-- Colors -->
+    <!-- Palette Colors -->
     <string name="color_deep_slate">Deep Slate</string>
     <string name="color_midnight_violet">Midnight Violet</string>
     <string name="color_black_plum">Black Plum</string>
@@ -193,20 +255,20 @@
     <string name="color_silver">Silver</string>
     <string name="color_sky_blue">Sky Blue</string>
 
-    <!-- Energy Optimization -->
+    <!-- Battery & Background Stability -->
     <string name="energy_optimization_title">Background Activity</string>
-    <string name="energy_optimization_message">To ensure reliable notifications, PiPup should be excluded from battery optimization. Would you like to see the instructions for manual or ADB configuration?</string>
-    <string name="energy_optimization_manual">To configure manually:\n\n1. Open System Settings\n2. Go to Apps -> Special app access\n3. Select \"Energy optimization\"\n4. Set PiPup to \"Don\'t optimize\"\n\nAlternatively, use ADB:\nadb shell dumpsys deviceidle whitelist +%1$s</string>
+    <string name="permission_energy_why">Ensure reliable background notifications.</string>
+    <!-- %1$s: App Name -->
+    <string name="energy_optimization_manual">To configure manually:\n\n1. Open System Settings\n2. Go to Apps -> Special app access\n3. Select \"Energy optimization\"\n4. Set %1$s to \"Don\'t optimize\"</string>
     <string name="energy_optimization_show_instructions">Instructions</string>
-    <string name="energy_optimization_later">Later</string>
-    <string name="energy_status_optimized">Optimized (problematic)</string>
-    <string name="energy_status_unrestricted">Unrestricted (recommended)</string>
     <string name="energy_menu_not_found">The energy menu could not be opened automatically. Please follow the manual instructions or use ADB.</string>
 
-    <!-- Web Server Landing Page -->
+    <!-- Web Landing Page (Status API) -->
+    <!-- %1$s: App Name -->
     <string name="server_landing_title">%1$s Server</string>
     <string name="server_landing_status">SERVER ACTIVE</string>
     <string name="server_landing_description">Your Android TV notification gateway is online and waiting for payloads.</string>
     <string name="server_landing_docs">Documentation and API usage can be found on GitHub.</string>
+    <!-- %1$s: Device Name/Model, %2$s: Android Version -->
     <string name="server_landing_running_on">Running on %1$s (Android %2$s)</string>
 </resources>

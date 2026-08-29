@@ -27,6 +27,7 @@ class UpdatesSubmenu(
 
     override fun onBind(root: View) {
         val suffix = context.getString(R.string.settings_default_suffix)
+        val appName = context.getString(R.string.app_name)
 
         // Check Update Button
         root.findViewById<Button>(R.id.btn_check_update)?.apply {
@@ -58,7 +59,7 @@ class UpdatesSubmenu(
         // Notification Style
         val styleItems = listOf(
             context.getString(R.string.settings_update_style_silent),
-            context.getString(R.string.settings_update_style_pipup),
+            context.getString(R.string.settings_update_style_pipup, appName),
             context.getString(R.string.settings_update_style_toast)
         ).mapIndexed { i, s -> if (i == 1) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_update_notification_style, ArrayAdapter(context, android.R.layout.simple_spinner_item, styleItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateNotificationStyle) {
@@ -203,7 +204,7 @@ class UpdatesSubmenu(
                     }
                 })
             }
-            .setNegativeButton(R.string.settings_update_later, null)
+            .setNegativeButton(android.R.string.cancel, null)
             .create()
 
         dialog.show()

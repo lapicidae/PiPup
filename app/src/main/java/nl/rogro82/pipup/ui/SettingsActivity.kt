@@ -20,6 +20,7 @@ import android.widget.ImageView
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.applyCanvas
@@ -33,6 +34,7 @@ import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.databinding.ActivitySettingsBinding
+import nl.rogro82.pipup.showToast
 
 /**
  * Main settings activity providing a multi-pane interface for TV configuration.
@@ -51,11 +53,30 @@ class SettingsActivity : AppCompatActivity() {
     private var currentLayoutRes: Int = -1
     private var currentNavId: Int = -1
 
+    private val adminLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            showToast(getString(R.string.admin_enabled))
+        }
+    }
+
     private val submenuControllers = mutableMapOf<Int, SubmenuController>()
 
     private val railIds = listOf(
         R.id.nav_item_general, R.id.nav_item_background, R.id.nav_item_text_style,
-        R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_updates, R.id.nav_item_advanced,
+        R.id.nav_item_border, R.id.nav_item_animation, R.id.nav_item_updates,
+        R.id.nav_item_modules, R.id.nav_item_permissions, R.id.nav_item_advanced,
+    )
+
+    private val layoutMap = mapOf(
+        R.id.nav_item_general to R.layout.submenu_general,
+        R.id.nav_item_background to R.layout.submenu_background,
+        R.id.nav_item_text_style to R.layout.submenu_text,
+        R.id.nav_item_border to R.layout.submenu_border,
+        R.id.nav_item_animation to R.layout.submenu_animation,
+        R.id.nav_item_updates to R.layout.submenu_updates,
+        R.id.nav_item_modules to R.layout.submenu_modules,
+        R.id.nav_item_permissions to R.layout.submenu_permissions,
+        R.id.nav_item_advanced to R.layout.submenu_advanced
     )
 
     private val settingsReceiver = object : android.content.BroadcastReceiver() {
@@ -98,9 +119,15 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        val restoredNavId = savedInstanceState?.getInt("currentNavId", -1).takeIf { it != null && it != -1 }
+            ?: intent.getIntExtra(EXTRA_NAV_ID, -1).takeIf { it != -1 }
+            ?: R.id.nav_item_general
+
+        val restoredLayoutRes = layoutMap[restoredNavId] ?: R.layout.submenu_general
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (getController(currentLayoutRes).onBackPress()) return
+                if (currentLayoutRes != -1 && getController(currentLayoutRes).onBackPress()) return
                 if (binding.submenuContainer.findFocus() != null) {
                     focusRail()
                 } else {
@@ -112,8 +139,7 @@ class SettingsActivity : AppCompatActivity() {
         })
 
         setupNavRail()
-        loadSubmenu(R.layout.submenu_general, R.id.nav_item_general)
-        findViewById<View>(R.id.nav_item_general).requestFocus()
+        loadSubmenu(restoredLayoutRes, restoredNavId)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
@@ -123,6 +149,48 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
+    override fun onPostResume() {
+        super.onPostResume()
+        handler.postDelayed({
+            ensureFocus(currentNavId)
+        }, 300)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            if (binding.navRail.findFocus() == null && binding.submenuContainer.findFocus() == null) {
+                ensureFocus(currentNavId)
+            }
+        }
+    }
+
+    private fun ensureFocus(targetId: Int) {
+        if (targetId == -1) return
+        val target = findViewById<View>(targetId) ?: return
+
+        // TV Focus Safeguard: Ensure the target is scrolled into view before requesting focus.
+        // On Android TV, focus requests on off-screen items are often silently ignored.
+        val parentScroll = (target.parent?.parent as? ScrollView) ?: (target.parent as? ScrollView)
+        parentScroll?.let { scroll ->
+            val rect = android.graphics.Rect()
+            target.getDrawingRect(rect)
+            scroll.offsetDescendantRectToMyCoords(target, rect)
+            val centerY = rect.top - (scroll.height / 2) + (target.height / 2)
+            scroll.scrollTo(0, centerY.coerceAtLeast(0))
+        }
+
+        if (!target.isFocused) {
+            target.requestFocus()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putInt("currentNavId", currentNavId)
+        outState.putInt("currentLayoutRes", currentLayoutRes)
+    }
+
     private fun setupNavRail() {
         configureNavItem(R.id.nav_item_general, R.string.settings_nav_general, R.drawable.ic_general_style, R.layout.submenu_general)
         configureNavItem(R.id.nav_item_background, R.string.settings_nav_background, R.drawable.ic_bg, R.layout.submenu_background)
@@ -130,6 +198,8 @@ class SettingsActivity : AppCompatActivity() {
         configureNavItem(R.id.nav_item_border, R.string.settings_nav_border, R.drawable.ic_border_style, R.layout.submenu_border)
         configureNavItem(R.id.nav_item_animation, R.string.settings_nav_animation, R.drawable.ic_animation, R.layout.submenu_animation)
         configureNavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, R.layout.submenu_updates)
+        configureNavItem(R.id.nav_item_modules, R.string.settings_nav_modules, R.drawable.ic_modules, R.layout.submenu_modules)
+        configureNavItem(R.id.nav_item_permissions, R.string.settings_nav_permissions, R.drawable.ic_permissions, R.layout.submenu_permissions)
         configureNavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, R.layout.submenu_advanced)
 
         railIds.forEachIndexed { i, id ->
@@ -158,7 +228,10 @@ class SettingsActivity : AppCompatActivity() {
                     val pivotY = scroll.height * 0.3f
                     scroll.smoothScrollTo(0, (rect.top - pivotY).toInt().coerceAtLeast(0))
                 }
-                if (currentLayoutRes != layoutRes) loadSubmenu(layoutRes, navId)
+
+                if (currentNavId != navId) {
+                    loadSubmenu(layoutRes, navId)
+                }
             }
             updateNavAppearance()
         }
@@ -172,21 +245,11 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updateNavAppearance() {
-        val layoutMap = mapOf(
-            R.id.nav_item_general to R.layout.submenu_general,
-            R.id.nav_item_background to R.layout.submenu_background,
-            R.id.nav_item_text_style to R.layout.submenu_text,
-            R.id.nav_item_border to R.layout.submenu_border,
-            R.id.nav_item_animation to R.layout.submenu_animation,
-            R.id.nav_item_updates to R.layout.submenu_updates,
-            R.id.nav_item_advanced to R.layout.submenu_advanced
-        )
-
         railIds.forEach { id ->
             val v = findViewById<View>(id) ?: return@forEach
             val label = v.findViewById<TextView>(R.id.nav_text)
             val icon = v.findViewById<ImageView>(R.id.nav_icon)
-            val isSelected = currentLayoutRes == layoutMap[id]
+            val isSelected = currentNavId == id
             val hasFocus = v.isFocused
 
             val color = when {
@@ -203,6 +266,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun loadSubmenu(layoutRes: Int, navId: Int) {
         currentLayoutRes = layoutRes
         currentNavId = navId
+
         binding.submenuContainer.removeAllViews()
         val root = LayoutInflater.from(this).inflate(layoutRes, binding.submenuContainer, true)
 
@@ -212,6 +276,13 @@ class SettingsActivity : AppCompatActivity() {
         setupSubmenuFocus(navId)
         updateNavAppearance()
         updatePreview(animate = false)
+    }
+
+    /**
+     * Helper to launch the Device Admin activation screen using the modern Result API.
+     */
+    fun requestAdminRights(intent: Intent) {
+        adminLauncher.launch(intent)
     }
 
     /**
@@ -229,6 +300,8 @@ class SettingsActivity : AppCompatActivity() {
                 R.layout.submenu_animation -> AnimationSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_advanced -> AdvancedSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_updates -> UpdatesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_permissions -> PermissionsSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_modules -> ModulesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 else -> object : SubmenuController {
                     override fun onBind(root: View) {}
                     override fun onBackPress(): Boolean = false
@@ -238,7 +311,19 @@ class SettingsActivity : AppCompatActivity() {
         }
     }
 
-    private fun setupSubmenuFocus(navId: Int) {
+    /**
+     * Returns the resource ID of the currently active submenu layout.
+     */
+    fun getCurrentSubmenuLayout(): Int = currentLayoutRes
+
+    /**
+     * Configures the focus navigation between the navigation rail and the submenu content.
+     * Call this after dynamically adding or removing focusable views in a submenu.
+     * @param targetNavId The ID of the currently active navigation rail item. Defaults to current if -1.
+     */
+    fun setupSubmenuFocus(targetNavId: Int = -1) {
+        val navId = if (targetNavId == -1) currentNavId else targetNavId
+        if (navId == -1) return
         val container = binding.submenuContainer.getChildAt(0) as? ViewGroup ?: return
         val focusableChildren = (0 until container.childCount).asSequence()
             .map { container.getChildAt(it) }
@@ -250,9 +335,23 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         focusableChildren.forEachIndexed { i, child ->
+            // Ensure child has a valid ID for focus mapping
+            if (child.id == View.NO_ID) child.id = View.generateViewId()
+
             child.nextFocusLeftId = navId
+            child.nextFocusRightId = child.id
             child.nextFocusUpId = if (i > 0) focusableChildren[i - 1].id else child.id
             child.nextFocusDownId = if (i < focusableChildren.size - 1) focusableChildren[i + 1].id else child.id
+
+            // Trap focus on the right side to prevent it from disappearing.
+            if (child !is android.widget.SeekBar) {
+                child.setOnKeyListener { _, keyCode, event ->
+                    if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
+                        return@setOnKeyListener true
+                    }
+                    false
+                }
+            }
 
             val old = child.onFocusChangeListener
             child.setOnFocusChangeListener { v, f ->
@@ -378,6 +477,16 @@ class SettingsActivity : AppCompatActivity() {
         }, 10)
     }
 
+    override fun onResume() {
+        super.onResume()
+        nl.rogro82.pipup.Permissions.onActivityResumed()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        nl.rogro82.pipup.Permissions.onActivityPaused()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         try {
@@ -386,6 +495,10 @@ class SettingsActivity : AppCompatActivity() {
         // Note: We don't manually recycle the placeholder here to avoid "recycled bitmap" errors
         // if the UI performs a final layout pass after activity destruction.
         cachedPlaceholder = null
+    }
+
+    companion object {
+        const val EXTRA_NAV_ID = "nl.rogro82.pipup.extra.NAV_ID"
     }
 
     /**

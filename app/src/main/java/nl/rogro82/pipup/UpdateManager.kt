@@ -3,6 +3,7 @@ package nl.rogro82.pipup
 import android.app.DownloadManager
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.Environment
 import android.os.Handler
 import android.os.Looper
@@ -87,6 +88,9 @@ class UpdateManager(context: Context) {
 
                 if (connection.responseCode == 200) {
                     val json = connection.inputStream.bufferedReader().use { it.readText() }
+                    lastCheckedAt = System.currentTimeMillis()
+                    lastError = null
+
                     val rootNode = Json.mapper.readTree(json)
                     if (!rootNode.isArray) {
                         callback.onError(appContext.getString(R.string.update_error_invalid_api))
@@ -120,6 +124,8 @@ class UpdateManager(context: Context) {
                         releases.firstOrNull { !it.prerelease }
                     }
 
+                    latestVersion = latest?.tagName?.removePrefix("v")
+
                     if (latest != null) {
                         Log.d("UpdateManager", "Comparing remote: ${latest.tagName} with beta channel: $includeBeta")
                         if (isNewer(latest.tagName)) {
@@ -134,11 +140,13 @@ class UpdateManager(context: Context) {
                         callback.onNoUpdate()
                     }
                 } else {
+                    lastError = "HTTP ${connection.responseCode}"
                     callback.onError("HTTP ${connection.responseCode}")
                 }
             } catch (e: Exception) {
                 Log.e("UpdateManager", "Error checking for updates", e)
-                callback.onError(e.localizedMessage ?: appContext.getString(R.string.update_error_network))
+                lastError = e.localizedMessage ?: appContext.getString(R.string.update_error_network)
+                callback.onError(lastError!!)
             }
         }
     }
@@ -159,8 +167,9 @@ class UpdateManager(context: Context) {
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun showPiPupPopup(release: GitHubRelease) {
         val appSettings = PiPupApp.settings
+        val appName = appContext.getString(R.string.app_name)
         val props = PopupProps(
-            title = appContext.getString(R.string.notification_update_title),
+            title = appContext.getString(R.string.notification_update_title, appName),
             message = appContext.getString(R.string.notification_update_msg, release.tagName),
             duration = 10,
             position = appSettings.positionIndex,
@@ -273,8 +282,9 @@ class UpdateManager(context: Context) {
         }
 
         val downloadManager = appContext.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+        val appName = appContext.getString(R.string.app_name)
         val request = DownloadManager.Request(asset.browserDownloadUrl.toUri())
-            .setTitle(appContext.getString(R.string.update_download_title, release.tagName))
+            .setTitle(appContext.getString(R.string.update_download_title, appName, release.tagName))
             .setDescription(appContext.getString(R.string.update_download_desc))
             .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             .setDestinationInExternalFilesDir(appContext, Environment.DIRECTORY_DOWNLOADS, "pipup-update.apk")
@@ -408,6 +418,7 @@ class UpdateManager(context: Context) {
 
         try {
             val ctx = installContext.applicationContext
+            isInstalling = true
             val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
             Log.d("UpdateManager", "Generated FileProvider URI: $uri")
 
@@ -429,5 +440,31 @@ class UpdateManager(context: Context) {
 
     companion object {
         private const val REPO_URL = "https://api.github.com/repos/lapicidae/PiPup/releases"
+
+        @Volatile var latestVersion: String? = null
+            private set
+        @Volatile var lastCheckedAt: Long = 0L
+            private set
+        @Volatile var lastError: String? = null
+            private set
+        @Volatile var isInstalling: Boolean = false
+            internal set
+
+        /**
+         * Whether a self-update can run without an on-screen confirmation (Android 12+).
+         */
+        val silentInstall: Boolean
+            get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
+
+        /**
+         * Checks if an update is available based on the last check.
+         */
+        fun updateAvailable(context: Context): Boolean {
+            val version = latestVersion ?: return false
+
+            // Re-use logic from class instance if needed, but here we can just do a simple check
+            // or better, instantiate a temporary manager for the comparison logic.
+            return UpdateManager(context).isNewer("v$version")
+        }
     }
 }

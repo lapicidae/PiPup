@@ -12,6 +12,7 @@ import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.MainActivity
 import nl.rogro82.pipup.R
+import java.util.Locale
 
 @UnstableApi
 class GeneralSubmenu(
@@ -39,7 +40,16 @@ class GeneralSubmenu(
         }
 
         val langCodes = context.resources.getStringArray(R.array.language_codes)
-        val langItems = context.resources.getStringArray(R.array.language_options)
+        val langItems = langCodes.map { code ->
+            if (code == "default") {
+                context.getString(R.string.language_default)
+            } else {
+                val locale = Locale.forLanguageTag(code)
+                locale.getDisplayName(locale).replaceFirstChar {
+                    if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
+                }
+            }
+        }
         val currentLangIndex = langCodes.indexOf(settings.language).coerceAtLeast(0)
 
         setupSpinner(root, R.id.spinner_language, ArrayAdapter(context, android.R.layout.simple_spinner_item, langItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, currentLangIndex) {

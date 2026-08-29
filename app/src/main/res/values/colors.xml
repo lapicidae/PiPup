@@ -19,8 +19,9 @@
     <color name="main_on_background">#001d34</color> <!-- Text Color on Main Activity -->
 
     <!-- Functional UI & Feedback Colors -->
-    <color name="status_green">#388E3C</color>
+    <color name="status_green">#1B6D21</color>
     <color name="status_red">#B3261E</color>
+    <color name="status_orange">#8B5000</color>
     <color name="toast_background">#E6212121</color> <!-- System-style dark semi-transparent for Toasts -->
     <color name="popup_text_default">#FFFFFF</color> <!-- Default Text Color for Notification Popups -->
 
