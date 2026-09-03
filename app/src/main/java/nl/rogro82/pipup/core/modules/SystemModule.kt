@@ -5,8 +5,13 @@ import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.Permissions
+import nl.rogro82.pipup.UpdateManager
+import nl.rogro82.pipup.GitHubRelease
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.PowerController
+import android.os.Handler
+import android.os.Looper
 
 /**
  * Module responsible for system diagnostics and permission management.
@@ -31,12 +36,29 @@ class SystemModule(private val context: Context) : PiPupModule {
 
     override fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? {
         val method = session.method
+        val uri = session.uri.lowercase()
 
-        return when (session.uri.lowercase()) {
+        return when (uri) {
             "/permissions/diagnose" -> if (method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST) diagnoseResponse() else null
             "/permissions/fix" -> if (method == NanoHTTPD.Method.POST) fixResponse(session) else null
+            "/update" -> if (method == NanoHTTPD.Method.POST) updateResponse() else null
             else -> null
         }
+    }
+
+    private fun updateResponse(): NanoHTTPD.Response {
+        val handler = Handler(Looper.getMainLooper())
+        val settings = PiPupApp.settings
+        handler.post {
+            UpdateManager(context).checkForUpdates(settings.updateChannel == 1, object : UpdateManager.UpdateCallback {
+                override fun onUpdateAvailable(release: GitHubRelease) {
+                    UpdateManager(context).downloadAndInstall(release)
+                }
+                override fun onNoUpdate() {}
+                override fun onError(message: String) {}
+            })
+        }
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "Update check started")
     }
 
     private fun diagnoseResponse(): NanoHTTPD.Response {
@@ -98,6 +120,7 @@ class SystemModule(private val context: Context) : PiPupModule {
 
         val success = if (key == null) Permissions.launchApp(context) else Permissions.launchFix(context, key)
 
+        // Exact JSON structure matching the reference fork
         val body = Json.writeValueAsString(mapOf(
             "what" to (key ?: "app"),
             "ok" to success,

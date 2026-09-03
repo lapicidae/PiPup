@@ -9,4 +9,10 @@
     <item name="nav_item_modules" type="id" />
     <item name="nav_item_permissions" type="id" />
     <item name="nav_item_advanced" type="id" />
+
+    <!-- Modules -->
+    <item name="container_discovery_module" type="id" />
+    <item name="switch_discovery_module" type="id" />
+    <item name="container_media_module" type="id" />
+    <item name="switch_media_module" type="id" />
 </resources>

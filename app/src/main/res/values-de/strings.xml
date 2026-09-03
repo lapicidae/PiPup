@@ -90,6 +90,9 @@
     <string name="settings_advanced_mode_desc">Aktiviert die manuelle HEX-Code Eingabe und zeigt präzise numerische Schieberegler-Werte an.</string>
     <!-- %1$s: App-Name -->
     <string name="settings_import_network">Von anderem %1$s importieren</string>
+    <string name="settings_import_discover">Suche nach Geräten…</string>
+    <string name="settings_import_no_devices">Keine anderen Geräte gefunden.</string>
+    <string name="settings_import_manual">Manuelle IP-Eingabe</string>
     <string name="settings_reset_settings">Einstellungen zurücksetzen</string>
 
     <!-- Self-Update Engine -->
@@ -162,9 +165,13 @@
     <!-- Module & Power-Steuerung -->
     <string name="settings_module_power">Power-Steuerung</string>
     <string name="settings_module_power_desc">Ermöglicht das ferngesteuerte Aufwecken und Ausschalten des Bildschirms via API.</string>
+    <string name="settings_module_discovery">Netzwerk-Entdeckung (NSD)</string>
+    <string name="settings_module_discovery_desc">Macht den TV im lokalen Netzwerk sichtbar für automatische Integration und Synchronisation.</string>
+    <string name="settings_module_media">Rich Media (WebView)</string>
+    <string name="settings_module_media_desc">Ermöglicht die Unterstützung von Web–, WHEP– und RTSP-Inhalten. Das Deaktivieren spart signifikant RAM (~50–80 MB).</string>
     <string name="admin_enabled">Geräteadministrator aktiviert</string>
     <string name="admin_disabled">Geräteadministrator deaktiviert</string>
-    <string name="permission_admin_explanation">Erforderlich, um den TV-Bildschirm aus der Ferne in den Standby zu schicken.</string>
+    <string name="permission_admin_explanation">Den TV-Bildschirm aus der Ferne in den Standby schicken.</string>
 
     <!-- Zentrales Berechtigungssystem -->
     <string name="permission_header_required">Erforderlich</string>
@@ -259,8 +266,6 @@
     <string name="permission_energy_why">Zuverlässige Hintergrund-Benachrichtigungen sicherstellen.</string>
     <!-- %1$s: App-Name -->
     <string name="energy_optimization_manual">Manuelle Konfiguration:\n\n1. Systemeinstellungen öffnen\n2. Apps -> Spezieller App-Zugriff\n3. Optimierter Energieverbrauch wählen\n4. %1$s auf \"Nicht optimieren\" setzen</string>
-    <string name="energy_optimization_show_instructions">Anleitung</string>
-    <string name="energy_menu_not_found">Das Energiemenü konnte nicht automatisch geöffnet werden. Bitte folgen Sie der manuellen Anleitung oder nutzen Sie ADB.</string>
 
     <!-- Web Landing Page (Status API) -->
     <!-- %1$s: App-Name -->

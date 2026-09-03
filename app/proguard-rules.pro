@@ -89,6 +89,6 @@
 
 # --- WebView Pre-Warming ---
 # Ensure the WebView engine isn't stripped during release optimization
--keepclassmembers class nl.rogro82.pipup.service.PipUpService {
+-keepclassmembers class nl.rogro82.pipup.core.modules.MediaModule {
     android.webkit.WebView warmWebView;
 }

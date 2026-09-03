@@ -52,6 +52,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private var currentLayoutRes: Int = -1
     private var currentNavId: Int = -1
+    private var isInitializing = false
 
     private val adminLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -152,6 +153,7 @@ class SettingsActivity : AppCompatActivity() {
     override fun onPostResume() {
         super.onPostResume()
         handler.postDelayed({
+            isInitializing = false
             ensureFocus(currentNavId)
         }, 300)
     }
@@ -478,6 +480,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     override fun onResume() {
+        isInitializing = true
         super.onResume()
         nl.rogro82.pipup.Permissions.onActivityResumed()
     }

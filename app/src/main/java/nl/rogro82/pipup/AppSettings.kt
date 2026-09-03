@@ -14,7 +14,14 @@ import kotlin.reflect.KProperty
 class AppSettings(context: Context) {
 
     private val appContext = context.applicationContext
-    private val prefs = appContext.getSharedPreferences("pipup_settings", Context.MODE_PRIVATE)
+    private val prefs = run {
+        val deviceProtectedContext = appContext.createDeviceProtectedStorageContext()
+        if (!deviceProtectedContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).contains("position_index")) {
+            // One-time migration from credential-protected storage
+            runCatching { deviceProtectedContext.moveSharedPreferencesFrom(appContext, PREFS_NAME) }
+        }
+        deviceProtectedContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
 
     // Styling
     /** The index of the popup position on the screen. */
@@ -65,6 +72,10 @@ class AppSettings(context: Context) {
     var appTheme by IntPref("app_theme", 0)
     /** Whether the power control module is enabled. */
     var powerModuleEnabled by BooleanPref("power_module_enabled", false)
+    /** Whether the network discovery module is enabled. */
+    var discoveryModuleEnabled by BooleanPref("discovery_module_enabled", true)
+    /** Whether the rich media (WebView/WHEP) module is enabled. */
+    var mediaModuleEnabled by BooleanPref("media_module_enabled", true)
     /** The preferred language for the application UI. */
     var language by StringPref("language", "default")
     /** The timestamp of the last daily permission nag. */
@@ -143,6 +154,9 @@ class AppSettings(context: Context) {
         val preWarmWebView: Boolean,
         val appTheme: Int,
         val advancedMode: Boolean,
+        val powerModuleEnabled: Boolean,
+        val discoveryModuleEnabled: Boolean,
+        val mediaModuleEnabled: Boolean,
         val updateChannel: Int,
         val updateInterval: Int,
         val updateNotificationStyle: Int,
@@ -163,7 +177,8 @@ class AppSettings(context: Context) {
         positionIndex, backgroundColor, backgroundAlpha, titleColor, titleSize,
         messageColor, messageSize, borderRadius, borderWidth, borderColor,
         contentPadding, titleAlignment, messageAlignment, mediaPosition,
-        animationType, animationDuration, animationExit, mediaTimeout, mediaRetries, preWarmWebView, appTheme, advancedMode,
+        animationType, animationDuration, animationExit, mediaTimeout, mediaRetries, preWarmWebView,
+        appTheme, advancedMode, powerModuleEnabled, discoveryModuleEnabled, mediaModuleEnabled,
         updateChannel, updateInterval, updateNotificationStyle, lastUpdateCheck,
         updateAvailableTag, updateRepeat, lastNotifiedTag,
         pendingUpdateId, pendingUpdateDigest, pendingUpdateTagName,
@@ -197,6 +212,9 @@ class AppSettings(context: Context) {
             putBoolean("pre_warm_webview", data.preWarmWebView)
             putInt("app_theme", data.appTheme.coerceIn(0, 1))
             putBoolean("advanced_mode", data.advancedMode)
+            putBoolean("power_module_enabled", data.powerModuleEnabled)
+            putBoolean("discovery_module_enabled", data.discoveryModuleEnabled)
+            putBoolean("media_module_enabled", data.mediaModuleEnabled)
             putInt("update_channel", data.updateChannel.coerceIn(-1, 1))
             putInt("update_interval", data.updateInterval.coerceIn(0, 4))
             putInt("update_notification_style", data.updateNotificationStyle.coerceIn(0, 2))
@@ -312,6 +330,7 @@ class AppSettings(context: Context) {
     }
 
     companion object {
+        const val PREFS_NAME = "pipup_settings"
         const val DEFAULT_BG_ALPHA = 225
         const val DEFAULT_TITLE_SIZE = 22f
         const val DEFAULT_MSG_SIZE = 16f

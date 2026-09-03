@@ -30,23 +30,48 @@ class ModulesSubmenu(
                 val newState = !settings.powerModuleEnabled
                 sw.isChecked = newState
                 settings.powerModuleEnabled = newState
-
-                // Notify service
-                val settingsIntent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED")
-                settingsIntent.setPackage(context.packageName)
-                context.sendBroadcast(settingsIntent)
-
+                notifySettingsChanged()
                 if (newState && nl.rogro82.pipup.core.PowerController.getSleepMethod(context) == null) {
                     Permissions.showFixDialog(context, Permissions.KEY_POWER)
                 }
-
                 onSettingsChanged(false)
             }
-            onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
-                if (hasFocus) {
-                    updatePreviewPosition(v)
-                }
-            }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
+
+        // Network Discovery Module
+        root.findViewById<View>(R.id.container_discovery_module)?.apply {
+            val sw = findViewById<SwitchCompat>(R.id.switch_discovery_module)
+            sw.isChecked = settings.discoveryModuleEnabled
+            setOnClickListener {
+                val newState = !settings.discoveryModuleEnabled
+                sw.isChecked = newState
+                settings.discoveryModuleEnabled = newState
+                notifySettingsChanged()
+                onSettingsChanged(false)
+            }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+
+        // Rich Media Module
+        root.findViewById<View>(R.id.container_media_module)?.apply {
+            val sw = findViewById<SwitchCompat>(R.id.switch_media_module)
+            sw.isChecked = settings.mediaModuleEnabled
+            setOnClickListener {
+                val newState = !settings.mediaModuleEnabled
+                sw.isChecked = newState
+                settings.mediaModuleEnabled = newState
+                notifySettingsChanged()
+                onSettingsChanged(false)
+            }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+    }
+
+    private fun notifySettingsChanged() {
+        val intent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED").apply {
+            setPackage(context.packageName)
+        }
+        context.sendBroadcast(intent)
     }
 }

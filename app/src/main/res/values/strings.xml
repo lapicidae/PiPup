@@ -91,6 +91,9 @@
     <string name="settings_advanced_mode_desc">Enables manual HEX code input and displays precise numeric slider values.</string>
     <!-- %1$s: App Name -->
     <string name="settings_import_network">Import from another %1$s</string>
+    <string name="settings_import_discover">Searching for devices…</string>
+    <string name="settings_import_no_devices">No other devices found.</string>
+    <string name="settings_import_manual">Manual IP entry</string>
     <string name="settings_reset_settings">Reset Settings</string>
 
     <!-- Self-Update Engine -->
@@ -163,9 +166,13 @@
     <!-- Modules & System Integration -->
     <string name="settings_module_power">Power Control</string>
     <string name="settings_module_power_desc">Allows remote waking and sleeping of the TV screen via API.</string>
+    <string name="settings_module_discovery">Network Discovery (NSD)</string>
+    <string name="settings_module_discovery_desc">Makes the TV visible in the local network for automatic integration and synchronization.</string>
+    <string name="settings_module_media">Rich Media (WebView)</string>
+    <string name="settings_module_media_desc">Enables support for Web, WHEP and RTSP content. Disabling this saves significant background RAM (~50–80MB).</string>
     <string name="admin_enabled">Device Administrator enabled</string>
     <string name="admin_disabled">Device Administrator disabled</string>
-    <string name="permission_admin_explanation">Required to put the TV screen into standby remotely.</string>
+    <string name="permission_admin_explanation">Put the TV screen into standby remotely.</string>
 
     <!-- Centralized Permission System -->
     <string name="permission_header_required">Required</string>
@@ -260,8 +267,6 @@
     <string name="permission_energy_why">Ensure reliable background notifications.</string>
     <!-- %1$s: App Name -->
     <string name="energy_optimization_manual">To configure manually:\n\n1. Open System Settings\n2. Go to Apps -> Special app access\n3. Select \"Energy optimization\"\n4. Set %1$s to \"Don\'t optimize\"</string>
-    <string name="energy_optimization_show_instructions">Instructions</string>
-    <string name="energy_menu_not_found">The energy menu could not be opened automatically. Please follow the manual instructions or use ADB.</string>
 
     <!-- Web Landing Page (Status API) -->
     <!-- %1$s: App Name -->

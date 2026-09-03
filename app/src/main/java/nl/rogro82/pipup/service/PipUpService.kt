@@ -8,6 +8,7 @@ import android.app.Service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
@@ -29,9 +30,13 @@ import nl.rogro82.pipup.core.WebServer
 import nl.rogro82.pipup.core.ModuleManager
 import nl.rogro82.pipup.core.modules.PowerModule
 import nl.rogro82.pipup.core.modules.SystemModule
+import nl.rogro82.pipup.core.modules.DiscoveryModule
+import nl.rogro82.pipup.core.modules.MediaModule
 import androidx.media3.common.util.UnstableApi
 import androidx.core.content.edit
 import java.util.UUID
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Main background service responsible for hosting the WebServer and managing the notification queue.
@@ -48,9 +53,18 @@ class PipUpService : Service() {
         private const val NOTIFICATION_ID = 1001
         /** The port on which the internal WebServer listens. */
         const val SERVER_PORT = 7979
+
+        @SuppressLint("StaticFieldLeak")
+        private var instance: PipUpService? = null
+        fun getInstance(): PipUpService? = instance
     }
 
+    /** Returns the module manager for this service. */
+    fun getModuleManager(): ModuleManager = moduleManager
+
     private val handler = Handler(Looper.getMainLooper())
+    // Hand-off of HTTP requests to the main thread to ensure sequential processing and sync
+    private val requestHandler = Handler(Looper.getMainLooper())
     private val settings = PiPupApp.settings
 
     private lateinit var webServer: WebServer
@@ -62,6 +76,14 @@ class PipUpService : Service() {
     private val mStartedAt = SystemClock.elapsedRealtime()
     private var mLastPopup: PopupProps? = null
     private var mLastPopupAt: Long = 0L
+
+    @Volatile private var mDreaming = false
+    private val mDreamReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            mDreaming = intent?.action == Intent.ACTION_DREAMING_STARTED
+            Log.d(TAG, "Screensaver ${if (mDreaming) "started" else "stopped"}")
+        }
+    }
 
     private var cachedLandingPage: String? = null
 
@@ -90,17 +112,20 @@ class PipUpService : Service() {
 
                 // 4. Update Modules
                 moduleManager.setModuleEnabled("power", settings.powerModuleEnabled)
+                moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled)
+                moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled)
 
-                // 5. Update Notification
+                // 5. Update Media pre-warm
+                (moduleManager.getModule("media") as? MediaModule)?.updatePreWarmState()
+
+                // 6. Update Notification
                 updateForegroundNotification(settings.language)
             }
         }
     }
 
-    @androidx.annotation.Keep
-    internal var warmWebView: android.webkit.WebView? = null
-
     override fun onCreate() {
+        instance = this
         super.onCreate()
         initNotificationChannel()
 
@@ -128,28 +153,18 @@ class PipUpService : Service() {
         moduleManager = ModuleManager()
         moduleManager.registerModule(SystemModule(this))
         moduleManager.registerModule(PowerModule(this))
+        moduleManager.registerModule(DiscoveryModule(this))
+        moduleManager.registerModule(MediaModule(this))
+
         moduleManager.setModuleEnabled("system", true)
         moduleManager.setModuleEnabled("power", settings.powerModuleEnabled)
+        moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled)
+        moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled)
 
-        // Pre-warm WebView if enabled to avoid cold-start timeouts on first WHEP request
-        if (settings.preWarmWebView) {
-            handler.post {
-                try {
-                    @SuppressLint("SetJavaScriptEnabled")
-                    val wv = android.webkit.WebView(applicationContext).apply {
-                        settings.javaScriptEnabled = true
-                        settings.domStorageEnabled = true // Required for some WebRTC players
-                        settings.mediaPlaybackRequiresUserGesture = false
-                        webViewClient = android.webkit.WebViewClient()
-                        loadUrl("about:blank")
-                    }
-                    warmWebView = wv
-                    Log.d(TAG, "WebView engine pre-warmed and reference kept (ref: ${warmWebView?.hashCode()})")
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to pre-warm WebView: ${e.message}")
-                }
-            }
-        }
+        registerReceiver(mDreamReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_DREAMING_STARTED)
+            addAction(Intent.ACTION_DREAMING_STOPPED)
+        })
 
         webServer = WebServer(
             SERVER_PORT,
@@ -167,10 +182,10 @@ class PipUpService : Service() {
 
         // Register settings receiver to react to UI changes
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(settingsReceiver, android.content.IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
+            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(settingsReceiver, android.content.IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"))
+            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"))
         }
 
         try {
@@ -183,23 +198,16 @@ class PipUpService : Service() {
 
     override fun onDestroy() {
         Log.d(TAG, "Service destroying, cleaning up resources...")
+        instance = null
         try {
             unregisterReceiver(settingsReceiver)
+        } catch (_: Exception) {}
+        try {
+            unregisterReceiver(mDreamReceiver)
         } catch (_: Exception) {}
         moduleManager.shutdown()
         webServer.stop()
         notificationManager.cancelAll()
-
-        warmWebView?.let { wv ->
-            wv.post {
-                try {
-                    Log.d(TAG, "Destroying pre-warmed WebView")
-                    wv.stopLoading()
-                    wv.destroy()
-                } catch (_: Exception) {}
-            }
-            warmWebView = null
-        }
         super.onDestroy()
     }
 
@@ -214,7 +222,8 @@ class PipUpService : Service() {
         // 1. Check if power module is enabled before processing its request
         if (uri == "/power" && !settings.powerModuleEnabled) {
              val localizedContext = getLocalizedContext(settings.language)
-             showToast(localizedContext.getString(R.string.error_module_disabled, "Power Control"))
+             val moduleName = localizedContext.getString(R.string.settings_module_power)
+             showToast(localizedContext.getString(R.string.error_module_disabled, moduleName))
              return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Module disabled")
         }
 
@@ -234,17 +243,23 @@ class PipUpService : Service() {
                     }
                 }
                 "/notify", "/api/notify" -> processNotify(session)
-                "/state" -> stateResponse()
+                "/state" -> {
+                    if (method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST) {
+                        stateResponse()
+                    } else NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
+                }
                 "/cancel" -> {
                     val id = session.parameters["id"]?.firstOrNull()
-                    val current = notificationManager.getCurrentProps()
-
-                    if (id != null && current != null && current.id != id) {
-                        ok("id mismatch: visible popup is ${current.id}")
-                    } else {
-                        notificationManager.cancelAll()
-                        ok("Queue cleared")
+                    val result = runOnMainSync {
+                        val current = notificationManager.getCurrentProps()
+                        if (id != null && current != null && current.id != id) {
+                            ok("id mismatch: visible popup is ${current.id}")
+                        } else {
+                            notificationManager.cancelAll()
+                            ok("Queue cleared")
+                        }
                     }
+                    result ?: invalidRequest("Main thread timeout")
                 }
                 "/settings" -> handleSettingsRequest(session)
                 "/favicon.svg", "/favicon.ico" -> handleFavicon()
@@ -265,15 +280,42 @@ class PipUpService : Service() {
         }
     }
 
+    private fun runOnMainSync(block: () -> NanoHTTPD.Response): NanoHTTPD.Response? {
+        val latch = CountDownLatch(1)
+        var result: NanoHTTPD.Response? = null
+        requestHandler.post {
+            try {
+                result = block()
+            } finally {
+                latch.countDown()
+            }
+        }
+        return if (latch.await(2000, TimeUnit.MILLISECONDS)) result else null
+    }
+
     private fun processNotify(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        return payloadParser.parse(session)?.let { props ->
-            val finalProps = applySettingsDefaults(props)
+        val props = payloadParser.parse(session) ?: return invalidRequest("failed to parse input")
+
+        // Check if media module is required and enabled
+        if (!settings.mediaModuleEnabled && (props.media is PopupProps.Media.Web || props.media is PopupProps.Media.Whep)) {
+            val localizedContext = getLocalizedContext(settings.language)
+            val moduleName = localizedContext.getString(R.string.settings_module_media)
+            showToast(localizedContext.getString(R.string.error_module_disabled, moduleName))
+            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Media module disabled")
+        }
+
+        val finalProps = applySettingsDefaults(props)
+
+        // Hand-off to main thread for UI sync, but parsing happened in background
+        val result = runOnMainSync {
             mPopupsShown.incrementAndGet()
             mLastPopup = finalProps
             mLastPopupAt = SystemClock.elapsedRealtime()
             notificationManager.enqueue(finalProps)
-            ok(finalProps.toString())
-        } ?: invalidRequest("failed to parse input")
+            ok("Enqueued: ${finalProps.title ?: "Untitled"}")
+        }
+
+        return result ?: NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, "text/plain", "Main thread timeout")
     }
 
     private fun stateResponse(): NanoHTTPD.Response {
@@ -287,8 +329,8 @@ class PipUpService : Service() {
             "name" to deviceName(),
             "visible" to notificationManager.isDisplaying(),
             "screenOn" to powerManager.isInteractive,
+            "dreaming" to mDreaming,
             "popupsShown" to mPopupsShown.get(),
-            "watchdogCleanups" to notificationManager.watchdogCleanups.get(),
             "uptime" to (SystemClock.elapsedRealtime() - mStartedAt) / 1000,
             "device" to mapOf(
                 "model" to Build.MODEL,
@@ -298,8 +340,10 @@ class PipUpService : Service() {
         )
         if (current != null) {
             state["popup"] = mapOf(
+                "id" to current.id,
                 "title" to current.title,
                 "duration" to current.duration,
+                "indefinite" to (current.duration <= 0),
                 "elapsed" to ((SystemClock.elapsedRealtime() - mLastPopupAt) / 1000)
             )
         }
@@ -348,11 +392,23 @@ class PipUpService : Service() {
     }
 
     private fun deviceId(): String {
-        val prefs = getSharedPreferences("pipup_id", MODE_PRIVATE)
+        val context = applicationContext.createDeviceProtectedStorageContext()
+
+        val prefs = context.getSharedPreferences("pipup_id", MODE_PRIVATE)
         var id = prefs.getString("device_id", null)
         if (id == null) {
-            id = UUID.randomUUID().toString()
-            prefs.edit { putString("device_id", id) }
+            // One-time migration if old prefs exist in regular storage
+            val oldPrefs = getSharedPreferences("pipup_id", MODE_PRIVATE)
+            id = oldPrefs.getString("device_id", null)
+            if (id != null) {
+                prefs.edit { putString("device_id", id) }
+                oldPrefs.edit { remove("device_id") }
+            }
+
+            if (id == null) {
+                id = UUID.randomUUID().toString()
+                prefs.edit { putString("device_id", id) }
+            }
         }
         return id
     }

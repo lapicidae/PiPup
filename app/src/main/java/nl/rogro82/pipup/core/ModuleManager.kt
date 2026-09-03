@@ -51,6 +51,11 @@ class ModuleManager {
     }
 
     /**
+     * Returns a registered module by its ID.
+     */
+    fun getModule(id: String): PiPupModule? = modules[id]
+
+    /**
      * Dispatches an HTTP request to all enabled modules.
      * The first module to return a non-null response wins.
      */

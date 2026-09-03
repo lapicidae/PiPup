@@ -1,8 +1,10 @@
 package nl.rogro82.pipup.ui
 
 import android.content.Context
+import android.content.DialogInterface
 import android.content.Intent
 import android.graphics.Rect
+import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.view.Gravity
 import android.view.KeyEvent
@@ -19,7 +21,10 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.getIpAddress
 import nl.rogro82.pipup.showToast
+import nl.rogro82.pipup.service.PipUpService
+import nl.rogro82.pipup.core.modules.DiscoveryModule
 
 @UnstableApi
 class AdvancedSubmenu(
@@ -35,7 +40,7 @@ class AdvancedSubmenu(
         // Network Import
         root.findViewById<Button>(R.id.btn_import_network)?.apply {
             text = context.getString(R.string.settings_import_network, appName)
-            setOnClickListener { showImportIpDialog() }
+            setOnClickListener { showImportDeviceDialog() }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
 
@@ -51,6 +56,9 @@ class AdvancedSubmenu(
 
         // Pre-warm WebView Toggle
         root.findViewById<View>(R.id.container_pre_warm)?.apply {
+            // Hide if media module is disabled
+            visibility = if (settings.mediaModuleEnabled) View.VISIBLE else View.GONE
+
             val sw = findViewById<SwitchCompat>(R.id.switch_pre_warm)
             sw.isChecked = settings.preWarmWebView
             setOnClickListener { sw.toggle() }
@@ -98,6 +106,94 @@ class AdvancedSubmenu(
         dialog.show()
         // Pre-select "No" for safety
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus()
+    }
+
+    private fun showImportDeviceDialog() {
+        val service = PipUpService.getInstance()
+        val discovery = service?.getModuleManager()?.getModule("discovery") as? DiscoveryModule
+
+        if (discovery == null || !settings.discoveryModuleEnabled) {
+            context.showToast(context.getString(R.string.error_module_disabled, context.getString(R.string.settings_module_discovery)))
+            showImportIpDialog()
+            return
+        }
+
+        val devices = mutableListOf<NsdServiceInfo>()
+        val deviceNames = mutableListOf<String>()
+        val adapter = android.widget.ArrayAdapter(context, android.R.layout.simple_list_item_1, deviceNames)
+        val localId = discovery.getDeviceId()
+        val myIp = getIpAddress()
+
+        val deviceListener = object : DiscoveryModule.DeviceListener {
+            override fun onDeviceFound(serviceInfo: NsdServiceInfo) {
+                val address = serviceInfo.getHostAddress()
+
+                // 1. Filter out self (by unique ID or IP address)
+                val remoteId = serviceInfo.attributes["id"]?.let { String(it) }
+                if (remoteId == localId || (address != null && address == myIp)) {
+                    return
+                }
+
+                settingsActivity?.runOnUiThread {
+                    // 2. Filter duplicates by service name to allow multiple mocks from one IP (stress test)
+                    if (devices.none { it.serviceName == serviceInfo.serviceName }) {
+                        devices.add(serviceInfo)
+                        deviceNames.add("${serviceInfo.serviceName} (${address ?: "???"})")
+                        if (deviceNames.getOrNull(0) == context.getString(R.string.settings_import_discover)) {
+                            deviceNames.removeAt(0)
+                        }
+                        adapter.notifyDataSetChanged()
+                    }
+                }
+            }
+
+            override fun onDeviceLost(serviceInfo: NsdServiceInfo) {
+                settingsActivity?.runOnUiThread {
+                    val index = devices.indexOfFirst { it.serviceName == serviceInfo.serviceName }
+                    if (index != -1) {
+                        devices.removeAt(index)
+                        deviceNames.removeAt(index)
+                        if (deviceNames.isEmpty()) {
+                            deviceNames.add(context.getString(R.string.settings_import_no_devices))
+                        }
+                        adapter.notifyDataSetChanged()
+                    }
+                }
+            }
+        }
+
+        val builder = AlertDialog.Builder(context)
+        builder.setTitle(context.getString(R.string.settings_import_network, context.getString(R.string.app_name)))
+        builder.setAdapter(adapter) { _: DialogInterface, which: Int ->
+            discovery.stopDiscovery()
+            val host = devices.getOrNull(which)?.getHostAddress()
+            host?.let { performNetworkImport(it) }
+        }
+        builder.setNeutralButton(R.string.settings_import_manual) { d: DialogInterface, _: Int ->
+            discovery.stopDiscovery()
+            d.dismiss()
+            showImportIpDialog()
+        }
+        builder.setNegativeButton(android.R.string.cancel) { d: DialogInterface, _: Int ->
+            discovery.stopDiscovery()
+            d.dismiss()
+        }
+
+        val dialog = builder.create()
+
+        dialog.setOnShowListener {
+            if (deviceNames.isEmpty()) {
+                deviceNames.add(context.getString(R.string.settings_import_discover))
+                adapter.notifyDataSetChanged()
+            }
+        }
+
+        dialog.setOnDismissListener {
+            discovery.stopDiscovery()
+        }
+
+        dialog.show()
+        discovery.startDiscovery(deviceListener)
     }
 
     private fun showImportIpDialog() {
@@ -205,5 +301,14 @@ class AdvancedSubmenu(
                 }
             }
         }.start()
+    }
+
+    private fun NsdServiceInfo.getHostAddress(): String? {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            hostAddresses.firstOrNull()?.hostAddress
+        } else {
+            @Suppress("DEPRECATION")
+            host?.hostAddress
+        }
     }
 }

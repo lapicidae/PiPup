@@ -82,7 +82,8 @@ readonly ALIGN_NAMES=("Left" "Center" "Right")
 readonly THEME_KEYS=("${!THEMES[@]}")
 
 # Test Assets
-readonly JPG_URL="https://picsum.photos/427/240.jpg"
+readonly JPG_URL="https://loremflickr.com/427/240/all"
+# readonly JPG_URL="https://picsum.photos/427/240.jpg"
 PNG_URL=$(printf 'https://robohash.org/hash_%s.png?size=427x240' "$RANDOM")
 readonly PNG_URL
 readonly SVG_URL="https://upload.wikimedia.org/wikipedia/commons/1/16/Eye_svg.svg"
@@ -501,6 +502,9 @@ print_result_row() {
   local status_display="N/A"
   if [[ -n "${status}" ]]; then
     status_display="${status}: ${message}"
+  elif [[ -n "${body}" ]]; then
+    # Fallback for plain text responses
+    status_display=$(printf '%s' "${body}" | head -n 1 | cut -c 1-40)
   fi
 
   printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-76s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET} | ${status_color}%-20s${CLR_RESET}\n" \
