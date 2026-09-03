@@ -28,6 +28,8 @@
     <!-- Settings & Previews -->
     <color name="preview_placeholder_bg">#DCE3E9</color>
     <color name="preview_placeholder_text">#40484D</color>
+    <color name="colorFocusStroke">#196584</color>
+    <color name="colorFocusBackground">#D1E4FF</color>
 
     <!-- Material Design Tonal Presets for Color Selection -->
     <color name="preset_deep_slate">#0F1417</color> <!-- Deep Slate (Basis-Hintergrund) -->

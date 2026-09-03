@@ -9,6 +9,8 @@ import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.readExactBytes
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Responsible for parsing incoming NanoHTTPD sessions into [PopupProps].
@@ -18,7 +20,27 @@ class PayloadParser(private val context: Context) {
 
     companion object {
         private const val TAG = "PayloadParser"
+        private const val CLEANUP_THRESHOLD_MS = 60 * 60 * 1000L // 1 hour
+
+        /** Single thread executor for all cache-related file operations to avoid I/O contention. */
+        private val fileExecutor = Executors.newSingleThreadExecutor()
+
+        /**
+         * Safely deletes a file in the background.
+         */
+        fun deleteFileAsync(path: String) {
+            fileExecutor.execute {
+                try {
+                    val file = File(path)
+                    if (file.exists() && file.delete()) {
+                        Log.d("PayloadParser", "Deleted cache file: $path")
+                    }
+                } catch (_: Exception) {}
+            }
+        }
     }
+
+    private val isCleaningUp = AtomicBoolean(false)
 
     fun parse(session: NanoHTTPD.IHTTPSession): PopupProps? {
         val headers = session.headers
@@ -93,6 +115,9 @@ class PayloadParser(private val context: Context) {
                     srcFile.copyTo(persistentFile, overwrite = true)
                     Log.d(TAG, "Successfully persisted image to: ${persistentFile.absolutePath}, final size=${persistentFile.length()}")
                     media = PopupProps.Media.LocalFile(persistentFile.absolutePath, imageWidth)
+
+                    // Trigger async cache cleanup
+                    triggerCacheCleanup()
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to copy multipart file from $tempPath to persistent cache", e)
                 }
@@ -113,5 +138,42 @@ class PayloadParser(private val context: Context) {
     } catch (e: Exception) {
         Log.e(TAG, "Multipart parsing error", e)
         null
+    }
+
+    /**
+     * Triggers the asynchronous cleanup of old multipart cache files.
+     */
+    private fun triggerCacheCleanup() {
+        if (isCleaningUp.compareAndSet(false, true)) {
+            fileExecutor.execute {
+                try {
+                    cleanupMultipartCache()
+                } finally {
+                    isCleaningUp.set(false)
+                }
+            }
+        }
+    }
+
+    /**
+     * Removes old multipart cache files that were leaked (e.g. after a crash).
+     */
+    private fun cleanupMultipartCache() {
+        try {
+            val cacheDir = context.cacheDir
+            val files = cacheDir.listFiles { _, name -> name.startsWith("multipart_") }
+            if (files != null) {
+                val now = System.currentTimeMillis()
+                files.forEach { file ->
+                    if (now - file.lastModified() > CLEANUP_THRESHOLD_MS) {
+                        if (file.delete()) {
+                            Log.d(TAG, "Cleaned up leaked multipart cache file: ${file.name}")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during multipart cache cleanup", e)
+        }
     }
 }

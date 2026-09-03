@@ -2,13 +2,15 @@
     <!-- Base application theme -->
     <style name="AppTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowBackground">@color/colorSurface</item>
+        <item name="alertDialogTheme">@style/PiPupAlertDialogTheme</item>
     </style>
 
     <!-- Flicker-free launch theme to keep background transparent until app logic is ready -->
-    <style name="LaunchTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
+    <style name="LaunchTheme" parent="AppTheme">
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowTranslucentStatus">true</item>
         <item name="android:windowTranslucentNavigation">true</item>
+        <item name="alertDialogTheme">@style/PiPupAlertDialogTheme</item>
     </style>
 
     <!-- Main Activity theme to avoid overdraw -->
@@ -17,25 +19,29 @@
     </style>
 
     <!-- Overlay settings theme -->
-    <style name="SettingsTheme" parent="Theme.AppCompat.DayNight.NoActionBar">
-        <item name="android:windowBackground">@color/colorSurface</item>
+    <style name="SettingsTheme" parent="AppTheme">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowAnimationStyle">@android:style/Animation.Dialog</item>
 
-        <!-- Enhance focus visibility for buttons and controls -->
+        <!-- Use system default colors for standard components -->
         <item name="colorAccent">@color/colorPrimary</item>
         <item name="colorControlHighlight">@color/colorSecondaryContainer</item>
-        <item name="alertDialogTheme">@style/PiPupAlertDialogTheme</item>
     </style>
 
     <style name="PiPupAlertDialogTheme" parent="Theme.AppCompat.DayNight.Dialog.Alert">
         <item name="colorAccent">@color/colorPrimary</item>
-        <item name="colorControlHighlight">@color/colorSecondaryContainer</item>
-        <!-- Force high-contrast focus for dialog buttons -->
+        <item name="android:windowBackground">@color/colorSurface</item>
+        <item name="android:textColorPrimary">@color/colorOnSurface</item>
         <item name="android:buttonBarButtonStyle">@style/PiPupDialogButtonStyle</item>
+        <item name="android:listChoiceBackgroundIndicator">@drawable/focus_background</item>
+        <item name="android:selectableItemBackground">@drawable/focus_background</item>
     </style>
 
     <style name="PiPupDialogButtonStyle" parent="Widget.AppCompat.Button.Borderless">
-        <item name="android:background">@drawable/focus_background</item>
+        <item name="android:background">@drawable/focus_button_background</item>
+        <item name="android:textColor">@color/selector_button_text</item>
+        <item name="android:paddingLeft">16dp</item>
+        <item name="android:paddingRight">16dp</item>
+        <item name="android:minWidth">88dp</item>
     </style>
 </resources>

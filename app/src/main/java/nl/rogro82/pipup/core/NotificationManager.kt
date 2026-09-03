@@ -29,6 +29,7 @@ class NotificationManager(
     companion object {
         private const val TAG = "NotificationManager"
         private val SAFETY_TIMEOUT_TOKEN = Any()
+        private val ENQUEUE_OVERWRITE_TOKEN = Any()
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -56,39 +57,51 @@ class NotificationManager(
     fun getCurrentProps(): PopupProps? = currentPopup?.props
 
     fun enqueue(props: PopupProps) {
-        handler.post {
-            if (props.overwrite) {
-                // 1. Handle case where a popup is already visible -> Smart Reuse!
-                currentPopup?.let {
-                    if (canUpdateInPlace(it.props, props)) {
-                        Log.d(TAG, "Overwrite: Updating existing visible popup (Identical Media)")
-                        handler.removeCallbacksAndMessages(durationToken)
-
-                        it.updateFromProps(props)
-                        applyPositionToLayoutParams(it.layoutParams as FrameLayout.LayoutParams, props)
-                        it.animateIn()
-                        it.startMedia()
-
-                        // Reset the duration timer
-                        handler.postAtTime({
-                            removeCurrentPopup()
-                        }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
-
-                        // Cleanup any pending next/preparing views
-                        cancelPendingPreparation()
-                        return@post
-                    } else {
-                        Log.d(TAG, "Overwrite: Media changed, preparing replacement in background")
-                    }
-                }
-
-                // 2. Prepare replacement or update existing preparation
-                cancelPendingPreparation()
-                preparePopup(props)
-            } else {
-                queue.addLast(props)
-                processNext()
+        if (props.overwrite) {
+            // Cancel any pending enqueues for overwrite to avoid main thread bombardment
+            handler.removeCallbacksAndMessages(ENQUEUE_OVERWRITE_TOKEN)
+            handler.postAtTime({
+                handleEnqueue(props)
+            }, ENQUEUE_OVERWRITE_TOKEN, android.os.SystemClock.uptimeMillis())
+        } else {
+            handler.post {
+                handleEnqueue(props)
             }
+        }
+    }
+
+    private fun handleEnqueue(props: PopupProps) {
+        if (props.overwrite) {
+            // 1. Handle case where a popup is already visible -> Smart Reuse!
+            currentPopup?.let {
+                if (canUpdateInPlace(it.props, props)) {
+                    Log.d(TAG, "Overwrite: Updating existing visible popup (Identical Media)")
+                    handler.removeCallbacksAndMessages(durationToken)
+
+                    it.updateFromProps(props)
+                    applyPositionToLayoutParams(it.layoutParams as FrameLayout.LayoutParams, props)
+                    it.animateIn()
+                    it.startMedia()
+
+                    // Reset the duration timer
+                    handler.postAtTime({
+                        removeCurrentPopup()
+                    }, durationToken, android.os.SystemClock.uptimeMillis() + (props.duration * 1000L))
+
+                    // Cleanup any pending next/preparing views
+                    cancelPendingPreparation()
+                    return
+                } else {
+                    Log.d(TAG, "Overwrite: Media changed, preparing replacement in background")
+                }
+            }
+
+            // 2. Prepare replacement or update existing preparation
+            cancelPendingPreparation()
+            preparePopup(props)
+        } else {
+            queue.addLast(props)
+            processNext()
         }
     }
 
@@ -129,6 +142,7 @@ class NotificationManager(
             queue.clear()
             handler.removeCallbacksAndMessages(SAFETY_TIMEOUT_TOKEN)
             handler.removeCallbacksAndMessages(durationToken)
+            handler.removeCallbacksAndMessages(ENQUEUE_OVERWRITE_TOKEN)
 
             isPreparing = false
             preparingView?.let { overlay?.removeView(it); it.cleanup() }

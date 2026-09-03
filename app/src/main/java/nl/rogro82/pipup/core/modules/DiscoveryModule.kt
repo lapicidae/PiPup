@@ -267,11 +267,6 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
     }
 
     /**
-     * Returns the service name this device registered with.
-     */
-    fun getLocalServiceName(): String? = mLocalServiceName
-
-    /**
      * Retrieves the unique device ID for this PiPup instance.
      */
     fun getDeviceId(): String {

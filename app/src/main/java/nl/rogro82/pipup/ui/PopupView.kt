@@ -35,6 +35,7 @@ import java.lang.ref.WeakReference
 import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.databinding.PopupBinding
 import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.getScaledPixels
@@ -1031,8 +1032,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
         mPlayer = null
 
-        (props.media as? PopupProps.Media.LocalFile)?.let {
-            try { java.io.File(it.path).delete() } catch (_: Exception) {}
+        (props.media as? PopupProps.Media.LocalFile)?.let { media ->
+            // Delete the temporary cache file in a background thread to keep UI smooth
+            PayloadParser.deleteFileAsync(media.path)
         }
 
         mWebView?.let { wv ->

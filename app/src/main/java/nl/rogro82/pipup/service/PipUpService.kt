@@ -74,8 +74,8 @@ class PipUpService : Service() {
 
     private val mPopupsShown = java.util.concurrent.atomic.AtomicLong(0)
     private val mStartedAt = SystemClock.elapsedRealtime()
-    private var mLastPopup: PopupProps? = null
-    private var mLastPopupAt: Long = 0L
+    @Volatile private var mLastPopup: PopupProps? = null
+    @Volatile private var mLastPopupAt: Long = 0L
 
     @Volatile private var mDreaming = false
     private val mDreamReceiver = object : BroadcastReceiver() {
@@ -306,16 +306,14 @@ class PipUpService : Service() {
 
         val finalProps = applySettingsDefaults(props)
 
-        // Hand-off to main thread for UI sync, but parsing happened in background
-        val result = runOnMainSync {
-            mPopupsShown.incrementAndGet()
-            mLastPopup = finalProps
-            mLastPopupAt = SystemClock.elapsedRealtime()
-            notificationManager.enqueue(finalProps)
-            ok("Enqueued: ${finalProps.title ?: "Untitled"}")
-        }
+        // Asynchronous hand-off to notification manager to avoid blocking NanoHTTPD threads
+        // or timing out on the main thread during heavy load.
+        mPopupsShown.incrementAndGet()
+        mLastPopup = finalProps
+        mLastPopupAt = SystemClock.elapsedRealtime()
+        notificationManager.enqueue(finalProps)
 
-        return result ?: NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.INTERNAL_ERROR, "text/plain", "Main thread timeout")
+        return ok("Enqueued: ${finalProps.title ?: "Untitled"}")
     }
 
     private fun stateResponse(): NanoHTTPD.Response {
@@ -583,6 +581,7 @@ class PipUpService : Service() {
     }
 
     private fun ok(message: String?): NanoHTTPD.Response {
+        Log.d(TAG, "Response OK: $message")
         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", message ?: "OK")
     }
 

@@ -20,6 +20,8 @@
     <!-- Settings & Previews Overrides -->
     <color name="preview_placeholder_bg">#40484D</color>
     <color name="preview_placeholder_text">#C0C7CD</color>
+    <color name="colorFocusStroke">#FFFFFF</color>
+    <color name="colorFocusBackground">#364954</color>
 
     <!-- Functional UI & Feedback Overrides -->
     <color name="status_green">#81C784</color>
