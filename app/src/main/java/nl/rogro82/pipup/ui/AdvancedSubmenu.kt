@@ -16,13 +16,9 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
-import nl.rogro82.pipup.AppSettings
-import nl.rogro82.pipup.R
-import nl.rogro82.pipup.getIpAddress
-import nl.rogro82.pipup.showToast
+import nl.rogro82.pipup.*
 import nl.rogro82.pipup.service.PipUpService
 import nl.rogro82.pipup.core.modules.DiscoveryModule
 
@@ -96,9 +92,17 @@ class AdvancedSubmenu(
             .setMessage(R.string.settings_reset_confirm_msg)
             .setPositiveButton(R.string.settings_yes) { _, _ ->
                 settings.resetToDefaults()
-                val mode = if (settings.appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-                AppCompatDelegate.setDefaultNightMode(mode)
-                settingsActivity?.recreate()
+                applyAppLocaleAndTheme(settings.language, settings.appTheme)
+
+                // Notify service AND all activities to clear caches and update states
+                // origin=remote ensures MainActivity also recreates.
+                val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
+                    setPackage(context.packageName)
+                    putExtra("origin", "remote")
+                }
+                context.sendBroadcast(intent)
+
+                settingsActivity?.resetSettingsUI()
             }
             .setNegativeButton(R.string.settings_no, null)
             .create()
@@ -121,7 +125,7 @@ class AdvancedSubmenu(
         val devices = mutableListOf<NsdServiceInfo>()
         val deviceNames = mutableListOf<String>()
         val adapter = android.widget.ArrayAdapter(context, android.R.layout.simple_list_item_1, deviceNames)
-        val localId = discovery.getDeviceId()
+        val localId = settings.deviceId
         val myIp = getIpAddress()
 
         val deviceListener = object : DiscoveryModule.DeviceListener {
@@ -280,12 +284,12 @@ class AdvancedSubmenu(
                     settingsActivity?.runOnUiThread {
                         if (data != null) {
                             settings.apply(data)
-                            // Notify system about settings change
-                            val intent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED").apply {
-                                setPackage(context.packageName)
-                                putExtra("origin", "remote")
-                            }
-                            context.sendBroadcast(intent)
+                        // Notify system about settings change
+                        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
+                            setPackage(context.packageName)
+                            putExtra("origin", "remote")
+                        }
+                        context.sendBroadcast(intent)
                         }
                         settingsActivity?.recreate()
                         context.showToast(context.getString(R.string.settings_import_success))

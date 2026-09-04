@@ -56,6 +56,12 @@ class NotificationManager(
      */
     fun getCurrentProps(): PopupProps? = currentPopup?.props
 
+    /**
+     * Enqueues a notification for display.
+     * Handles smart-updates for notifications with the overwrite flag.
+     *
+     * @param props The properties of the notification to enqueue.
+     */
     fun enqueue(props: PopupProps) {
         if (props.overwrite) {
             // Cancel any pending enqueues for overwrite to avoid main thread bombardment

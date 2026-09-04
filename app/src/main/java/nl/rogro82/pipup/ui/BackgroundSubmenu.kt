@@ -30,18 +30,12 @@ class BackgroundSubmenu(
         root.findViewById<Button>(R.id.btn_edit_bg_hex)?.apply {
             text = settings.backgroundColor
             visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
-            setOnClickListener { showHexInputDialog(this) { settings.backgroundColor = it; onSettingsChanged(false) } }
+            setOnClickListener { handleHexInput(this, settings.backgroundColor) { settings.backgroundColor = it } }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
 
         setupSeekBar(root, R.id.seekbar_bg_alpha, R.id.text_bg_alpha_value, settings.backgroundAlpha) {
             settings.backgroundAlpha = it
         }
-    }
-
-    private fun setSelectedColorInSpinner(root: View, spinnerId: Int, adapter: SettingsActivity.ColorSpinnerAdapter, hex: String) {
-        val clean = hex.replace("#", "").let { if (it.length == 8) it.substring(2) else it }
-        val idx = adapter.colors.indexOfFirst { it.hex.equals("#$clean", true) }
-        if (idx != -1) root.findViewById<android.widget.Spinner>(spinnerId)?.setSelection(idx)
     }
 }

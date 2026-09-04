@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.ColorStateList
 import android.graphics.Paint
-import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -34,6 +33,7 @@ import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.databinding.ActivitySettingsBinding
+import nl.rogro82.pipup.registerProtectedReceiver
 import nl.rogro82.pipup.showToast
 
 /**
@@ -53,6 +53,7 @@ class SettingsActivity : AppCompatActivity() {
     private var currentLayoutRes: Int = -1
     private var currentNavId: Int = -1
     private var isInitializing = false
+    private var lastFocusedViewId: Int = View.NO_ID
 
     private val adminLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -82,7 +83,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private val settingsReceiver = object : android.content.BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "nl.rogro82.pipup.SETTINGS_CHANGED") {
+            if (intent?.action == PiPupApp.ACTION_SETTINGS_CHANGED) {
                 if (intent.getStringExtra("origin") == "remote") {
                     android.util.Log.d("SettingsActivity", "Remote settings change detected, refreshing UI")
                     recreate()
@@ -120,6 +121,7 @@ class SettingsActivity : AppCompatActivity() {
         binding = ActivitySettingsBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        lastFocusedViewId = savedInstanceState?.getInt("lastFocusedViewId", View.NO_ID) ?: View.NO_ID
         val restoredNavId = savedInstanceState?.getInt("currentNavId", -1).takeIf { it != null && it != -1 }
             ?: intent.getIntExtra(EXTRA_NAV_ID, -1).takeIf { it != -1 }
             ?: R.id.nav_item_general
@@ -142,18 +144,20 @@ class SettingsActivity : AppCompatActivity() {
         setupNavRail()
         loadSubmenu(restoredLayoutRes, restoredNavId)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"))
-        }
+        registerProtectedReceiver(settingsReceiver, IntentFilter(PiPupApp.ACTION_SETTINGS_CHANGED))
     }
 
     override fun onPostResume() {
         super.onPostResume()
         handler.postDelayed({
             isInitializing = false
+            if (lastFocusedViewId != View.NO_ID) {
+                val target = findViewById<View>(lastFocusedViewId)
+                if (target != null && target.isFocusable && target.isVisible) {
+                    target.requestFocus()
+                    return@postDelayed
+                }
+            }
             ensureFocus(currentNavId)
         }, 300)
     }
@@ -191,6 +195,11 @@ class SettingsActivity : AppCompatActivity() {
         super.onSaveInstanceState(outState)
         outState.putInt("currentNavId", currentNavId)
         outState.putInt("currentLayoutRes", currentLayoutRes)
+
+        val focused = currentFocus
+        if (focused != null && focused.id != View.NO_ID && focused.id !in railIds) {
+            outState.putInt("lastFocusedViewId", focused.id)
+        }
     }
 
     private fun setupNavRail() {
@@ -281,6 +290,15 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     /**
+     * Resets the UI state of the settings activity to its initial values and recreates it.
+     */
+    fun resetSettingsUI() {
+        lastFocusedViewId = View.NO_ID
+        currentNavId = R.id.nav_item_general
+        recreate()
+    }
+
+    /**
      * Helper to launch the Device Admin activation screen using the modern Result API.
      */
     fun requestAdminRights(intent: Intent) {
@@ -289,6 +307,7 @@ class SettingsActivity : AppCompatActivity() {
 
     /**
      * Retrieves or creates the controller for the specified submenu layout.
+     *
      * @param layoutRes The layout resource ID of the submenu.
      * @return The corresponding [SubmenuController].
      */

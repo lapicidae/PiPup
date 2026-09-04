@@ -8,7 +8,7 @@ import java.util.concurrent.Executors
  */
 class WebServer(port: Int, private val handler: Handler) : NanoHTTPD(port) {
 
-    private val poolRunner = PooledAsyncRunner(16)
+    private val poolRunner = PooledAsyncRunner(8)
 
     init {
         setAsyncRunner(poolRunner)

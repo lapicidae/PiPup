@@ -6,11 +6,10 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
-import androidx.core.content.edit
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.BuildConfig
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.core.PiPupModule
-import java.util.UUID
 
 /**
  * Module responsible for Network Service Discovery (NSD).
@@ -75,7 +74,7 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
                 serviceType = SERVICE_TYPE
                 port = 7979
                 // Attributes for easier identification
-                setAttribute("id", getDeviceId())
+                setAttribute("id", PiPupApp.settings.deviceId)
                 setAttribute("name", getDeviceName())
                 setAttribute("version", BuildConfig.VERSION_NAME)
             }
@@ -264,17 +263,6 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
         }
         discoveryListener = null
         deviceListener = null
-    }
-
-    /**
-     * Retrieves the unique device ID for this PiPup instance.
-     */
-    fun getDeviceId(): String {
-        val context = context.applicationContext.createDeviceProtectedStorageContext()
-        val prefs = context.getSharedPreferences("pipup_id", Context.MODE_PRIVATE)
-        return prefs.getString("device_id", null) ?: UUID.randomUUID().toString().also { id ->
-            prefs.edit { putString("device_id", id) }
-        }
     }
 
     private fun getDeviceName(): String {

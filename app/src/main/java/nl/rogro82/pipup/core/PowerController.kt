@@ -51,6 +51,9 @@ object PowerController {
     /**
      * Attempts to wake the screen.
      * Uses both a WakeLock and starting a transparent Activity for maximum reliability.
+     *
+     * @param context The application context.
+     * @return True if wake lock was acquired or activity was started.
      */
     fun wake(context: Context): Boolean {
         var success = false
@@ -83,6 +86,9 @@ object PowerController {
     /**
      * Attempts to put the screen to sleep (standby).
      * Tries Device Administrator first, then Accessibility Service.
+     *
+     * @param context The application context.
+     * @return True if a sleep command was successfully executed.
      */
     fun sleep(context: Context): Boolean {
         if (isDeviceAdminActive(context)) {

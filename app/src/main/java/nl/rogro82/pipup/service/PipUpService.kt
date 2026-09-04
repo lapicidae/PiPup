@@ -20,23 +20,32 @@ import android.util.Log
 import android.view.WindowManager
 import androidx.annotation.OptIn
 import androidx.core.app.NotificationCompat
+import androidx.media3.common.util.UnstableApi
 import fi.iki.elonen.NanoHTTPD
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
-import nl.rogro82.pipup.*
+import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.BuildConfig
+import nl.rogro82.pipup.Json
+import nl.rogro82.pipup.MainActivity
+import nl.rogro82.pipup.Permissions
+import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.R
+import nl.rogro82.pipup.UpdateManager
+import nl.rogro82.pipup.UpdateWorker
+import nl.rogro82.pipup.applyAppLocaleAndTheme
+import nl.rogro82.pipup.colorToHex
+import nl.rogro82.pipup.core.ModuleManager
 import nl.rogro82.pipup.core.NotificationManager
 import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.core.WebServer
-import nl.rogro82.pipup.core.ModuleManager
-import nl.rogro82.pipup.core.modules.PowerModule
-import nl.rogro82.pipup.core.modules.SystemModule
 import nl.rogro82.pipup.core.modules.DiscoveryModule
 import nl.rogro82.pipup.core.modules.MediaModule
-import androidx.media3.common.util.UnstableApi
-import androidx.core.content.edit
-import java.util.UUID
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
+import nl.rogro82.pipup.core.modules.PowerModule
+import nl.rogro82.pipup.core.modules.SystemModule
+import nl.rogro82.pipup.getLocalizedContext
+import nl.rogro82.pipup.readExactBytes
+import nl.rogro82.pipup.registerProtectedReceiver
+import nl.rogro82.pipup.showToast
 
 /**
  * Main background service responsible for hosting the WebServer and managing the notification queue.
@@ -63,8 +72,6 @@ class PipUpService : Service() {
     fun getModuleManager(): ModuleManager = moduleManager
 
     private val handler = Handler(Looper.getMainLooper())
-    // Hand-off of HTTP requests to the main thread to ensure sequential processing and sync
-    private val requestHandler = Handler(Looper.getMainLooper())
     private val settings = PiPupApp.settings
 
     private lateinit var webServer: WebServer
@@ -72,16 +79,16 @@ class PipUpService : Service() {
     private lateinit var payloadParser: PayloadParser
     private lateinit var moduleManager: ModuleManager
 
-    private val mPopupsShown = java.util.concurrent.atomic.AtomicLong(0)
-    private val mStartedAt = SystemClock.elapsedRealtime()
-    @Volatile private var mLastPopup: PopupProps? = null
-    @Volatile private var mLastPopupAt: Long = 0L
+    private val popupsShown = java.util.concurrent.atomic.AtomicLong(0)
+    private val startedAt = SystemClock.elapsedRealtime()
+    @Volatile private var lastPopup: PopupProps? = null
+    @Volatile private var lastPopupAt: Long = 0L
 
-    @Volatile private var mDreaming = false
-    private val mDreamReceiver = object : BroadcastReceiver() {
+    @Volatile private var dreaming = false
+    private val dreamReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            mDreaming = intent?.action == Intent.ACTION_DREAMING_STARTED
-            Log.d(TAG, "Screensaver ${if (mDreaming) "started" else "stopped"}")
+            dreaming = intent?.action == Intent.ACTION_DREAMING_STARTED
+            Log.d(TAG, "Screensaver ${if (dreaming) "started" else "stopped"}")
         }
     }
 
@@ -89,36 +96,25 @@ class PipUpService : Service() {
 
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == "nl.rogro82.pipup.SETTINGS_CHANGED") {
+            if (intent.action == PiPupApp.ACTION_SETTINGS_CHANGED) {
                 Log.d(TAG, "Settings change detected, applying global states")
                 cachedLandingPage = null
 
-                // 1. Re-apply Locale
-                val lang = settings.language
-                val appLocale: LocaleListCompat = if (lang == "default") {
-                    LocaleListCompat.getEmptyLocaleList()
-                } else {
-                    LocaleListCompat.forLanguageTags(lang)
-                }
-                AppCompatDelegate.setApplicationLocales(appLocale)
+                // 1. Re-apply Locale & Theme
+                applyAppLocaleAndTheme(settings.language, settings.appTheme)
 
-                // 2. Re-apply Theme
-                val appTheme = settings.appTheme
-                val mode = if (appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-                AppCompatDelegate.setDefaultNightMode(mode)
-
-                // 3. Update Worker schedule
+                // 2. Update Worker schedule
                 UpdateWorker.schedule(applicationContext, settings.updateInterval)
 
-                // 4. Update Modules
+                // 3. Update Modules
                 moduleManager.setModuleEnabled("power", settings.powerModuleEnabled)
                 moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled)
                 moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled)
 
-                // 5. Update Media pre-warm
+                // 4. Update Media pre-warm
                 (moduleManager.getModule("media") as? MediaModule)?.updatePreWarmState()
 
-                // 6. Update Notification
+                // 5. Update Notification
                 updateForegroundNotification(settings.language)
             }
         }
@@ -161,7 +157,7 @@ class PipUpService : Service() {
         moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled)
         moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled)
 
-        registerReceiver(mDreamReceiver, IntentFilter().apply {
+        registerReceiver(dreamReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_DREAMING_STARTED)
             addAction(Intent.ACTION_DREAMING_STOPPED)
         })
@@ -181,12 +177,7 @@ class PipUpService : Service() {
         } catch (_: Exception) {}
 
         // Register settings receiver to react to UI changes
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"))
-        }
+        registerProtectedReceiver(settingsReceiver, IntentFilter(PiPupApp.ACTION_SETTINGS_CHANGED))
 
         try {
             webServer.start(30000)
@@ -203,7 +194,7 @@ class PipUpService : Service() {
             unregisterReceiver(settingsReceiver)
         } catch (_: Exception) {}
         try {
-            unregisterReceiver(mDreamReceiver)
+            unregisterReceiver(dreamReceiver)
         } catch (_: Exception) {}
         moduleManager.shutdown()
         webServer.stop()
@@ -250,16 +241,14 @@ class PipUpService : Service() {
                 }
                 "/cancel" -> {
                     val id = session.parameters["id"]?.firstOrNull()
-                    val result = runOnMainSync {
+                    handler.post {
                         val current = notificationManager.getCurrentProps()
-                        if (id != null && current != null && current.id != id) {
-                            ok("id mismatch: visible popup is ${current.id}")
-                        } else {
+                        if (id == null || current?.id == id) {
                             notificationManager.cancelAll()
-                            ok("Queue cleared")
+                            lastPopupAt = 0L // Reset timing on manual cancel
                         }
                     }
-                    result ?: invalidRequest("Main thread timeout")
+                    ok("Cancel requested")
                 }
                 "/settings" -> handleSettingsRequest(session)
                 "/favicon.svg", "/favicon.ico" -> handleFavicon()
@@ -280,19 +269,6 @@ class PipUpService : Service() {
         }
     }
 
-    private fun runOnMainSync(block: () -> NanoHTTPD.Response): NanoHTTPD.Response? {
-        val latch = CountDownLatch(1)
-        var result: NanoHTTPD.Response? = null
-        requestHandler.post {
-            try {
-                result = block()
-            } finally {
-                latch.countDown()
-            }
-        }
-        return if (latch.await(2000, TimeUnit.MILLISECONDS)) result else null
-    }
-
     private fun processNotify(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         val props = payloadParser.parse(session) ?: return invalidRequest("failed to parse input")
 
@@ -308,9 +284,9 @@ class PipUpService : Service() {
 
         // Asynchronous hand-off to notification manager to avoid blocking NanoHTTPD threads
         // or timing out on the main thread during heavy load.
-        mPopupsShown.incrementAndGet()
-        mLastPopup = finalProps
-        mLastPopupAt = SystemClock.elapsedRealtime()
+        popupsShown.incrementAndGet()
+        lastPopup = finalProps
+        lastPopupAt = SystemClock.elapsedRealtime()
         notificationManager.enqueue(finalProps)
 
         return ok("Enqueued: ${finalProps.title ?: "Untitled"}")
@@ -323,13 +299,13 @@ class PipUpService : Service() {
         val state = mutableMapOf<String, Any?>(
             "app" to appName,
             "version" to BuildConfig.VERSION_NAME,
-            "id" to deviceId(),
+            "id" to settings.deviceId,
             "name" to deviceName(),
             "visible" to notificationManager.isDisplaying(),
             "screenOn" to powerManager.isInteractive,
-            "dreaming" to mDreaming,
-            "popupsShown" to mPopupsShown.get(),
-            "uptime" to (SystemClock.elapsedRealtime() - mStartedAt) / 1000,
+            "dreaming" to dreaming,
+            "popupsShown" to popupsShown.get(),
+            "uptime" to (SystemClock.elapsedRealtime() - startedAt) / 1000,
             "device" to mapOf(
                 "model" to Build.MODEL,
                 "manufacturer" to Build.MANUFACTURER,
@@ -342,7 +318,7 @@ class PipUpService : Service() {
                 "title" to current.title,
                 "duration" to current.duration,
                 "indefinite" to (current.duration <= 0),
-                "elapsed" to ((SystemClock.elapsedRealtime() - mLastPopupAt) / 1000)
+                "elapsed" to ((SystemClock.elapsedRealtime() - lastPopupAt) / 1000)
             )
         }
         state["permissions"] = Permissions.asMap(this)
@@ -357,7 +333,7 @@ class PipUpService : Service() {
         )
         moduleManager.augmentState(state)
 
-        val last = mLastPopup
+        val last = lastPopup
         if (last != null) {
             state["lastPopup"] = mapOf(
                 "title" to last.title,
@@ -365,7 +341,7 @@ class PipUpService : Service() {
                 "position" to last.getPositionEnum().name,
                 "muted" to mediaMuted(last),
                 "media" to mediaInfo(last),
-                "secondsAgo" to ((SystemClock.elapsedRealtime() - mLastPopupAt) / 1000)
+                "secondsAgo" to ((SystemClock.elapsedRealtime() - lastPopupAt) / 1000)
             )
         }
         return NanoHTTPD.newFixedLengthResponse(
@@ -387,28 +363,6 @@ class PipUpService : Service() {
         is PopupProps.Media.Web -> m.muted
         is PopupProps.Media.Video -> m.muted
         else -> null
-    }
-
-    private fun deviceId(): String {
-        val context = applicationContext.createDeviceProtectedStorageContext()
-
-        val prefs = context.getSharedPreferences("pipup_id", MODE_PRIVATE)
-        var id = prefs.getString("device_id", null)
-        if (id == null) {
-            // One-time migration if old prefs exist in regular storage
-            val oldPrefs = getSharedPreferences("pipup_id", MODE_PRIVATE)
-            id = oldPrefs.getString("device_id", null)
-            if (id != null) {
-                prefs.edit { putString("device_id", id) }
-                oldPrefs.edit { remove("device_id") }
-            }
-
-            if (id == null) {
-                id = UUID.randomUUID().toString()
-                prefs.edit { putString("device_id", id) }
-            }
-        }
-        return id
     }
 
     private fun deviceName(): String {
@@ -516,7 +470,7 @@ class PipUpService : Service() {
                             applyGlobalSettings(data)
                         }
                         // Notify UI about settings change
-                        val intent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED").apply {
+                        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
                             setPackage(packageName)
                             putExtra("origin", "remote")
                         }

@@ -8,7 +8,9 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.Permissions
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.PowerController
 
 /**
  * Submenu for managing optional PiPup modules.
@@ -23,45 +25,56 @@ class ModulesSubmenu(
 
     override fun onBind(root: View) {
         // Power Control Module
-        root.findViewById<View>(R.id.container_power_module)?.apply {
-            val sw = findViewById<SwitchCompat>(R.id.switch_power_module)
-            sw.isChecked = settings.powerModuleEnabled
-            setOnClickListener {
-                val newState = !settings.powerModuleEnabled
-                sw.isChecked = newState
-                settings.powerModuleEnabled = newState
-                notifySettingsChanged()
-                if (newState && nl.rogro82.pipup.core.PowerController.getSleepMethod(context) == null) {
-                    Permissions.showFixDialog(context, Permissions.KEY_POWER)
-                }
-                onSettingsChanged(false)
-            }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
-        }
+        bindModuleToggle(
+            root,
+            R.id.container_power_module,
+            R.id.switch_power_module,
+            { settings.powerModuleEnabled },
+            { settings.powerModuleEnabled = it },
+            { if (it && PowerController.getSleepMethod(context) == null) Permissions.showFixDialog(context, Permissions.KEY_POWER) }
+        )
 
         // Network Discovery Module
-        root.findViewById<View>(R.id.container_discovery_module)?.apply {
-            val sw = findViewById<SwitchCompat>(R.id.switch_discovery_module)
-            sw.isChecked = settings.discoveryModuleEnabled
-            setOnClickListener {
-                val newState = !settings.discoveryModuleEnabled
-                sw.isChecked = newState
-                settings.discoveryModuleEnabled = newState
-                notifySettingsChanged()
-                onSettingsChanged(false)
-            }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
-        }
+        bindModuleToggle(
+            root,
+            R.id.container_discovery_module,
+            R.id.switch_discovery_module,
+            { settings.discoveryModuleEnabled },
+            { settings.discoveryModuleEnabled = it }
+        )
 
         // Rich Media Module
-        root.findViewById<View>(R.id.container_media_module)?.apply {
-            val sw = findViewById<SwitchCompat>(R.id.switch_media_module)
-            sw.isChecked = settings.mediaModuleEnabled
+        bindModuleToggle(
+            root,
+            R.id.container_media_module,
+            R.id.switch_media_module,
+            { settings.mediaModuleEnabled },
+            { settings.mediaModuleEnabled = it }
+        )
+    }
+
+    private fun bindModuleToggle(
+        root: View,
+        containerId: Int,
+        switchId: Int,
+        getter: () -> Boolean,
+        onToggle: (Boolean) -> Unit,
+        afterToggle: ((Boolean) -> Unit)? = null
+    ) {
+        root.findViewById<View>(containerId)?.apply {
+            val sw = findViewById<SwitchCompat>(switchId)
+            sw.isChecked = getter()
+
+            // Disable direct interaction with the switch to avoid double-toggles
+            sw.isClickable = false
+            sw.isFocusable = false
+
             setOnClickListener {
-                val newState = !settings.mediaModuleEnabled
+                val newState = !getter()
                 sw.isChecked = newState
-                settings.mediaModuleEnabled = newState
+                onToggle(newState)
                 notifySettingsChanged()
+                afterToggle?.invoke(newState)
                 onSettingsChanged(false)
             }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
@@ -69,7 +82,7 @@ class ModulesSubmenu(
     }
 
     private fun notifySettingsChanged() {
-        val intent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED").apply {
+        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
             setPackage(context.packageName)
         }
         context.sendBroadcast(intent)

@@ -1,17 +1,36 @@
 package nl.rogro82.pipup
 
 import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.IntentFilter
 import android.content.res.Configuration
 import android.content.res.Resources
+import android.graphics.Rect
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.util.TypedValue
+import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewTreeObserver
+import android.view.WindowManager
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.toColorInt
+import androidx.core.os.LocaleListCompat
 import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import java.io.InputStream
 import java.net.Inet4Address
@@ -165,4 +184,155 @@ fun Context.showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
             Toast.makeText(applicationContext, message, duration).show()
         }
     }
+}
+
+/**
+ * Helper to register a broadcast receiver with the appropriate flags for Android 13+.
+ */
+fun Context.registerProtectedReceiver(receiver: BroadcastReceiver, filter: IntentFilter) {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+    } else {
+        @Suppress("UnspecifiedRegisterReceiverFlag")
+        registerReceiver(receiver, filter)
+    }
+}
+
+/**
+ * Centralized logic to apply application-wide locale and theme settings.
+ * Includes optimization to avoid redundant AppCompatDelegate calls that cause activity recreation.
+ */
+fun applyAppLocaleAndTheme(langTag: String, appTheme: Int) {
+    // 1. Locale Optimization
+    val currentLocales = AppCompatDelegate.getApplicationLocales()
+    val desiredLocales: LocaleListCompat = if (langTag == "default") {
+        LocaleListCompat.getEmptyLocaleList()
+    } else {
+        LocaleListCompat.forLanguageTags(langTag)
+    }
+
+    if (currentLocales.toLanguageTags() != desiredLocales.toLanguageTags()) {
+        Log.d("Utils", "Applying new locale: ${desiredLocales.toLanguageTags()}")
+        AppCompatDelegate.setApplicationLocales(desiredLocales)
+    }
+
+    // 2. Theme Optimization
+    val currentMode = AppCompatDelegate.getDefaultNightMode()
+    val desiredMode = if (appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
+
+    if (currentMode != desiredMode) {
+        Log.d("Utils", "Applying new theme mode: $desiredMode")
+        AppCompatDelegate.setDefaultNightMode(desiredMode)
+    }
+}
+
+/**
+ * Extension to find the nearest Activity from a Context.
+ */
+tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
+}
+
+/**
+ * Shared logic for showing a hex color input dialog with TV-optimized focus management.
+ */
+fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
+    val padding = dpToPx(12)
+    val input = EditText(this).apply {
+        setText(initialHex.replace("#", ""))
+        isSingleLine = true
+        background = ContextCompat.getDrawable(this@showHexInputDialog, R.drawable.field_background)
+        setPadding(padding, padding, padding, padding)
+        gravity = Gravity.CENTER
+        typeface = Typeface.MONOSPACE
+        inputType = android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+        setTextColor(ContextCompat.getColor(this@showHexInputDialog, R.color.colorOnSurface))
+        onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
+            if (hasFocus) {
+                val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                imm.showSoftInput(v, 0)
+            }
+        }
+    }
+
+    val container = FrameLayout(this).apply {
+        val margin = dpToPx(24)
+        setPadding(margin, margin / 2, margin, 0)
+        addView(input)
+    }
+
+    val dialog = AlertDialog.Builder(this)
+        .setTitle(R.string.settings_edit_hex_title).setView(container)
+        .setPositiveButton(android.R.string.ok) { _, _ ->
+            val h = "#${input.text.toString().uppercase()}"
+            try {
+                h.toColorInt()
+                onSet(h)
+            } catch (_: Exception) {
+                Log.e("Utils", "Invalid hex color entered: $h")
+            }
+        }.setNegativeButton(android.R.string.cancel, null)
+        .create()
+
+    dialog.window?.apply {
+        setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL)
+        attributes = attributes.apply { y = 100 }
+        setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+    }
+    dialog.show()
+
+    val handler = Handler(Looper.getMainLooper())
+    findActivity()?.window?.decorView?.let { decor ->
+        var wasKeyboardVisible = true
+        val posUpdater = Runnable {
+            dialog.window?.let { win ->
+                val p = win.attributes
+                p.gravity = if (wasKeyboardVisible) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
+                p.y = if (wasKeyboardVisible) 100 else 0
+                win.attributes = p
+            }
+        }
+        val listener = ViewTreeObserver.OnGlobalLayoutListener {
+            val r = Rect()
+            decor.getWindowVisibleDisplayFrame(r)
+            val screenHeight = decor.rootView.height
+            val keypadHeight = screenHeight - r.bottom
+            val isKeyboardVisible = (keypadHeight > screenHeight * 0.15) ||
+                    (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
+
+            if (isKeyboardVisible != wasKeyboardVisible) {
+                wasKeyboardVisible = isKeyboardVisible
+                handler.removeCallbacks(posUpdater)
+                handler.postDelayed(posUpdater, if (isKeyboardVisible) 0 else 250)
+            }
+        }
+        decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
+        dialog.setOnDismissListener {
+            decor.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+            handler.removeCallbacks(posUpdater)
+        }
+    }
+
+    input.setOnKeyListener { _, keyCode, event ->
+        if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).requestFocus()
+            true
+        } else false
+    }
+
+    val buttonKeyListener = View.OnKeyListener { _, keyCode, event ->
+        if (event.action == KeyEvent.ACTION_DOWN) {
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_UP -> { input.requestFocus(); true }
+                KeyEvent.KEYCODE_DPAD_DOWN -> { input.requestFocus(); input.dispatchKeyEvent(event); true }
+                else -> false
+            }
+        } else false
+    }
+    dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnKeyListener(buttonKeyListener)
+    dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setOnKeyListener(buttonKeyListener)
+
+    input.requestFocus()
 }

@@ -33,14 +33,8 @@ class BorderSubmenu(
         root.findViewById<Button>(R.id.btn_edit_border_hex)?.apply {
             text = settings.borderColor
             visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
-            setOnClickListener { showHexInputDialog(this) { settings.borderColor = it; onSettingsChanged(false) } }
+            setOnClickListener { handleHexInput(this, settings.borderColor) { settings.borderColor = it } }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
-    }
-
-    private fun setSelectedColorInSpinner(root: View, spinnerId: Int, adapter: SettingsActivity.ColorSpinnerAdapter, hex: String) {
-        val clean = hex.replace("#", "").let { if (it.length == 8) it.substring(2) else it }
-        val idx = adapter.colors.indexOfFirst { it.hex.equals("#$clean", true) }
-        if (idx != -1) root.findViewById<android.widget.Spinner>(spinnerId)?.setSelection(idx)
     }
 }

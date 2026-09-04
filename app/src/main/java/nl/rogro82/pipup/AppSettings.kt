@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.core.graphics.toColorInt
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import java.util.UUID
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
@@ -21,6 +22,26 @@ class AppSettings(context: Context) {
             runCatching { deviceProtectedContext.moveSharedPreferencesFrom(appContext, PREFS_NAME) }
         }
         deviceProtectedContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    /**
+     * Retrieves the unique device ID, migrating from old storage if necessary.
+     */
+    val deviceId: String by lazy {
+        val idPrefs = appContext.createDeviceProtectedStorageContext().getSharedPreferences("pipup_id", Context.MODE_PRIVATE)
+        idPrefs.getString("device_id", null) ?: run {
+            val oldPrefs = appContext.getSharedPreferences("pipup_id", Context.MODE_PRIVATE)
+            val oldId = oldPrefs.getString("device_id", null)
+            if (oldId != null) {
+                idPrefs.edit { putString("device_id", oldId) }
+                oldPrefs.edit { remove("device_id") }
+                oldId
+            } else {
+                UUID.randomUUID().toString().also { newId ->
+                    idPrefs.edit { putString("device_id", newId) }
+                }
+            }
+        }
     }
 
     // Styling
@@ -172,18 +193,49 @@ class AppSettings(context: Context) {
 
     /**
      * Retrieves all current settings as a [SettingsData] object.
+     * Uses Jackson to convert the instance directly to reduce manual field mapping.
      */
-    fun getAll() = SettingsData(
-        positionIndex, backgroundColor, backgroundAlpha, titleColor, titleSize,
-        messageColor, messageSize, borderRadius, borderWidth, borderColor,
-        contentPadding, titleAlignment, messageAlignment, mediaPosition,
-        animationType, animationDuration, animationExit, mediaTimeout, mediaRetries, preWarmWebView,
-        appTheme, advancedMode, powerModuleEnabled, discoveryModuleEnabled, mediaModuleEnabled,
-        updateChannel, updateInterval, updateNotificationStyle, lastUpdateCheck,
-        updateAvailableTag, updateRepeat, lastNotifiedTag,
-        pendingUpdateId, pendingUpdateDigest, pendingUpdateTagName,
-        language
-    )
+    fun getAll(): SettingsData {
+        val map = mapOf(
+            "positionIndex" to positionIndex,
+            "backgroundColor" to backgroundColor,
+            "backgroundAlpha" to backgroundAlpha,
+            "titleColor" to titleColor,
+            "titleSize" to titleSize,
+            "messageColor" to messageColor,
+            "messageSize" to messageSize,
+            "borderRadius" to borderRadius,
+            "borderWidth" to borderWidth,
+            "borderColor" to borderColor,
+            "contentPadding" to contentPadding,
+            "titleAlignment" to titleAlignment,
+            "messageAlignment" to messageAlignment,
+            "mediaPosition" to mediaPosition,
+            "animationType" to animationType,
+            "animationDuration" to animationDuration,
+            "animationExit" to animationExit,
+            "mediaTimeout" to mediaTimeout,
+            "mediaRetries" to mediaRetries,
+            "preWarmWebView" to preWarmWebView,
+            "appTheme" to appTheme,
+            "advancedMode" to advancedMode,
+            "powerModuleEnabled" to powerModuleEnabled,
+            "discoveryModuleEnabled" to discoveryModuleEnabled,
+            "mediaModuleEnabled" to mediaModuleEnabled,
+            "updateChannel" to updateChannel,
+            "updateInterval" to updateInterval,
+            "updateNotificationStyle" to updateNotificationStyle,
+            "lastUpdateCheck" to lastUpdateCheck,
+            "updateAvailableTag" to updateAvailableTag,
+            "updateRepeat" to updateRepeat,
+            "lastNotifiedTag" to lastNotifiedTag,
+            "pendingUpdateId" to pendingUpdateId,
+            "pendingUpdateDigest" to pendingUpdateDigest,
+            "pendingUpdateTagName" to pendingUpdateTagName,
+            "language" to language
+        )
+        return Json.mapper.convertValue(map, SettingsData::class.java)
+    }
 
     /**
      * Applies new settings from a [SettingsData] object.
@@ -262,9 +314,12 @@ class AppSettings(context: Context) {
      * Resets all settings to their default values.
      */
     fun resetToDefaults() {
-        prefs.edit {
+        prefs.edit(commit = true) {
             clear()
         }
+        cachedFullBgColor = null
+        // Re-initialize default values that were set in init
+        updateChannel = if (isBetaBuild) 1 else 0
     }
 
     private class StringPref(val key: String, val defaultValue: String, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, String> {

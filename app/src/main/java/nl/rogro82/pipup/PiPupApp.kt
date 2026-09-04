@@ -8,6 +8,8 @@ import com.bumptech.glide.Glide
 class PiPupApp : Application() {
 
     companion object {
+        const val ACTION_SETTINGS_CHANGED = "nl.rogro82.pipup.SETTINGS_CHANGED"
+
         lateinit var settings: AppSettings
             private set
     }

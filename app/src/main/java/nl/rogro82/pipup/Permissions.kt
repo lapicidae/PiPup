@@ -77,7 +77,12 @@ object Permissions {
         Log.d(LOG_TAG, "Activity paused, visibility counter: $count")
     }
 
-    /** SYSTEM_ALERT_WINDOW - without it popups are accepted but never appear. */
+    /**
+     * SYSTEM_ALERT_WINDOW - without it popups are accepted but never appear.
+     *
+     * @param context The context to check.
+     * @return True if permission is granted.
+     */
     fun overlay(context: Context): Boolean = try {
         Settings.canDrawOverlays(context)
     } catch (ex: Throwable) {
@@ -85,7 +90,12 @@ object Permissions {
         false
     }
 
-    /** REQUEST_INSTALL_PACKAGES - needed for the self-update to install its download. */
+    /**
+     * REQUEST_INSTALL_PACKAGES - needed for the self-update to install its download.
+     *
+     * @param context The context to check.
+     * @return True if permission is granted.
+     */
     fun installPackages(context: Context): Boolean = try {
         context.packageManager.canRequestPackageInstalls().also {
             mInstallCheckError = null
@@ -96,7 +106,12 @@ object Permissions {
         false
     }
 
-    /** TCL's vendor app-op that decides whether Android may restart a killed service. */
+    /**
+     * TCL's vendor app-op that decides whether Android may restart a killed service.
+     *
+     * @param context The context to check.
+     * @return True if allowed, false if denied, null if op is unavailable.
+     */
     fun autoStart(context: Context): Boolean? = try {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = checkAppOp(ops, OP_AUTO_START, context)
@@ -128,6 +143,13 @@ object Permissions {
         }
     }
 
+    /**
+     * Returns whether a specific permission is granted.
+     *
+     * @param context The context to check.
+     * @param key The permission key (e.g. [KEY_OVERLAY]).
+     * @return True if granted, false if missing, null if not applicable.
+     */
     fun granted(context: Context, key: String): Boolean? = when (key) {
         KEY_OVERLAY -> overlay(context)
         KEY_INSTALL -> installPackages(context)
@@ -155,6 +177,13 @@ object Permissions {
         "fixable" to FIXABLE_KEYS.associateWith { fixIntent(context, it) != null },
     )
 
+    /**
+     * Returns an ADB command string to grant the given permission.
+     *
+     * @param key The permission key.
+     * @param context The application context.
+     * @return The full adb shell command.
+     */
     fun adbCommand(key: String, context: Context): String {
         val pkg = context.packageName
         return when (key) {
@@ -168,6 +197,13 @@ object Permissions {
         }
     }
 
+    /**
+     * Returns the raw system intent to open the settings screen for a permission.
+     *
+     * @param context The context.
+     * @param key The permission key.
+     * @return The Intent, or null if not supported.
+     */
     fun rawIntent(context: Context, key: String): Intent? = when (key) {
         KEY_OVERLAY -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}".toUri())
         KEY_INSTALL -> Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri())

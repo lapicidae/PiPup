@@ -4,11 +4,10 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.View
 import android.widget.ImageButton
 import android.widget.TextView
@@ -20,10 +19,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.util.UnstableApi
+import java.util.Calendar
 import nl.rogro82.pipup.core.PowerController
 import nl.rogro82.pipup.service.PipUpService
 import nl.rogro82.pipup.ui.SettingsActivity
-import java.util.Calendar
 
 /**
  * Main Activity displaying server status and version information.
@@ -38,7 +37,7 @@ class MainActivity : AppCompatActivity() {
 
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
-            if (intent?.action == "nl.rogro82.pipup.SETTINGS_CHANGED") {
+            if (intent?.action == PiPupApp.ACTION_SETTINGS_CHANGED) {
                 if (intent.getStringExtra("origin") == "remote") {
                     Log.d("MainActivity", "Remote settings change detected, refreshing UI")
                     recreate()
@@ -95,12 +94,7 @@ class MainActivity : AppCompatActivity() {
         val serviceIntent = Intent(this, PipUpService::class.java)
         startForegroundService(serviceIntent)
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
-        } else {
-            @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(settingsReceiver, IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"))
-        }
+        registerProtectedReceiver(settingsReceiver, IntentFilter(PiPupApp.ACTION_SETTINGS_CHANGED))
     }
 
     override fun onResume() {
@@ -162,7 +156,7 @@ class MainActivity : AppCompatActivity() {
             area.visibility = View.VISIBLE
             area.text = getString(R.string.permission_missing, missing.joinToString(", "))
             area.setTextColor(ContextCompat.getColor(this, R.color.status_red))
-        } else if (appSettings.updateAvailableTag.isNotEmpty() && UpdateManager(this).isNewer(appSettings.updateAvailableTag)) {
+        } else if (appSettings.updateAvailableTag.isNotEmpty() && UpdateManager.isNewer(this, appSettings.updateAvailableTag)) {
             // Priority 2: App Update Available (Informational only)
             area.visibility = View.VISIBLE
             area.text = getString(R.string.settings_update_found_indicator)

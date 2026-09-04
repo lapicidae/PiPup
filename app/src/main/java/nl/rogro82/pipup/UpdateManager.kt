@@ -128,7 +128,7 @@ class UpdateManager(context: Context) {
 
                     if (latest != null) {
                         Log.d("UpdateManager", "Comparing remote: ${latest.tagName} with beta channel: $includeBeta")
-                        if (isNewer(latest.tagName)) {
+                        if (isNewer(appContext, latest.tagName)) {
                             Log.i("UpdateManager", "New version available: ${latest.tagName}")
                             callback.onUpdateAvailable(latest)
                         } else {
@@ -161,8 +161,6 @@ class UpdateManager(context: Context) {
             2 -> showToastNotification(release)
         }
     }
-
-
 
     @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun showPiPupPopup(release: GitHubRelease) {
@@ -198,52 +196,6 @@ class UpdateManager(context: Context) {
 
     private fun showToastNotification(release: GitHubRelease) {
         appContext.showToast(appContext.getString(R.string.notification_update_msg, release.tagName), android.widget.Toast.LENGTH_LONG)
-    }
-
-    /**
-     * Checks if a remote tag version is newer than the currently installed version.
-     */
-    fun isNewer(remoteTag: String): Boolean {
-        val currentVersion = try {
-            appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
-        } catch (_: Exception) {
-            "0.0.0"
-        }
-
-        Log.d("UpdateManager", "Comparing remote: $remoteTag with local: $currentVersion")
-        val result = compareVersions(remoteTag.replace("v", ""), currentVersion?.replace("v", "") ?: "0.0.0")
-        return result > 0
-    }
-
-    /**
-     * Compares two version strings.
-     * Returns > 0 if v1 > v2, < 0 if v1 < v2, 0 if equal.
-     * Handles semantic versioning and suffixes like -beta, -prerelease.
-     */
-    fun compareVersions(v1: String, v2: String): Int {
-        val parts1 = v1.split("-")
-        val parts2 = v2.split("-")
-
-        val main1 = parts1[0].split(".").mapNotNull { it.toIntOrNull() }
-        val main2 = parts2[0].split(".").mapNotNull { it.toIntOrNull() }
-
-        val length = maxOf(main1.size, main2.size)
-        for (i in 0 until length) {
-            val n1 = main1.getOrElse(i) { 0 }
-            val n2 = main2.getOrElse(i) { 0 }
-            if (n1 != n2) return n1.compareTo(n2)
-        }
-
-        // Main version is same, compare suffixes
-        val suffix1 = parts1.getOrNull(1)
-        val suffix2 = parts2.getOrNull(1)
-
-        return when {
-            suffix1 == null && suffix2 == null -> 0
-            suffix1 == null -> 1  // v1 is stable, v2 is beta -> v1 is newer
-            suffix2 == null -> -1 // v1 is beta, v2 is stable -> v2 is newer
-            else -> suffix1.compareTo(suffix2) // Both are beta, compare strings (simple)
-        }
     }
 
     /**
@@ -461,10 +413,51 @@ class UpdateManager(context: Context) {
          */
         fun updateAvailable(context: Context): Boolean {
             val version = latestVersion ?: return false
+            return isNewer(context, "v$version")
+        }
 
-            // Re-use logic from class instance if needed, but here we can just do a simple check
-            // or better, instantiate a temporary manager for the comparison logic.
-            return UpdateManager(context).isNewer("v$version")
+        /**
+         * Checks if a remote tag version is newer than the currently installed version.
+         */
+        fun isNewer(context: Context, remoteTag: String): Boolean {
+            val currentVersion = try {
+                context.packageManager.getPackageInfo(context.packageName, 0).versionName
+            } catch (_: Exception) {
+                "0.0.0"
+            }
+
+            Log.d("UpdateManager", "Comparing remote: $remoteTag with local: $currentVersion")
+            val result = compareVersions(remoteTag.replace("v", ""), currentVersion?.replace("v", "") ?: "0.0.0")
+            return result > 0
+        }
+
+        /**
+         * Compares two version strings.
+         * Returns > 0 if v1 > v2, < 0 if v1 < v2, 0 if equal.
+         */
+        fun compareVersions(v1: String, v2: String): Int {
+            val parts1 = v1.split("-")
+            val parts2 = v2.split("-")
+
+            val main1 = parts1[0].split(".").mapNotNull { it.toIntOrNull() }
+            val main2 = parts2[0].split(".").mapNotNull { it.toIntOrNull() }
+
+            val length = maxOf(main1.size, main2.size)
+            for (i in 0 until length) {
+                val n1 = main1.getOrElse(i) { 0 }
+                val n2 = main2.getOrElse(i) { 0 }
+                if (n1 != n2) return n1.compareTo(n2)
+            }
+
+            val suffix1 = parts1.getOrNull(1)
+            val suffix2 = parts2.getOrNull(1)
+
+            return when {
+                suffix1 == null && suffix2 == null -> 0
+                suffix1 == null -> 1
+                suffix2 == null -> -1
+                else -> suffix1.compareTo(suffix2)
+            }
         }
     }
 }

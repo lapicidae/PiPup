@@ -80,7 +80,7 @@ class UpdatesSubmenu(
     }
 
     private fun updateButtonText(btn: Button) {
-        btn.text = if (settings.updateAvailableTag.isNotEmpty() && UpdateManager(context).isNewer(settings.updateAvailableTag)) {
+        btn.text = if (settings.updateAvailableTag.isNotEmpty() && UpdateManager.isNewer(context, settings.updateAvailableTag)) {
             context.getString(R.string.settings_update_to, settings.updateAvailableTag)
         } else {
             context.getString(R.string.settings_check_update)
@@ -99,6 +99,7 @@ class UpdatesSubmenu(
             .setMessage(R.string.settings_checking_update)
             .setCancelable(true)
             .show()
+        progress.findViewById<TextView>(android.R.id.message)?.gravity = android.view.Gravity.CENTER
 
         UpdateManager(context).checkForUpdates(settings.updateChannel == 1, object : UpdateManager.UpdateCallback {
             override fun onUpdateAvailable(release: GitHubRelease) {

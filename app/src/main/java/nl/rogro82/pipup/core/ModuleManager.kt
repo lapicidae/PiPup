@@ -17,6 +17,8 @@ class ModuleManager {
 
     /**
      * Registers a module with the manager.
+     *
+     * @param module The module instance to register.
      */
     fun registerModule(module: PiPupModule) {
         modules[module.id] = module
@@ -25,6 +27,9 @@ class ModuleManager {
 
     /**
      * Toggles the enabled state of a module.
+     *
+     * @param id The unique identifier of the module.
+     * @param enabled True to enable, false to disable.
      */
     fun setModuleEnabled(id: String, enabled: Boolean) {
         val module = modules[id] ?: return
@@ -52,12 +57,18 @@ class ModuleManager {
 
     /**
      * Returns a registered module by its ID.
+     *
+     * @param id The module identifier.
+     * @return The [PiPupModule] if found, null otherwise.
      */
     fun getModule(id: String): PiPupModule? = modules[id]
 
     /**
      * Dispatches an HTTP request to all enabled modules.
      * The first module to return a non-null response wins.
+     *
+     * @param session The NanoHTTPD session.
+     * @return A [NanoHTTPD.Response] if handled, null otherwise.
      */
     fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? {
         for (id in enabledModules) {
@@ -69,6 +80,8 @@ class ModuleManager {
 
     /**
      * Allows enabled modules to add their own information to the global state report.
+     *
+     * @param state The mutable state map to augment.
      */
     fun augmentState(state: MutableMap<String, Any?>) {
         for (id in enabledModules) {
@@ -77,12 +90,13 @@ class ModuleManager {
     }
 
     /**
-     * Gracefully shuts down all enabled modules.
+     * Gracefully shuts down all enabled modules and clears the module registry.
      */
     fun shutdown() {
         Log.d(TAG, "Shutting down all modules...")
         for (id in enabledModules.toList()) {
             setModuleEnabled(id, false)
         }
+        modules.clear()
     }
 }

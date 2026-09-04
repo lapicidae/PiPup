@@ -57,15 +57,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     /** The listener to be notified when the media is fully loaded and ready to be displayed. */
     var readyListener: ReadyListener? = null
 
-    private var mPlayer: ExoPlayer? = null
-    private var mVideoView: android.view.View? = null
-    private var mWebView: WebView? = null
+    private var player: ExoPlayer? = null
+    private var videoView: android.view.View? = null
+    private var webView: WebView? = null
     private var isScrolling = false
     private var targetMediaWidth = 0
     private var targetMediaHeight = 0
     private var isReadyCalled = false
     private var isCleanedUp = false
-    private var isFirstAnimateIn = true
+    private var isAnimatedIn = false
     private var lastMediaError: String? = null
 
     @Keep
@@ -80,7 +80,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 popup.mainHandler.post {
                     if (popup.isCleanedUp) return@post
                     android.util.Log.d("PopupView", "WHEP video playing signal received from JS")
-                    popup.mWebView?.let {
+                    popup.webView?.let {
                         it.visibility = VISIBLE
                         popup.removeStaleViews(it)
                     }
@@ -149,7 +149,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         cleanupMediaResources()
 
         // Ensure visibility is restored if we were in an invisible pre-loading state
-        mWebView?.visibility = VISIBLE
+        webView?.visibility = VISIBLE
 
         val frame = binding.popupMediaFrame
         frame.removeAllViews()
@@ -267,7 +267,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             if (oldMedia is PopupProps.Media.Whep && newMedia is PopupProps.Media.Whep) {
                 if (oldMedia.videoFit != newMedia.videoFit) {
                     android.util.Log.d("PopupView", "Updating WHEP videoFit dynamically to ${newMedia.videoFit}")
-                    mWebView?.evaluateJavascript("document.getElementById('v').style.objectFit = '${newMedia.videoFit}';", null)
+                    webView?.evaluateJavascript("document.getElementById('v').style.objectFit = '${newMedia.videoFit}';", null)
                 }
             }
             adjustHeights()
@@ -590,10 +590,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         // If the new view is NOT a video, we can safely release the player now
         if (keepView !is TextureView) {
-            mPlayer?.stop()
-            mPlayer?.release()
-            mPlayer = null
-            mVideoView = null
+            player?.stop()
+            player?.release()
+            player = null
+            videoView = null
         }
     }
 
@@ -607,12 +607,12 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             }
         }
 
-        mPlayer?.stop()
-        mPlayer?.release()
-        mPlayer = null
-        mVideoView = null
+        player?.stop()
+        player?.release()
+        player = null
+        videoView = null
 
-        mWebView?.let { wv ->
+        webView?.let { wv ->
             try {
                 wv.onPause()
                 wv.stopLoading()
@@ -626,7 +626,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 android.util.Log.d("PopupView", "WebView cleanup error: ${e.message}")
             }
         }
-        mWebView = null
+        webView = null
     }
 
     private fun renderImage(frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean) {
@@ -644,36 +644,36 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         frame.layoutParams.height = th
 
         // Clean up previous player if this is a retry, but keep placeholders
-        mPlayer?.let {
+        player?.let {
             it.stop()
             it.release()
         }
-        mPlayer = null
-        mVideoView?.let { frame.removeView(it) }
+        player = null
+        videoView?.let { frame.removeView(it) }
 
-        val player = ExoPlayer.Builder(context)
+        val p = ExoPlayer.Builder(context)
             .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(500, 1000, 250, 500).build())
-            .build().also { mPlayer = it }
+            .build().also { player = it }
 
-        val tv = TextureView(context).also { mVideoView = it; it.isVisible = false }
-        player.setVideoTextureView(tv)
-        player.repeatMode = Player.REPEAT_MODE_ONE
-        player.setMediaItem(MediaItem.fromUri(uri))
-        player.prepare()
+        val tv = TextureView(context).also { videoView = it; it.isVisible = false }
+        p.setVideoTextureView(tv)
+        p.repeatMode = Player.REPEAT_MODE_ONE
+        p.setMediaItem(MediaItem.fromUri(uri))
+        p.prepare()
 
-        player.addListener(object : Player.Listener {
+        p.addListener(object : Player.Listener {
             var ready = false
             override fun onPlaybackStateChanged(state: Int) {
                 if (!ready && state == Player.STATE_READY) {
                     ready = true
                     if (isReadyCalled || isCleanedUp) return
 
-                    player.videoFormat?.let { if (it.width > 0) targetMediaHeight = (tw * it.height) / it.width }
+                    p.videoFormat?.let { if (it.width > 0) targetMediaHeight = (tw * it.height) / it.width }
                     if (targetMediaHeight > 0 && targetMediaHeight != th) {
                         frame.layoutParams.height = targetMediaHeight
                         frame.requestLayout()
                     }
-                    mVideoView?.let { removeStaleViews(it) }
+                    videoView?.let { removeStaleViews(it) }
                     notifyReady()
                     adjustHeights()
                 }
@@ -685,10 +685,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                         val nextRetry = retryCount + 1
                         android.util.Log.w("PopupView", "Video load failed, retrying ($nextRetry/$maxRetries): ${error.message}")
 
-                        mPlayer?.stop()
-                        mPlayer?.release()
-                        mPlayer = null
-                        mVideoView = null
+                        player?.stop()
+                        player?.release()
+                        player = null
+                        videoView = null
 
                         mainHandler.postDelayed({
                             if (!isCleanedUp) {
@@ -719,13 +719,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         frame.layoutParams.height = th
 
         // Clean up previous WebView if this is a retry, but keep placeholders
-        mWebView?.let { oldWv ->
+        webView?.let { oldWv ->
             oldWv.stopLoading()
             oldWv.loadUrl("about:blank")
             frame.removeView(oldWv)
             oldWv.destroy()
         }
-        mWebView = null
+        webView = null
 
         val wv = WebView(context).apply {
             visibility = INVISIBLE // Hide until page finished
@@ -733,13 +733,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             if (BuildConfig.DEBUG) {
                 WebView.setWebContentsDebuggingEnabled(true)
             }
-            mWebView = this
+            webView = this
             webViewClient = object : WebViewClient() {
                 var errorOccurred = false
                 override fun onPageFinished(v: WebView?, u: String?) {
                     if (!errorOccurred && !isReadyCalled && !isCleanedUp) {
                         v?.visibility = VISIBLE
-                        mWebView?.let { removeStaleViews(it) }
+                        webView?.let { removeStaleViews(it) }
                         notifyReady()
                         adjustHeights()
                     }
@@ -828,13 +828,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             frame.layoutParams.height = th
 
             // Clean up previous WebView if this is a retry, but keep placeholders
-            mWebView?.let { oldWv ->
+            webView?.let { oldWv ->
                 oldWv.stopLoading()
                 oldWv.loadUrl("about:blank")
                 frame.removeView(oldWv)
                 oldWv.destroy()
             }
-            mWebView = null
+            webView = null
 
             val wv = WebView(context).apply {
                 visibility = INVISIBLE // Hide until WHEP signal received
@@ -842,7 +842,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 if (BuildConfig.DEBUG) {
                     WebView.setWebContentsDebuggingEnabled(true)
                 }
-                mWebView = this
+                webView = this
                 addJavascriptInterface(JsBridge(retryCount), "PiPup")
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(v: WebView?, u: String?) {
@@ -989,8 +989,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             return
         }
         try {
-            mVideoView?.isVisible = true
-            mPlayer?.play()
+            videoView?.isVisible = true
+            player?.play()
         } catch (e: Exception) {
             android.util.Log.e("PopupView", "Failed to start media: ${e.message}")
         }
@@ -1023,21 +1023,21 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         // That logic should be handled by the owner (SettingsActivity).
 
         try {
-            mPlayer?.let {
+            player?.let {
                 it.stop()
                 it.release()
             }
         } catch (e: Exception) {
             android.util.Log.w("PopupView", "Player release error: ${e.message}")
         }
-        mPlayer = null
+        player = null
 
         (props.media as? PopupProps.Media.LocalFile)?.let { media ->
             // Delete the temporary cache file in a background thread to keep UI smooth
             PayloadParser.deleteFileAsync(media.path)
         }
 
-        mWebView?.let { wv ->
+        webView?.let { wv ->
             try {
                 wv.onPause()
                 wv.stopLoading()
@@ -1053,7 +1053,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 android.util.Log.d("PopupView", "WebView cleanup error: ${e.message}")
             }
         }
-        mWebView = null
+        webView = null
     }
 
     /**
@@ -1061,11 +1061,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
      */
     fun animateIn() {
         if (isCleanedUp) return
-        if (!isFirstAnimateIn && alpha == 1.0f && scaleX == 1.0f && translationX == 0f && translationY == 0f) {
+        if (isAnimatedIn && alpha == 1.0f && scaleX == 1.0f && translationX == 0f && translationY == 0f) {
             // Already visible and positioned correctly, skip entrance animation to avoid blinking on overwrite
             return
         }
-        isFirstAnimateIn = false
+        isAnimatedIn = true
         val duration = props.animationDuration.toLong()
         resetAnimationProps()
         if (props.animationType == 0 || duration <= 0) return
@@ -1117,6 +1117,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
      */
     fun animateOut(completion: () -> Unit) {
         val duration = props.animationDuration.toLong()
+        isAnimatedIn = false
         if (props.animationType == 0 || duration <= 0 || !props.animationExit) {
             animate().alpha(0f).setDuration(if (duration > 0) duration else 300).withEndAction(completion).start()
             return

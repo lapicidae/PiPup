@@ -1,32 +1,25 @@
 package nl.rogro82.pipup.ui
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
 import android.content.res.ColorStateList
-import android.graphics.Rect
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
-import android.view.ViewTreeObserver
-import android.view.WindowManager
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
-import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.toColorInt
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.findActivity
+import nl.rogro82.pipup.showHexInputDialog
 
 /**
  * Base class for common submenu logic.
@@ -43,12 +36,6 @@ abstract class SubmenuBase(
     protected val handler = Handler(Looper.getMainLooper())
     private val animationDebounceToken = "animation_debounce"
 
-    protected tailrec fun Context.findActivity(): Activity? = when (this) {
-        is Activity -> this
-        is ContextWrapper -> baseContext.findActivity()
-        else -> null
-    }
-
     protected val settingsActivity: SettingsActivity?
         get() = context.findActivity() as? SettingsActivity
 
@@ -62,6 +49,12 @@ abstract class SubmenuBase(
         return false
     }
 
+    /**
+     * Updates the position of the preview popup based on the focused view's location.
+     * Ensures the preview doesn't cover important UI elements.
+     *
+     * @param v The currently focused view.
+     */
     override fun updatePreviewPosition(v: View) {
         val location = IntArray(2)
         v.getLocationOnScreen(location)
@@ -199,8 +192,6 @@ abstract class SubmenuBase(
         val spinner = root.findViewById<Spinner>(resId) ?: return
         spinner.adapter = adapter
 
-        // Safety: Clamp the initial selection to avoid IndexOutOfBoundsException if
-        // settings were updated via API with out-of-range values.
         val safeSelection = initialSelection.coerceIn(0, (adapter.count - 1).coerceAtLeast(0))
         spinner.setSelection(safeSelection)
 
@@ -220,113 +211,17 @@ abstract class SubmenuBase(
         }
     }
 
-    protected fun showHexInputDialog(btn: Button, onSet: (String) -> Unit) {
-        val padding = (context.resources.displayMetrics.density * 12).toInt()
-        val input = EditText(context).apply {
-            setText(btn.text.toString().replace("#", ""))
-            isSingleLine = true
-            background = ContextCompat.getDrawable(context, R.drawable.field_background)
-            setPadding(padding, padding, padding, padding)
-            gravity = Gravity.CENTER
-            typeface = android.graphics.Typeface.MONOSPACE
-            inputType = android.text.InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
-            setTextColor(ContextCompat.getColor(context, R.color.colorOnSurface))
-            onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
-                if (hasFocus) {
-                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
-                    imm.showSoftInput(v, 0)
-                }
-            }
+    protected fun setSelectedColorInSpinner(root: View, spinnerId: Int, adapter: SettingsActivity.ColorSpinnerAdapter, hex: String) {
+        val clean = hex.replace("#", "").let { if (it.length == 8) it.substring(2) else it }
+        val idx = adapter.colors.indexOfFirst { it.hex.equals("#$clean", true) }
+        if (idx != -1) root.findViewById<Spinner>(spinnerId)?.setSelection(idx)
+    }
+
+    protected fun handleHexInput(btn: Button, initialHex: String, onSet: (String) -> Unit) {
+        context.showHexInputDialog(initialHex) { newHex ->
+            btn.text = newHex
+            onSet(newHex)
+            onSettingsChanged(false)
         }
-
-        val container = FrameLayout(context).apply {
-            val margin = (context.resources.displayMetrics.density * 24).toInt()
-            setPadding(margin, margin / 2, margin, 0)
-            addView(input)
-        }
-
-        val dialog = AlertDialog.Builder(context)
-            .setTitle(R.string.settings_edit_hex_title).setView(container)
-            .setPositiveButton(android.R.string.ok) { _, _ ->
-                val h = "#${input.text.toString().uppercase()}"
-                try {
-                    h.toColorInt()
-                    btn.text = h
-                    onSet(h)
-                } catch (_: Exception) {}
-            }.setNegativeButton(android.R.string.cancel, null)
-            .create()
-
-        // Initial state: TOP to avoid overlap and resizing
-        dialog.window?.apply {
-            setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL)
-            attributes = attributes.apply { y = 100 }
-            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-        }
-        dialog.show()
-
-        // Reliable detection via Activity decor view
-        context.findActivity()?.window?.decorView?.let { decor ->
-            var wasKeyboardVisible = true
-            val posUpdater = Runnable {
-                dialog.window?.let { win ->
-                    val p = win.attributes
-                    p.gravity = if (wasKeyboardVisible) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
-                    p.y = if (wasKeyboardVisible) 100 else 0
-                    win.attributes = p
-                }
-            }
-            val listener = ViewTreeObserver.OnGlobalLayoutListener {
-                val r = Rect()
-                decor.getWindowVisibleDisplayFrame(r)
-                val screenHeight = decor.rootView.height
-                val keypadHeight = screenHeight - r.bottom
-                val isKeyboardVisible = (keypadHeight > screenHeight * 0.15) ||
-                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
-
-                if (isKeyboardVisible != wasKeyboardVisible) {
-                    wasKeyboardVisible = isKeyboardVisible
-                    handler.removeCallbacks(posUpdater)
-                    // Immediate move to top, 250ms delay to move to center (debouncing)
-                    handler.postDelayed(posUpdater, if (isKeyboardVisible) 0 else 250)
-                }
-            }
-            decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
-            dialog.setOnDismissListener {
-                decor.viewTreeObserver.removeOnGlobalLayoutListener(listener)
-                handler.removeCallbacks(posUpdater)
-            }
-        }
-
-        // Enable D-pad navigation between buttons and EditText on TV
-        input.setOnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP) {
-                dialog.getButton(AlertDialog.BUTTON_POSITIVE).requestFocus()
-                true
-            } else false
-        }
-
-        val buttonKeyListener = View.OnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_UP -> {
-                        input.requestFocus()
-                        true
-                    }
-                    KeyEvent.KEYCODE_DPAD_DOWN -> {
-                        // Focus the EditText first, then pass the DOWN event to it
-                        // so it can forward it to the IME (Keyboard)
-                        input.requestFocus()
-                        input.dispatchKeyEvent(event)
-                        true
-                    }
-                    else -> false
-                }
-            } else false
-        }
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnKeyListener(buttonKeyListener)
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setOnKeyListener(buttonKeyListener)
-
-        input.requestFocus()
     }
 }

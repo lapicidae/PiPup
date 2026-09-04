@@ -42,6 +42,12 @@ class PayloadParser(private val context: Context) {
 
     private val isCleaningUp = AtomicBoolean(false)
 
+    /**
+     * Parses the incoming session body and parameters into [PopupProps].
+     *
+     * @param session The NanoHTTPD session.
+     * @return The parsed properties, or null on error.
+     */
     fun parse(session: NanoHTTPD.IHTTPSession): PopupProps? {
         val headers = session.headers
         var contentType = headers["content-type"] ?: ""

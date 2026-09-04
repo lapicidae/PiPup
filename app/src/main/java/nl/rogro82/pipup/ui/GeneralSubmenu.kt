@@ -10,7 +10,7 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.core.os.LocaleListCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
-import nl.rogro82.pipup.MainActivity
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
 import java.util.Locale
 
@@ -65,18 +65,9 @@ class GeneralSubmenu(
                 }
                 AppCompatDelegate.setApplicationLocales(appLocale)
 
-                // Notify service to clear web cache and update notification
-                val settingsIntent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED")
+                val settingsIntent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED)
                 settingsIntent.setPackage(context.packageName)
                 context.sendBroadcast(settingsIntent)
-
-                // The above might already recreate activities, but we ensure a clean state
-                (context as? SettingsActivity)?.let { activity ->
-                    val intent = Intent(activity, MainActivity::class.java)
-                    intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK)
-                    activity.startActivity(intent)
-                    activity.finish()
-                }
             }
         }
 
@@ -89,7 +80,7 @@ class GeneralSubmenu(
                 AppCompatDelegate.setDefaultNightMode(mode)
 
                 // Notify service to clear web cache
-                val settingsIntent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED")
+                val settingsIntent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED)
                 settingsIntent.setPackage(context.packageName)
                 context.sendBroadcast(settingsIntent)
 
