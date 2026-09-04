@@ -1,21 +1,20 @@
 package nl.rogro82.pipup.core.modules
 
 import android.annotation.SuppressLint
-import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import fi.iki.elonen.NanoHTTPD
-import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
 
 /**
  * Module responsible for rich media support (WebView, WHEP).
  * Manages background WebView pre-warming to improve notification speed.
  */
-class MediaModule(private val context: Context) : PiPupModule {
+class MediaModule : PiPupModule {
 
     companion object {
         private const val TAG = "MediaModule"
@@ -25,30 +24,32 @@ class MediaModule(private val context: Context) : PiPupModule {
     override val name: String = "Rich Media Support"
 
     private val handler = Handler(Looper.getMainLooper())
-    private val settings = PiPupApp.settings
+    private var moduleContext: ModuleContext? = null
 
     @androidx.annotation.Keep
     internal var warmWebView: WebView? = null
 
-    override fun onEnable() {
+    override fun onEnable(context: ModuleContext) {
         Log.d(TAG, "Media module enabled")
-        if (settings.preWarmWebView) {
-            preWarmWebView()
+        this.moduleContext = context
+        if (context.settings.preWarmWebView) {
+            preWarmWebView(context)
         }
     }
 
     override fun onDisable() {
         Log.d(TAG, "Media module disabled, cleaning up WebView")
         destroyWebView()
+        moduleContext = null
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun preWarmWebView() {
+    private fun preWarmWebView(context: ModuleContext) {
         handler.post {
             try {
                 if (warmWebView != null) return@post
 
-                val wv = WebView(context.applicationContext).apply {
+                val wv = WebView(context.androidContext).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     settings.mediaPlaybackRequiresUserGesture = false
@@ -80,8 +81,9 @@ class MediaModule(private val context: Context) : PiPupModule {
      * Refreshes the pre-warm state based on settings.
      */
     fun updatePreWarmState() {
-        if (settings.preWarmWebView) {
-            preWarmWebView()
+        val context = moduleContext ?: return
+        if (context.settings.preWarmWebView) {
+            preWarmWebView(context)
         } else {
             destroyWebView()
         }

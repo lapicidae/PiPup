@@ -226,6 +226,14 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     init {
         clipChildren = false
         clipToPadding = false
+
+        // Automatic cleanup when the view is detached from the window.
+        addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: android.view.View) {}
+            override fun onViewDetachedFromWindow(v: android.view.View) {
+                cleanup()
+            }
+        })
     }
 
     /**

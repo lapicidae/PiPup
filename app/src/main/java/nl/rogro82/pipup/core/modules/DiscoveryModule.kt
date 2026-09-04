@@ -1,6 +1,5 @@
 package nl.rogro82.pipup.core.modules
 
-import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
@@ -8,14 +7,14 @@ import android.util.Log
 import androidx.core.content.ContextCompat
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.BuildConfig
-import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
 
 /**
  * Module responsible for Network Service Discovery (NSD).
  * Handles both registering this device and discovering other PiPup instances.
  */
-class DiscoveryModule(private val context: Context) : PiPupModule {
+class DiscoveryModule : PiPupModule {
 
     companion object {
         private const val TAG = "DiscoveryModule"
@@ -25,7 +24,8 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
     override val id: String = "discovery"
     override val name: String = "Network Discovery"
 
-    private val nsdManager = context.getSystemService(Context.NSD_SERVICE) as NsdManager
+    private var moduleContext: ModuleContext? = null
+    private var nsdManager: NsdManager? = null
     private var registrationListener: NsdManager.RegistrationListener? = null
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private val discoveredDevices = mutableMapOf<String, NsdServiceInfo>()
@@ -56,8 +56,10 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
         finishResolve()
     }
 
-    override fun onEnable() {
+    override fun onEnable(context: ModuleContext) {
         Log.d(TAG, "Discovery module enabled, registering service")
+        this.moduleContext = context
+        this.nsdManager = context.getSystemService(android.content.Context.NSD_SERVICE) as NsdManager
         registerService()
     }
 
@@ -65,16 +67,20 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
         Log.d(TAG, "Discovery module disabled, unregistering service")
         unregisterService()
         stopDiscovery()
+        moduleContext = null
+        nsdManager = null
     }
 
     private fun registerService() {
+        val context = moduleContext ?: return
+        val nsd = nsdManager ?: return
         try {
             val serviceInfo = NsdServiceInfo().apply {
                 serviceName = "PiPup ${getDeviceName()}".take(63)
                 serviceType = SERVICE_TYPE
                 port = 7979
                 // Attributes for easier identification
-                setAttribute("id", PiPupApp.settings.deviceId)
+                setAttribute("id", context.settings.deviceId)
                 setAttribute("name", getDeviceName())
                 setAttribute("version", BuildConfig.VERSION_NAME)
             }
@@ -95,7 +101,7 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
                 }
             }
 
-            nsdManager.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener)
+            nsd.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to register NSD service", e)
         }
@@ -104,7 +110,7 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
     private fun unregisterService() {
         registrationListener?.let {
             try {
-                nsdManager.unregisterService(it)
+                nsdManager?.unregisterService(it)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to unregister NSD service", e)
             }
@@ -116,6 +122,7 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
      * Starts discovering other PiPup services on the local network.
      */
     fun startDiscovery(listener: DeviceListener) {
+        val nsd = nsdManager ?: return
         if (discoveryListener != null) stopDiscovery()
 
         this.deviceListener = listener
@@ -161,11 +168,11 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
 
             override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
                 Log.e(TAG, "Stop discovery failed: $errorCode")
-                nsdManager.stopServiceDiscovery(this)
+                nsd.stopServiceDiscovery(this)
             }
         }
 
-        nsdManager.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
+        nsd.discoverServices(SERVICE_TYPE, NsdManager.PROTOCOL_DNS_SD, discoveryListener)
     }
 
     /**
@@ -188,16 +195,18 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
     }
 
     private fun resolveServiceInternal(service: NsdServiceInfo) {
+        val nsd = nsdManager ?: return
+        val context = moduleContext?.androidContext ?: return
         Log.d(TAG, "Starting resolution for: ${service.serviceName}")
 
         // Start timeout watchdog (5s for slow emulators)
         queueHandler.postDelayed(resolveTimeoutRunnable, 5000)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            nsdManager.registerServiceInfoCallback(service, ContextCompat.getMainExecutor(context), object : NsdManager.ServiceInfoCallback {
+            nsd.registerServiceInfoCallback(service, ContextCompat.getMainExecutor(context), object : NsdManager.ServiceInfoCallback {
                 override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
                     onResolveFinished(serviceInfo)
-                    try { nsdManager.unregisterServiceInfoCallback(this) } catch (_: Exception) {}
+                    try { nsd.unregisterServiceInfoCallback(this) } catch (_: Exception) {}
                 }
                 override fun onServiceLost() { finishResolve() }
                 override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
@@ -208,7 +217,7 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
             })
         } else {
             @Suppress("DEPRECATION")
-            nsdManager.resolveService(service, object : NsdManager.ResolveListener {
+            nsd.resolveService(service, object : NsdManager.ResolveListener {
                 override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                     Log.e(TAG, "Resolve failed: $errorCode")
                     finishResolve()
@@ -256,7 +265,7 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
         }
         discoveryListener?.let {
             try {
-                nsdManager.stopServiceDiscovery(it)
+                nsdManager?.stopServiceDiscovery(it)
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to stop discovery", e)
             }
@@ -266,6 +275,7 @@ class DiscoveryModule(private val context: Context) : PiPupModule {
     }
 
     private fun getDeviceName(): String {
+        val context = moduleContext?.androidContext ?: return Build.MODEL
         return android.provider.Settings.Global.getString(context.contentResolver, android.provider.Settings.Global.DEVICE_NAME)
             ?: Build.MODEL
     }

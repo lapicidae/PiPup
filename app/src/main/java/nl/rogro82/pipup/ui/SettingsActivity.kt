@@ -86,7 +86,9 @@ class SettingsActivity : AppCompatActivity() {
             if (intent?.action == PiPupApp.ACTION_SETTINGS_CHANGED) {
                 if (intent.getStringExtra("origin") == "remote") {
                     android.util.Log.d("SettingsActivity", "Remote settings change detected, refreshing UI")
-                    recreate()
+                    if (!isFinishing && !isDestroyed) {
+                        recreate()
+                    }
                 }
             }
         }

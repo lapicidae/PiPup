@@ -1,11 +1,16 @@
 package nl.rogro82.pipup
 
 import android.app.Application
-import androidx.appcompat.app.AppCompatDelegate
-import androidx.core.os.LocaleListCompat
 import com.bumptech.glide.Glide
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 
 class PiPupApp : Application() {
+
+    /**
+     * Application-wide coroutine scope that follows the application lifecycle.
+     */
+    val applicationScope = CoroutineScope(SupervisorJob())
 
     companion object {
         const val ACTION_SETTINGS_CHANGED = "nl.rogro82.pipup.SETTINGS_CHANGED"
@@ -18,19 +23,8 @@ class PiPupApp : Application() {
         super.onCreate()
         settings = AppSettings(this)
 
-        // Apply language as early as possible using AppCompat API
-        val lang = settings.language
-        val appLocale: LocaleListCompat = if (lang == "default") {
-            LocaleListCompat.getEmptyLocaleList()
-        } else {
-            LocaleListCompat.forLanguageTags(lang)
-        }
-        AppCompatDelegate.setApplicationLocales(appLocale)
-
-        // Apply theme as early as possible
-        val appTheme = settings.appTheme
-        val mode = if (appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
-        AppCompatDelegate.setDefaultNightMode(mode)
+        // Apply language and theme as early as possible using optimized unified logic
+        applyAppLocaleAndTheme(settings.language, settings.appTheme)
     }
 
     override fun onTrimMemory(level: Int) {

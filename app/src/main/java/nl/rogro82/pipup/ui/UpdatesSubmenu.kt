@@ -12,6 +12,8 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import nl.rogro82.pipup.*
 import nl.rogro82.pipup.R
 
@@ -101,34 +103,29 @@ class UpdatesSubmenu(
             .show()
         progress.findViewById<TextView>(android.R.id.message)?.gravity = android.view.Gravity.CENTER
 
-        UpdateManager(context).checkForUpdates(settings.updateChannel == 1, object : UpdateManager.UpdateCallback {
-            override fun onUpdateAvailable(release: GitHubRelease) {
-                (context as? SettingsActivity)?.runOnUiThread {
-                    availableRelease = release
+        val scope = (context.applicationContext as? PiPupApp)?.applicationScope ?: kotlinx.coroutines.MainScope()
+        scope.launch(Dispatchers.Main) {
+            val updateManager = UpdateManager(context)
+            updateManager.checkForUpdates(settings.updateChannel == 1).onSuccess { release ->
+                availableRelease = release
+                if (release != null) {
                     settings.updateAvailableTag = release.tagName
                     settings.lastUpdateCheck = System.currentTimeMillis()
                     btn?.let { updateButtonText(it) }
                     progress.dismiss()
                     showUpdateDialog(release)
-                }
-            }
-            override fun onNoUpdate() {
-                (context as? SettingsActivity)?.runOnUiThread {
-                    availableRelease = null
+                } else {
                     settings.updateAvailableTag = ""
                     settings.lastUpdateCheck = System.currentTimeMillis()
                     btn?.let { updateButtonText(it) }
                     progress.dismiss()
                     context.showToast(context.getString(R.string.settings_update_none))
                 }
+            }.onFailure {
+                progress.dismiss()
+                context.showToast(context.getString(R.string.settings_update_error, it.message), android.widget.Toast.LENGTH_LONG)
             }
-            override fun onError(message: String) {
-                (context as? SettingsActivity)?.runOnUiThread {
-                    progress.dismiss()
-                    context.showToast(context.getString(R.string.settings_update_error, message), android.widget.Toast.LENGTH_LONG)
-                }
-            }
-        })
+        }
     }
 
     private fun showUpdateDialog(targetRelease: GitHubRelease) {
@@ -170,12 +167,13 @@ class UpdatesSubmenu(
             .setTitle(R.string.settings_update_available)
             .setView(container)
             .setPositiveButton(R.string.settings_update_install) { _, _ ->
-                val mgr = UpdateManager(context)
-                context.showToast(context.getString(R.string.settings_update_verifying))
+                val scope = (context.applicationContext as? PiPupApp)?.applicationScope ?: kotlinx.coroutines.MainScope()
+                scope.launch(Dispatchers.Main) {
+                    val mgr = UpdateManager(context)
+                    context.showToast(context.getString(R.string.settings_update_verifying))
 
-                mgr.checkForUpdates(settings.updateChannel == 1, object : UpdateManager.UpdateCallback {
-                    override fun onUpdateAvailable(release: GitHubRelease) {
-                        (context as? SettingsActivity)?.runOnUiThread {
+                    mgr.checkForUpdates(settings.updateChannel == 1).onSuccess { release ->
+                        if (release != null) {
                             if (release.tagName == targetRelease.tagName) {
                                 mgr.downloadAndInstall(release)
                                 context.showToast(context.getString(R.string.settings_update_downloading), android.widget.Toast.LENGTH_LONG)
@@ -183,27 +181,17 @@ class UpdatesSubmenu(
                                 // A different (likely newer) update was found during the re-check
                                 showUpdateDialog(release)
                             }
+                        } else {
+                            context.showToast(context.getString(R.string.settings_update_no_longer_available), android.widget.Toast.LENGTH_LONG)
+                            // Refresh UI state
+                            availableRelease = null
+                            settings.updateAvailableTag = ""
+                            btn?.let { updateButtonText(it) }
                         }
+                    }.onFailure {
+                        context.showToast("Verification failed: ${it.message}", android.widget.Toast.LENGTH_LONG)
                     }
-
-                    override fun onNoUpdate() {
-                        (context as SettingsActivity).run {
-                            runOnUiThread {
-                                context.showToast(context.getString(R.string.settings_update_no_longer_available), android.widget.Toast.LENGTH_LONG)
-                                // Refresh UI state
-                                availableRelease = null
-                                settings.updateAvailableTag = ""
-                                findViewById<Button>(R.id.btn_check_update)?.let { updateButtonText(it) }
-                            }
-                        }
-                    }
-
-                    override fun onError(message: String) {
-                        (context as SettingsActivity).runOnUiThread {
-                            context.showToast("Verification failed: $message", android.widget.Toast.LENGTH_LONG)
-                        }
-                    }
-                })
+                }
             }
             .setNegativeButton(android.R.string.cancel, null)
             .create()
@@ -213,4 +201,7 @@ class UpdatesSubmenu(
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus()
         }
     }
+
+    private val btn: Button?
+        get() = (context as? SettingsActivity)?.findViewById(R.id.btn_check_update)
 }

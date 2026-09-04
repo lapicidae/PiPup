@@ -1,19 +1,18 @@
 package nl.rogro82.pipup.core.modules
 
-import android.content.Context
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.PowerController
-import nl.rogro82.pipup.showToast
 
 /**
  * Module responsible for remote power management (screen wake/sleep).
  */
-class PowerModule(private val context: Context) : PiPupModule {
+class PowerModule : PiPupModule {
 
     companion object {
         private const val TAG = "PowerModule"
@@ -22,12 +21,16 @@ class PowerModule(private val context: Context) : PiPupModule {
     override val id: String = "power"
     override val name: String = "Power Control"
 
-    override fun onEnable() {
+    private var moduleContext: ModuleContext? = null
+
+    override fun onEnable(context: ModuleContext) {
         Log.d(TAG, "Power module enabled")
+        this.moduleContext = context
     }
 
     override fun onDisable() {
         Log.d(TAG, "Power module disabled")
+        moduleContext = null
     }
 
     override fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? {
@@ -39,6 +42,10 @@ class PowerModule(private val context: Context) : PiPupModule {
     }
 
     private fun handlePowerRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val context = moduleContext?.androidContext ?: return NanoHTTPD.newFixedLengthResponse(
+            NanoHTTPD.Response.Status.INTERNAL_ERROR, "text/plain", "Missing context"
+        )
+
         val requested = session.parameters["state"]?.firstOrNull()?.lowercase()
         val target = when (requested) {
             "on", "wake", "true", "1" -> true
@@ -55,11 +62,9 @@ class PowerModule(private val context: Context) : PiPupModule {
         val method = if (target) "wake_activity" else PowerController.getSleepMethod(context)
 
         if (!success && !target && method == null) {
-            // Visual feedback on TV (Logic in showToast ensures it only shows when app is visible)
-            context.showToast(context.getString(R.string.error_power_permission_missing))
+            moduleContext?.showToast(moduleContext?.getString(R.string.error_power_permission_missing) ?: "")
         }
 
-        // Exact JSON structure from fork: /mnt/OpenMediaVault/Daten/github/_fork-PiPup/
         val body = Json.writeValueAsString(mapOf(
             "state" to if (target) "on" else "off",
             "ok" to success,
@@ -75,6 +80,7 @@ class PowerModule(private val context: Context) : PiPupModule {
     }
 
     override fun augmentState(state: MutableMap<String, Any?>) {
+        val context = moduleContext?.androidContext ?: return
         state["power"] = mapOf(
             "canWake" to true,
             "canSleep" to (PowerController.getSleepMethod(context) != null),

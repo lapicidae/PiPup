@@ -1,23 +1,22 @@
 package nl.rogro82.pipup.core.modules
 
-import android.content.Context
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.Permissions
-import nl.rogro82.pipup.UpdateManager
-import nl.rogro82.pipup.GitHubRelease
 import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.UpdateManager
+import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.PowerController
-import android.os.Handler
-import android.os.Looper
 
 /**
  * Module responsible for system diagnostics and permission management.
  * This module is always active and cannot be disabled.
  */
-class SystemModule(private val context: Context) : PiPupModule {
+class SystemModule : PiPupModule {
 
     companion object {
         private const val TAG = "SystemModule"
@@ -26,12 +25,16 @@ class SystemModule(private val context: Context) : PiPupModule {
     override val id: String = "system"
     override val name: String = "System Diagnostics"
 
-    override fun onEnable() {
+    private var moduleContext: ModuleContext? = null
+
+    override fun onEnable(context: ModuleContext) {
         Log.d(TAG, "System module enabled")
+        this.moduleContext = context
     }
 
     override fun onDisable() {
         Log.d(TAG, "System module disabled")
+        moduleContext = null
     }
 
     override fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? {
@@ -47,21 +50,23 @@ class SystemModule(private val context: Context) : PiPupModule {
     }
 
     private fun updateResponse(): NanoHTTPD.Response {
-        val handler = Handler(Looper.getMainLooper())
-        val settings = PiPupApp.settings
-        handler.post {
-            UpdateManager(context).checkForUpdates(settings.updateChannel == 1, object : UpdateManager.UpdateCallback {
-                override fun onUpdateAvailable(release: GitHubRelease) {
-                    UpdateManager(context).downloadAndInstall(release)
+        val context = moduleContext?.androidContext ?: return NanoHTTPD.newFixedLengthResponse("Missing context")
+        val settings = moduleContext?.settings ?: return NanoHTTPD.newFixedLengthResponse("Missing settings")
+        val scope = (context.applicationContext as? PiPupApp)?.applicationScope ?: kotlinx.coroutines.MainScope()
+
+        scope.launch(Dispatchers.Main) {
+            val updateManager = UpdateManager(context)
+            updateManager.checkForUpdates(settings.updateChannel == 1).onSuccess { release ->
+                if (release != null) {
+                    updateManager.downloadAndInstall(release)
                 }
-                override fun onNoUpdate() {}
-                override fun onError(message: String) {}
-            })
+            }
         }
         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "Update check started")
     }
 
     private fun diagnoseResponse(): NanoHTTPD.Response {
+        val context = moduleContext?.androidContext ?: return NanoHTTPD.newFixedLengthResponse("Missing context")
         return NanoHTTPD.newFixedLengthResponse(
             NanoHTTPD.Response.Status.OK,
             "application/json",
@@ -70,6 +75,8 @@ class SystemModule(private val context: Context) : PiPupModule {
     }
 
     private fun fixResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val context = moduleContext?.androidContext ?: return NanoHTTPD.newFixedLengthResponse("Missing context")
+
         val key: String? = when (val requested = session.parameters["what"]?.firstOrNull()?.lowercase()) {
             null, "", "app", "status" -> null
             "next" -> Permissions.firstMissing(context)

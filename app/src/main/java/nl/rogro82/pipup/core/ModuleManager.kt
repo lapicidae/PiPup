@@ -30,14 +30,19 @@ class ModuleManager {
      *
      * @param id The unique identifier of the module.
      * @param enabled True to enable, false to disable.
+     * @param context The module context to provide if enabling.
      */
-    fun setModuleEnabled(id: String, enabled: Boolean) {
+    fun setModuleEnabled(id: String, enabled: Boolean, context: ModuleContext? = null) {
         val module = modules[id] ?: return
         if (enabled) {
+            if (context == null) {
+                Log.e(TAG, "Cannot enable module $id without a ModuleContext")
+                return
+            }
             if (enabledModules.add(id)) {
                 Log.i(TAG, "Enabling module: $id")
                 try {
-                    module.onEnable()
+                    module.onEnable(context)
                 } catch (e: Exception) {
                     Log.e(TAG, "Failed to enable module $id", e)
                     enabledModules.remove(id)

@@ -8,9 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.resume
 
 class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
@@ -20,9 +18,10 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         val updateManager = UpdateManager(applicationContext)
 
         return try {
-            suspendCancellableCoroutine { continuation ->
-                updateManager.checkForUpdates(includeBeta, object : UpdateManager.UpdateCallback {
-                    override fun onUpdateAvailable(release: GitHubRelease) {
+            val result = updateManager.checkForUpdates(includeBeta)
+            result.fold(
+                onSuccess = { release ->
+                    if (release != null) {
                         appSettings.updateAvailableTag = release.tagName
                         appSettings.lastUpdateCheck = System.currentTimeMillis()
 
@@ -30,21 +29,16 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
                             updateManager.showUpdateNotification(release)
                             appSettings.lastNotifiedTag = release.tagName
                         }
-
-                        if (continuation.isActive) continuation.resume(Result.success())
-                    }
-
-                    override fun onNoUpdate() {
+                    } else {
                         appSettings.updateAvailableTag = ""
                         appSettings.lastUpdateCheck = System.currentTimeMillis()
-                        if (continuation.isActive) continuation.resume(Result.success())
                     }
-
-                    override fun onError(message: String) {
-                        if (continuation.isActive) continuation.resume(Result.retry())
-                    }
-                })
-            }
+                    Result.success()
+                },
+                onFailure = {
+                    Result.retry()
+                }
+            )
         } catch (_: Exception) {
             Result.failure()
         }

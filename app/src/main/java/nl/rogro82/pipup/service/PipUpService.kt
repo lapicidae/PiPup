@@ -34,6 +34,7 @@ import nl.rogro82.pipup.UpdateManager
 import nl.rogro82.pipup.UpdateWorker
 import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
+import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.ModuleManager
 import nl.rogro82.pipup.core.NotificationManager
 import nl.rogro82.pipup.core.PayloadParser
@@ -94,6 +95,17 @@ class PipUpService : Service() {
 
     private var cachedLandingPage: String? = null
 
+    /** Concrete implementation of [ModuleContext] for the background service. */
+    private val moduleContextImpl = object : ModuleContext {
+        override val settings: AppSettings get() = this@PipUpService.settings
+        override val androidContext: Context get() = this@PipUpService.applicationContext
+        override fun getSystemService(name: String): Any? = this@PipUpService.getSystemService(name)
+        override fun getPackageName(): String = this@PipUpService.packageName
+        override fun showToast(message: String) = this@PipUpService.showToast(message)
+        override fun getString(resId: Int): String = this@PipUpService.getString(resId)
+        override fun getString(resId: Int, vararg formatArgs: Any): String = this@PipUpService.getString(resId, *formatArgs)
+    }
+
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == PiPupApp.ACTION_SETTINGS_CHANGED) {
@@ -107,9 +119,9 @@ class PipUpService : Service() {
                 UpdateWorker.schedule(applicationContext, settings.updateInterval)
 
                 // 3. Update Modules
-                moduleManager.setModuleEnabled("power", settings.powerModuleEnabled)
-                moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled)
-                moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled)
+                moduleManager.setModuleEnabled("power", settings.powerModuleEnabled, moduleContextImpl)
+                moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled, moduleContextImpl)
+                moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled, moduleContextImpl)
 
                 // 4. Update Media pre-warm
                 (moduleManager.getModule("media") as? MediaModule)?.updatePreWarmState()
@@ -147,15 +159,15 @@ class PipUpService : Service() {
         payloadParser = PayloadParser(applicationContext)
 
         moduleManager = ModuleManager()
-        moduleManager.registerModule(SystemModule(this))
-        moduleManager.registerModule(PowerModule(this))
-        moduleManager.registerModule(DiscoveryModule(this))
-        moduleManager.registerModule(MediaModule(this))
+        moduleManager.registerModule(SystemModule())
+        moduleManager.registerModule(PowerModule())
+        moduleManager.registerModule(DiscoveryModule())
+        moduleManager.registerModule(MediaModule())
 
-        moduleManager.setModuleEnabled("system", true)
-        moduleManager.setModuleEnabled("power", settings.powerModuleEnabled)
-        moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled)
-        moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled)
+        moduleManager.setModuleEnabled("system", true, moduleContextImpl)
+        moduleManager.setModuleEnabled("power", settings.powerModuleEnabled, moduleContextImpl)
+        moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled, moduleContextImpl)
+        moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled, moduleContextImpl)
 
         registerReceiver(dreamReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_DREAMING_STARTED)

@@ -5,19 +5,19 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Environment
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
 import com.fasterxml.jackson.annotation.JsonProperty
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileInputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
-import kotlin.concurrent.thread
 import nl.rogro82.pipup.service.PipUpService
 
 /**
@@ -52,102 +52,79 @@ class UpdateManager(context: Context) {
     private val appContext = context.applicationContext
 
     /**
-     * Interface for update check callbacks.
-     */
-    interface UpdateCallback {
-        /**
-         * Called when a newer version is available.
-         * @param release The information about the available release.
-         */
-        fun onUpdateAvailable(release: GitHubRelease)
-        /**
-         * Called when no update is available (already on the latest version).
-         */
-        fun onNoUpdate()
-        /**
-         * Called when an error occurs during the update check.
-         * @param message The error message.
-         */
-        fun onError(message: String)
-    }
-
-    /**
-     * Checks for new updates asynchronously.
+     * Checks for new updates asynchronously using coroutines.
      * @param includeBeta Whether to include pre-release (beta) versions in the check.
-     * @param callback The callback to handle the results.
+     * @return A [Result] containing the latest [GitHubRelease] if available, null if no update.
      */
-    fun checkForUpdates(includeBeta: Boolean, callback: UpdateCallback) {
-        thread {
-            try {
-                val connection = URL(REPO_URL).openConnection() as HttpURLConnection
-                connection.requestMethod = "GET"
-                connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
-                connection.setRequestProperty("User-Agent", "PiPup-App")
-                connection.connectTimeout = 10000
-                connection.readTimeout = 10000
+    suspend fun checkForUpdates(includeBeta: Boolean): Result<GitHubRelease?> = withContext(Dispatchers.IO) {
+        try {
+            val connection = URL(REPO_URL).openConnection() as HttpURLConnection
+            connection.requestMethod = "GET"
+            connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
+            connection.setRequestProperty("User-Agent", "PiPup-App")
+            connection.connectTimeout = 10000
+            connection.readTimeout = 10000
 
-                if (connection.responseCode == 200) {
-                    val json = connection.inputStream.bufferedReader().use { it.readText() }
-                    lastCheckedAt = System.currentTimeMillis()
-                    lastError = null
+            if (connection.responseCode == 200) {
+                val json = connection.inputStream.bufferedReader().use { it.readText() }
+                lastCheckedAt = System.currentTimeMillis()
+                lastError = null
 
-                    val rootNode = Json.mapper.readTree(json)
-                    if (!rootNode.isArray) {
-                        callback.onError(appContext.getString(R.string.update_error_invalid_api))
-                        return@thread
-                    }
+                val rootNode = Json.mapper.readTree(json)
+                if (!rootNode.isArray) {
+                    return@withContext Result.failure(Exception(appContext.getString(R.string.update_error_invalid_api)))
+                }
 
-                    val releases = mutableListOf<GitHubRelease>()
-                    for (node in rootNode) {
-                        val assets = mutableListOf<GitHubAsset>()
-                        node.get("assets")?.forEach { assetNode ->
-                            assets.add(GitHubAsset(
-                                name = assetNode.get("name")?.asText() ?: "",
-                                browserDownloadUrl = assetNode.get("browser_download_url")?.asText() ?: "",
-                                contentType = assetNode.get("content_type")?.asText() ?: "",
-                                digest = assetNode.get("digest")?.asText()
-                            ))
-                        }
-
-                        releases.add(GitHubRelease(
-                            tagName = node.get("tag_name")?.asText() ?: "",
-                            name = node.get("name")?.asText(),
-                            prerelease = node.get("prerelease")?.asBoolean() ?: false,
-                            body = node.get("body")?.asText(),
-                            assets = assets
+                val releases = mutableListOf<GitHubRelease>()
+                for (node in rootNode) {
+                    val assets = mutableListOf<GitHubAsset>()
+                    node.get("assets")?.forEach { assetNode ->
+                        assets.add(GitHubAsset(
+                            name = assetNode.get("name")?.asText() ?: "",
+                            browserDownloadUrl = assetNode.get("browser_download_url")?.asText() ?: "",
+                            contentType = assetNode.get("content_type")?.asText() ?: "",
+                            digest = assetNode.get("digest")?.asText()
                         ))
                     }
 
-                    val latest = if (includeBeta) {
-                        releases.firstOrNull()
-                    } else {
-                        releases.firstOrNull { !it.prerelease }
-                    }
+                    releases.add(GitHubRelease(
+                        tagName = node.get("tag_name")?.asText() ?: "",
+                        name = node.get("name")?.asText(),
+                        prerelease = node.get("prerelease")?.asBoolean() ?: false,
+                        body = node.get("body")?.asText(),
+                        assets = assets
+                    ))
+                }
 
-                    latestVersion = latest?.tagName?.removePrefix("v")
+                val latest = if (includeBeta) {
+                    releases.firstOrNull()
+                } else {
+                    releases.firstOrNull { !it.prerelease }
+                }
 
-                    if (latest != null) {
-                        Log.d("UpdateManager", "Comparing remote: ${latest.tagName} with beta channel: $includeBeta")
-                        if (isNewer(appContext, latest.tagName)) {
-                            Log.i("UpdateManager", "New version available: ${latest.tagName}")
-                            callback.onUpdateAvailable(latest)
-                        } else {
-                            Log.i("UpdateManager", "No update available. Current version matches or is newer than ${latest.tagName}")
-                            callback.onNoUpdate()
-                        }
+                latestVersion = latest?.tagName?.removePrefix("v")
+
+                if (latest != null) {
+                    Log.d("UpdateManager", "Comparing remote: ${latest.tagName} with beta channel: $includeBeta")
+                    if (isNewer(appContext, latest.tagName)) {
+                        Log.i("UpdateManager", "New version available: ${latest.tagName}")
+                        return@withContext Result.success(latest)
                     } else {
-                        Log.w("UpdateManager", "No releases found on GitHub for selected channel (beta=$includeBeta)")
-                        callback.onNoUpdate()
+                        Log.i("UpdateManager", "No update available. Current version matches or is newer than ${latest.tagName}")
+                        return@withContext Result.success(null)
                     }
                 } else {
-                    lastError = "HTTP ${connection.responseCode}"
-                    callback.onError("HTTP ${connection.responseCode}")
+                    Log.w("UpdateManager", "No releases found on GitHub for selected channel (beta=$includeBeta)")
+                    return@withContext Result.success(null)
                 }
-            } catch (e: Exception) {
-                Log.e("UpdateManager", "Error checking for updates", e)
-                lastError = e.localizedMessage ?: appContext.getString(R.string.update_error_network)
-                callback.onError(lastError!!)
+            } else {
+                lastError = "HTTP ${connection.responseCode}"
+                return@withContext Result.failure(Exception(lastError))
             }
+        } catch (e: Exception) {
+            Log.e("UpdateManager", "Error checking for updates", e)
+            lastError = e.localizedMessage ?: appContext.getString(R.string.update_error_network)
+            Result.failure(Exception(lastError))
         }
     }
 
@@ -290,7 +267,8 @@ class UpdateManager(context: Context) {
                     Log.i("UpdateManager", "Download $downloadId successful.")
                     val digest = appSettings.pendingUpdateDigest
                     if (digest.isNotEmpty()) {
-                        verifyAndInstall(digest)
+                        val scope = (appContext as? PiPupApp)?.applicationScope ?: kotlinx.coroutines.MainScope()
+                        scope.launch { verifyAndInstall(digest) }
                     } else {
                         Log.w("UpdateManager", "No digest stored for verification, proceeding with installation.")
                         installApk(appContext)
@@ -318,26 +296,26 @@ class UpdateManager(context: Context) {
         cursor.close()
     }
 
-    private fun verifyAndInstall(digest: String) {
-        thread {
-            try {
-                val expectedHash = digest.substringAfter("sha256:").trim()
-                val apkFile = File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
-                val actualHash = calculateSha256(apkFile)
+    private suspend fun verifyAndInstall(digest: String) = withContext(Dispatchers.IO) {
+        try {
+            val expectedHash = digest.substringAfter("sha256:").trim()
+            val apkFile = File(appContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
+            val actualHash = calculateSha256(apkFile)
 
-                Log.d("UpdateManager", "Verification: expected=$expectedHash, actual=$actualHash")
+            Log.d("UpdateManager", "Verification: expected=$expectedHash, actual=$actualHash")
 
+            withContext(Dispatchers.Main) {
                 if (expectedHash.equals(actualHash, ignoreCase = true)) {
                     Log.i("UpdateManager", "SHA-256 verification successful.")
-                    Handler(Looper.getMainLooper()).post { installApk(appContext) }
+                    installApk(appContext)
                 } else {
                     Log.e("UpdateManager", "SHA-256 mismatch!")
                     appContext.showToast(appContext.getString(R.string.update_verification_failed), android.widget.Toast.LENGTH_LONG)
                 }
-            } catch (e: Exception) {
-                Log.e("UpdateManager", "Error during checksum verification", e)
-                Handler(Looper.getMainLooper()).post { installApk(appContext) }
             }
+        } catch (e: Exception) {
+            Log.e("UpdateManager", "Error during checksum verification", e)
+            withContext(Dispatchers.Main) { installApk(appContext) }
         }
     }
 

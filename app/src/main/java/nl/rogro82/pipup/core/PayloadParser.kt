@@ -21,6 +21,7 @@ class PayloadParser(private val context: Context) {
     companion object {
         private const val TAG = "PayloadParser"
         private const val CLEANUP_THRESHOLD_MS = 60 * 60 * 1000L // 1 hour
+        private const val MAX_PAYLOAD_SIZE = 1024 * 1024 // 1 MB safety limit
 
         /** Single thread executor for all cache-related file operations to avoid I/O contention. */
         private val fileExecutor = Executors.newSingleThreadExecutor()
@@ -68,10 +69,15 @@ class PayloadParser(private val context: Context) {
 
     private fun parseJson(session: NanoHTTPD.IHTTPSession): PopupProps? = try {
         val contentLength = session.headers["content-length"]?.toIntOrNull() ?: 0
-        if (contentLength > 0) {
+        if (contentLength in 1..MAX_PAYLOAD_SIZE) {
             val content = session.inputStream.readExactBytes(contentLength)
             Json.mapper.readValue(content, PopupProps::class.java)
-        } else null
+        } else {
+            if (contentLength > MAX_PAYLOAD_SIZE) {
+                Log.w(TAG, "Rejecting JSON payload: too large ($contentLength bytes)")
+            }
+            null
+        }
     } catch (e: Exception) {
         Log.e(TAG, "JSON parsing error", e)
         null
