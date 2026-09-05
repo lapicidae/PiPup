@@ -70,7 +70,69 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="48dp" />
+            android:padding="48dp">
+
+            <ViewStub
+                android:id="@+id/stub_general"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_general" />
+
+            <ViewStub
+                android:id="@+id/stub_background"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_background" />
+
+            <ViewStub
+                android:id="@+id/stub_text"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_text" />
+
+            <ViewStub
+                android:id="@+id/stub_border"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_border" />
+
+            <ViewStub
+                android:id="@+id/stub_animation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_animation" />
+
+            <ViewStub
+                android:id="@+id/stub_updates"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_updates" />
+
+            <ViewStub
+                android:id="@+id/stub_modules"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_modules" />
+
+            <ViewStub
+                android:id="@+id/stub_permissions"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_permissions" />
+
+            <ViewStub
+                android:id="@+id/stub_advanced"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_advanced" />
+
+            <ViewStub
+                android:id="@+id/stub_module_dynamic"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_module_dynamic" />
+
+        </LinearLayout>
     </ScrollView>
 
     <!-- Live Preview Container (Truly an overlay) -->

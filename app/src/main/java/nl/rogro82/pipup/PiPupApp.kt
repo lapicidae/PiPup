@@ -9,6 +9,7 @@ import nl.rogro82.pipup.core.modules.DiscoveryModule
 import nl.rogro82.pipup.core.modules.MediaModule
 import nl.rogro82.pipup.core.modules.PowerModule
 import nl.rogro82.pipup.core.modules.SystemModule
+import nl.rogro82.pipup.core.modules.DebugModule
 
 class PiPupApp : Application() {
 
@@ -34,6 +35,10 @@ class PiPupApp : Application() {
         moduleManager.registerModule(PowerModule())
         moduleManager.registerModule(DiscoveryModule())
         moduleManager.registerModule(MediaModule())
+
+        if (BuildConfig.DEBUG) {
+            moduleManager.registerModule(DebugModule())
+        }
 
         // Apply language and theme as early as possible using optimized unified logic
         applyAppLocaleAndTheme(settings.language, settings.appTheme)

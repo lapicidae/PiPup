@@ -37,7 +37,6 @@ import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.core.ActivationStrategy
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.NotificationManager
-import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.core.WebServer
 import nl.rogro82.pipup.getLocalizedContext
 import nl.rogro82.pipup.readExactBytes
@@ -69,8 +68,10 @@ class PipUpService : Service() {
     private val settings = PiPupApp.settings
 
     private lateinit var webServer: WebServer
-    private lateinit var notificationManager: NotificationManager
-    private lateinit var payloadParser: PayloadParser
+    private val notificationManager by lazy {
+        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
+        NotificationManager(this, wm)
+    }
     /** The module manager for this service. */
     val moduleManager by lazy { (application as PiPupApp).moduleManager }
 
@@ -140,10 +141,6 @@ class PipUpService : Service() {
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
-
-        val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        notificationManager = NotificationManager(this, wm)
-        payloadParser = PayloadParser(applicationContext)
 
         moduleManager.initialize(moduleContextImpl)
 

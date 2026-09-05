@@ -122,3 +122,25 @@ Closes the current notification. If an `id` is provided, the popup is only close
 `GET /permissions/diagnose`
 
 Returns a detailed report on system permissions and intent resolution. Used for troubleshooting restricted devices.
+
+---
+
+### 6. Debug & Development (Debug Builds Only)
+
+These endpoints are only available when the application is compiled in `debug` mode and are intended for testing and performance tuning.
+
+#### Get Memory Statistics
+`GET /debug/memory`
+
+Returns a snapshot of the current memory usage (Java Heap, Native Heap) and module statuses.
+
+#### Set Idle Timeout
+`POST /debug/idle?ms=<milliseconds>`
+
+Sets the timeout duration after which Eco-mode modules (like WebView) are automatically unloaded.
+- **Example:** `POST /debug/idle?ms=15000` (Sets timeout to 15 seconds)
+
+#### Force Immediate Unload
+`POST /debug/unload`
+
+Triggers an immediate cleanup of all dormant/Eco modules, destroying active WebViews and freeing associated resources.

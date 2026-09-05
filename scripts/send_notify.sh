@@ -195,6 +195,32 @@ monitor_memory() {
 }
 
 #######################################
+# Sends a debug command to trigger an immediate module unload.
+# Globals:
+#   PORT
+#   CLR_MONITOR
+#   CLR_RESET
+#   CLR_SUCCESS
+#   CLR_ERROR
+# Arguments:
+#   target_ip: String IP address of the target server.
+#######################################
+send_debug_unload() {
+  local target_ip="${1}"
+  local endpoint="http://${target_ip}:${PORT}/debug/unload"
+
+  printf "\n%b[DEBUG] Requesting forced module unload...%b " "${CLR_MONITOR}" "${CLR_RESET}"
+  local code
+  code=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${endpoint}" || printf "000")
+
+  if [[ "${code}" == "200" ]]; then
+    printf "%bOK%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
+  else
+    printf "%bFAILED (HTTP %s)%b\n" "${CLR_ERROR}" "${code}" "${CLR_RESET}"
+  fi
+}
+
+#######################################
 # Analyzes the collected memory log and prints a summary.
 # Globals:
 #   MEM_LOG_FILE
@@ -273,8 +299,17 @@ finish_monitoring() {
   local is_mon="${1}"
   local mon_pid="${2}"
   local duration="${3}"
+  local trigger_unload="${4:-false}"
+  local target_ip="${5:-}"
 
   [[ "${is_mon}" != "true" ]] && return
+
+  # Trigger unload before waiting for recovery if requested
+  if [[ "${trigger_unload}" == "true" && -n "${target_ip}" ]]; then
+      # Small buffer for last popup animation
+      sleep 1.5
+      send_debug_unload "${target_ip}"
+  fi
 
   local now
   now=$(date +%s)
@@ -1110,7 +1145,7 @@ Options:
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
   -g    Gallery mode: Systematic walkthrough of all animations and positions
-  -m    Monitor RAM usage in background. Optional: seconds (default: auto)
+  -m    Monitor RAM usage in background. Optional: seconds, and 'u' to trigger unload (e.g. -m 60 u)
   -k    Stop the active WHEP pipeline and server
   -h, --help, -?  Show this help message and exit
 EOF
@@ -1155,6 +1190,7 @@ main() {
   local server_only="false"
   local overwrite="false"
   local monitor_mem="false"
+  local trigger_unload="false"
   local USE_CACHE="true"
   local monitor_duration="auto"
   local repeat_count=1
@@ -1184,15 +1220,16 @@ main() {
         ;;
       m)
         monitor_mem="true"
-        # If the next argument doesn't start with a hyphen, use it as duration
-        local next_val="${!OPTIND:-}"
-        if [[ -n "${next_val}" && "${next_val}" =~ ^[0-9]+$ ]]; then
-          monitor_duration="${next_val}"
+        # Peek at multiple optional arguments: duration and/or 'u'
+        while [[ ${!OPTIND:-} =~ ^([0-9]+|auto|u|unload)$ ]]; do
+          local val="${!OPTIND}"
+          if [[ "${val}" =~ ^[0-9]+$ || "${val}" == "auto" ]]; then
+            monitor_duration="${val}"
+          elif [[ "${val}" == "u" || "${val}" == "unload" ]]; then
+            trigger_unload="true"
+          fi
           OPTIND=$((OPTIND + 1))
-        elif [[ "${next_val}" == "auto" ]]; then
-          monitor_duration="auto"
-          OPTIND=$((OPTIND + 1))
-        fi
+        done
         ;;
       w)
         force_start_webrtc="true"
@@ -1530,7 +1567,7 @@ main() {
     fi
 
     printf "\n[SYSTEM] All %d requests processed.\n" "${STRESS_ITERATIONS}"
-    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}"
+    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}" "${trigger_unload}" "${target_ip}"
     printf "\n[STRESS] Execution wave completed successfully.\n"
   }
 
@@ -1563,7 +1600,7 @@ main() {
       done
     done
 
-    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}"
+    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}" "${trigger_unload}" "${target_ip}"
     return 0
   fi
 
@@ -1656,7 +1693,7 @@ main() {
     done
   fi
 
-  finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}"
+  finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}" "${trigger_unload}" "${target_ip}"
 }
 
 main "$@"

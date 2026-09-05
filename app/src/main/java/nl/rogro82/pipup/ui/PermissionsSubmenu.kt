@@ -3,7 +3,6 @@ package nl.rogro82.pipup.ui
 import android.content.Context
 import android.graphics.Typeface
 import android.view.View
-import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -29,9 +28,12 @@ class PermissionsSubmenu(
     private val refreshTask = object : Runnable {
         override fun run() {
             val root = rootView
-            // Only continue if we are still the active submenu and the view is attached
-            if (root != null && root.isAttachedToWindow && settingsActivity?.getCurrentSubmenuLayout() == R.layout.submenu_permissions) {
-                refreshPermissionList(root)
+            // Only continue if we are still the active submenu.
+            // We wait for attachment if it hasn't happened yet.
+            if (root != null && settingsActivity?.getCurrentSubmenuLayout() == R.layout.submenu_permissions) {
+                if (root.isAttachedToWindow) {
+                    refreshPermissionList(root)
+                }
                 handler.postDelayed(this, 2000)
             } else {
                 handler.removeCallbacks(this)
@@ -58,11 +60,9 @@ class PermissionsSubmenu(
     }
 
     private fun refreshPermissionList(root: View) {
-        val container = root as? ViewGroup ?: return
-        val submenuRoot = container.getChildAt(0) as? LinearLayout ?: return
-
-        // Safety check: Is this actually our permissions layout?
-        if (submenuRoot.id != R.id.permissions_root) return
+        // Robustness: Handle both the direct root (from ViewStub) or its container
+        val submenuRoot: LinearLayout? = root.findViewById(R.id.permissions_root) ?: (root as? LinearLayout)
+        if (submenuRoot == null || (submenuRoot.id != R.id.permissions_root && root.id != R.id.permissions_root)) return
 
         // Use a signature to avoid unnecessary UI rebuilds
         val sleepMethod = PowerController.getSleepMethod(context)

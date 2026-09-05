@@ -395,6 +395,7 @@ class NotificationManager(
                 }
                 overlay?.removeView(currentView)
                 currentView.cleanup()
+
                 checkNextAfterRemovalLocked()
             }
         }

@@ -10,12 +10,17 @@ class ModuleManager {
 
     companion object {
         private const val TAG = "ModuleManager"
-        private const val IDLE_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes
+        private const val DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes
     }
 
     private val modules = mutableMapOf<String, PiPupModule>()
     private val activeModules = mutableSetOf<String>()
     private val dormantModules = mutableSetOf<String>() // Eco mode: logically on, but not initialized
+
+    /**
+     * The timeout in milliseconds before an Eco module is considered idle and released.
+     */
+    var idleTimeoutMs: Long = DEFAULT_IDLE_TIMEOUT_MS
 
     private var moduleContext: ModuleContext? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
@@ -98,6 +103,26 @@ class ModuleManager {
         lastActivityMap[id] = android.os.SystemClock.elapsedRealtime()
     }
 
+    /**
+     * Forces an immediate check and cleanup of idle modules, regardless of the timeout.
+     */
+    fun forceIdleCleanup() {
+        Log.i(TAG, "Forced idle cleanup triggered")
+        val context = moduleContext ?: return
+
+        activeModules.toList().forEach { id ->
+            val module = modules[id] ?: return@forEach
+            // Only Eco modules are eligible for idle cleanup
+            if (context.settings.getActivationStrategy(id) == ActivationStrategy.ECO) {
+                Log.i(TAG, "Module $id forced to idle, releasing resources")
+                module.onIdle()
+                activeModules.remove(id)
+                dormantModules.add(id)
+                lastActivityMap.remove(id)
+            }
+        }
+    }
+
     private fun checkIdleModules() {
         val now = android.os.SystemClock.elapsedRealtime()
         val context = moduleContext ?: return
@@ -107,7 +132,7 @@ class ModuleManager {
             // Only Eco modules are eligible for idle cleanup
             if (context.settings.getActivationStrategy(id) == ActivationStrategy.ECO) {
                 val lastActivity = lastActivityMap[id] ?: 0L
-                if (now - lastActivity > IDLE_TIMEOUT_MS) {
+                if (now - lastActivity > idleTimeoutMs) {
                     Log.i(TAG, "Module $id is idle, releasing resources")
                     module.onIdle()
                     activeModules.remove(id)

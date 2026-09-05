@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!--
+        LeakCanary Configuration
+        Allows LeakCanary to run in the 'profiling' build type.
+        R8 minification in non-debuggable builds can trigger a safety crash
+        which is bypassed by this flag.
+    -->
+    <bool name="leak_canary_allow_in_non_debuggable_build" tools:ignore="UnusedResources">true</bool>
+</resources>

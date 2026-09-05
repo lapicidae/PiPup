@@ -64,6 +64,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private val submenuControllers = mutableMapOf<Int, SubmenuController>()
     private val moduleControllers = mutableMapOf<String, SubmenuController>()
+    private val inflatedSubmenus = mutableMapOf<Int, View>()
 
     private val coreRailItems = listOf(
         NavItem(101, R.string.settings_nav_general, R.drawable.ic_general_style, 10, R.layout.submenu_general),
@@ -329,8 +330,24 @@ class SettingsActivity : AppCompatActivity() {
         val layoutRes = if (item.moduleId != null) R.layout.submenu_module_dynamic else item.layoutRes
         currentLayoutRes = layoutRes
 
-        binding.submenuContainer.removeAllViews()
-        val root = LayoutInflater.from(this).inflate(layoutRes, binding.submenuContainer, true)
+        val stubId = getStubIdForNavItem(item)
+
+        // 1. Hide all previously inflated views
+        inflatedSubmenus.values.forEach { it.visibility = View.GONE }
+
+        // 2. Inflate or just show the target view
+        val root = inflatedSubmenus.getOrPut(stubId) {
+            val stub = findViewById<android.view.ViewStub>(stubId)
+            if (stub != null) {
+                stub.inflate()
+            } else {
+                // Fallback: If stub is missing (already inflated but map lost it?),
+                // try to find the view by its inflated ID if possible.
+                // For simplicity, we assume the map is consistent.
+                binding.submenuContainer.findViewById(R.id.permissions_root) ?: View(this)
+            }
+        }
+        root.visibility = View.VISIBLE
 
         binding.settingsScroll.post { binding.settingsScroll.scrollTo(0, 0) }
 
@@ -338,6 +355,23 @@ class SettingsActivity : AppCompatActivity() {
         setupSubmenuFocus(item.id)
         updateNavAppearance()
         updatePreview(animate = false)
+    }
+
+    private fun getStubIdForNavItem(item: NavItem): Int {
+        return if (item.moduleId != null) {
+            R.id.stub_module_dynamic
+        } else when (item.id) {
+            101 -> R.id.stub_general
+            102 -> R.id.stub_background
+            103 -> R.id.stub_text
+            104 -> R.id.stub_border
+            105 -> R.id.stub_animation
+            106 -> R.id.stub_updates
+            107 -> R.id.stub_modules
+            108 -> R.id.stub_permissions
+            109 -> R.id.stub_advanced
+            else -> R.id.stub_module_dynamic
+        }
     }
 
     /**
@@ -390,13 +424,16 @@ class SettingsActivity : AppCompatActivity() {
 
     /**
      * Configures the focus navigation between the navigation rail and the submenu content.
-     * Call this after dynamically adding or removing focusable views in a submenu.
      * @param targetNavId The ID of the currently active navigation rail item. Defaults to current if -1.
      */
     fun setupSubmenuFocus(targetNavId: Int = -1) {
         val navId = if (targetNavId == -1) currentNavId else targetNavId
         if (navId == -1) return
-        val container = binding.submenuContainer.getChildAt(0) as? ViewGroup ?: return
+
+        val item = (coreRailItems + dynamicRailItems).find { it.id == navId } ?: return
+        val stubId = getStubIdForNavItem(item)
+        val container = inflatedSubmenus[stubId] as? ViewGroup ?: return
+
         val focusableChildren = (0 until container.childCount).asSequence()
             .map { container.getChildAt(it) }
             .filter { it.isFocusable && it.isVisible }
@@ -430,7 +467,7 @@ class SettingsActivity : AppCompatActivity() {
                 if (f) {
                     // Gold Standard: Smooth Focus Centering (Pivot Scrolling)
                     val scroll = binding.settingsScroll
-                    val container = binding.submenuContainer
+                    val c = binding.submenuContainer
 
                     val rect = android.graphics.Rect()
                     v.getDrawingRect(rect)
@@ -441,7 +478,7 @@ class SettingsActivity : AppCompatActivity() {
                         // Pivot at 30% from the top
                         val pivotY = viewportHeight * 0.3f
                         val targetScrollY = (rect.top - pivotY).toInt()
-                        val maxScroll = (container.height - viewportHeight).coerceAtLeast(0)
+                        val maxScroll = (c.height - viewportHeight).coerceAtLeast(0)
                         scroll.smoothScrollTo(0, targetScrollY.coerceIn(0, maxScroll))
                     }
                 }
@@ -462,8 +499,14 @@ class SettingsActivity : AppCompatActivity() {
      * Focuses the first focusable child in the currently active submenu.
      */
     fun focusFirstInSubmenu() {
-        val container = binding.submenuContainer.getChildAt(0) as? ViewGroup ?: return
-        (0 until container.childCount).map { container.getChildAt(it) }.firstOrNull { it.isFocusable && it.isVisible }?.requestFocus()
+        val item = (coreRailItems + dynamicRailItems).find { it.id == currentNavId } ?: return
+        val stubId = getStubIdForNavItem(item)
+        val container = inflatedSubmenus[stubId] as? ViewGroup ?: return
+
+        (0 until container.childCount).asSequence()
+            .map { container.getChildAt(it) }
+            .firstOrNull { it.isFocusable && it.isVisible }
+            ?.requestFocus()
     }
 
     private fun updatePreview(animate: Boolean = false) {
@@ -509,13 +552,14 @@ class SettingsActivity : AppCompatActivity() {
                     getControllerForNav(currentNavId).updatePreviewPosition(focus)
                 } else {
                     // Ensure default position when focused on the navigation rail
-                    val params = existingPreview.layoutParams as FrameLayout.LayoutParams
-                    val defaultGravity = Gravity.BOTTOM or Gravity.END
-                    if (params.gravity != defaultGravity) {
-                        params.gravity = defaultGravity
-                        val m = (resources.displayMetrics.density * 10).toInt()
-                        params.setMargins(0, m, m, m)
-                        existingPreview.layoutParams = params
+                    (existingPreview.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+                        val defaultGravity = Gravity.BOTTOM or Gravity.END
+                        if (params.gravity != defaultGravity) {
+                            params.gravity = defaultGravity
+                            val m = (resources.displayMetrics.density * 10).toInt()
+                            params.setMargins(0, m, m, m)
+                            existingPreview.layoutParams = params
+                        }
                     }
                 }
             } else {

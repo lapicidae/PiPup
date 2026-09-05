@@ -63,7 +63,7 @@ abstract class SubmenuBase(
         val shouldBeAtTop = location[1] > screenHeight * 0.6
 
         val popup = previewArea.getChildAt(0) ?: return
-        val params = popup.layoutParams as FrameLayout.LayoutParams
+        val params = popup.layoutParams as? FrameLayout.LayoutParams ?: return
         val newGravity = (if (shouldBeAtTop) Gravity.TOP else Gravity.BOTTOM) or Gravity.END
 
         if (params.gravity != newGravity) {

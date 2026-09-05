@@ -132,7 +132,7 @@ android {
 
         profiling {
             initWith release
-            debuggable true
+            debuggable false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'profiling-rules.pro'
             signingConfig signingConfigs.debug
             matchingFallbacks = ['release']

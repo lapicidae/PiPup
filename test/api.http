@@ -7,19 +7,19 @@
 # NOTE: For Emulator testing, run this command in your terminal first:
 # adb forward tcp:7979 tcp:7979
 
-### 1. Get Server State (JSON structure check)
+### Get Server State (JSON structure check)
 GET {{baseUrl}}/state
 
-### 2. Power Control: Turn ON
+### Power Control: Turn ON
 POST {{baseUrl}}/power?state=on
 
-### 3. Power Control: Turn OFF
+### Power Control: Turn OFF
 POST {{baseUrl}}/power?state=off
 
-### 4. Diagnostics: Permissions Report
+### Diagnostics: Permissions Report
 GET {{baseUrl}}/permissions/diagnose
 
-### 5. Send a standard notification (Image)
+### Send a standard notification (Image)
 POST {{baseUrl}}/notify
 Content-Type: application/json
 
@@ -41,7 +41,7 @@ Content-Type: application/json
   }
 }
 
-### 6. Send a standard notification (Web)
+### Send a standard notification (Web)
 POST {{baseUrl}}/notify
 Content-Type: application/json
 
@@ -59,7 +59,7 @@ Content-Type: application/json
   }
 }
 
-### 7. Test Settings Transfer (STABILITY TEST - DO NOT CHANGE VALUES)
+### Test Settings Transfer (STABILITY TEST - DO NOT CHANGE VALUES)
 POST {{baseUrl}}/settings
 Content-Type: application/json
 
@@ -99,8 +99,22 @@ Content-Type: application/json
   "unknown_future_setting": "This unknown field should be ignored by the app without crashing"
 }
 
-### 8. Pull Current Settings
+### Pull Current Settings
 GET {{baseUrl}}/settings
 
-### 9. Cancel current popup
+### Cancel current popup
 POST {{baseUrl}}/cancel
+
+
+# ---------------------------------------------------------
+# DEBUG & DIAGNOSTICS (Only available in Debug builds)
+# ---------------------------------------------------------
+
+### Get Memory Statistics
+GET {{baseUrl}}/debug/memory
+
+### Set Idle Timeout (e.g., 10 seconds)
+POST {{baseUrl}}/debug/idle?ms=10000
+
+### Force Immediate Unload (Eco modules cleanup)
+POST {{baseUrl}}/debug/unload
