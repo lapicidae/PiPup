@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import androidx.core.content.edit
 import androidx.core.graphics.toColorInt
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties
+import nl.rogro82.pipup.core.ActivationStrategy
 import java.util.UUID
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
@@ -40,6 +41,85 @@ class AppSettings(context: Context) {
                 UUID.randomUUID().toString().also { newId ->
                     idPrefs.edit { putString("device_id", newId) }
                 }
+            }
+        }
+    }
+
+    /**
+     * Retrieves the activation strategy for a specific module.
+     */
+    fun getActivationStrategy(moduleId: String): Int {
+        val legacyKey = when (moduleId) {
+            "power" -> "power_module_enabled"
+            "discovery" -> "discovery_module_enabled"
+            "media" -> "media_module_enabled"
+            else -> null
+        }
+
+        val default = if (moduleId == "system") ActivationStrategy.PERFORMANCE else ActivationStrategy.ECO
+        val strategy = prefs.getInt("module_strategy_$moduleId", -1)
+
+        if (strategy != -1) return strategy
+
+        // Migration from legacy boolean flags
+        if (legacyKey != null && prefs.contains(legacyKey)) {
+            val enabled = prefs.getBoolean(legacyKey, true)
+            return if (enabled) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF
+        }
+
+        return default
+    }
+
+    /**
+     * Sets the activation strategy for a specific module.
+     * Remembers the last non-OFF strategy to restore it upon re-activation.
+     */
+    fun setActivationStrategy(moduleId: String, strategy: Int) {
+        prefs.edit {
+            putInt("module_strategy_$moduleId", strategy)
+            if (strategy != ActivationStrategy.OFF) {
+                putInt("module_preferred_strategy_$moduleId", strategy)
+            }
+        }
+    }
+
+    /**
+     * Retrieves the last used active strategy (Eco/Performance) for a module.
+     * Defaults to PERFORMANCE for System, ECO for others.
+     */
+    fun getPreferredStrategy(moduleId: String): Int {
+        val default = if (moduleId == "system") ActivationStrategy.PERFORMANCE else ActivationStrategy.ECO
+        return prefs.getInt("module_preferred_strategy_$moduleId", default)
+    }
+
+    /**
+     * Generic method to retrieve a module-specific setting.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun <T> getModuleSetting(moduleId: String, key: String, defaultValue: T): T {
+        val fullKey = "mod_${moduleId}_$key"
+        return when (defaultValue) {
+            is Boolean -> prefs.getBoolean(fullKey, defaultValue) as T
+            is Int -> prefs.getInt(fullKey, defaultValue) as T
+            is Float -> prefs.getFloat(fullKey, defaultValue) as T
+            is Long -> prefs.getLong(fullKey, defaultValue) as T
+            is String -> (prefs.getString(fullKey, defaultValue) ?: defaultValue) as T
+            else -> defaultValue
+        }
+    }
+
+    /**
+     * Generic method to store a module-specific setting.
+     */
+    fun setModuleSetting(moduleId: String, key: String, value: Any) {
+        val fullKey = "mod_${moduleId}_$key"
+        prefs.edit {
+            when (value) {
+                is Boolean -> putBoolean(fullKey, value)
+                is Int -> putInt(fullKey, value)
+                is Float -> putFloat(fullKey, value)
+                is Long -> putLong(fullKey, value)
+                is String -> putString(fullKey, value)
             }
         }
     }
@@ -83,20 +163,28 @@ class AppSettings(context: Context) {
     var mediaTimeout by IntPref("media_timeout", 10)
     /** The number of retries for failed media loads. */
     var mediaRetries by IntPref("media_retries", 3)
-    /** Whether to initialize the WebView engine in the background for faster loading. */
-    var preWarmWebView by BooleanPref("pre_warm_webview", false)
 
     // System / App
     /** Enables additional technical settings and information. */
     var advancedMode by BooleanPref("advanced_mode", false)
     /** The application theme (0: Dark, 1: Light). */
     var appTheme by IntPref("app_theme", 0)
-    /** Whether the power control module is enabled. */
-    var powerModuleEnabled by BooleanPref("power_module_enabled", false)
-    /** Whether the network discovery module is enabled. */
-    var discoveryModuleEnabled by BooleanPref("discovery_module_enabled", true)
-    /** Whether the rich media (WebView/WHEP) module is enabled. */
-    var mediaModuleEnabled by BooleanPref("media_module_enabled", true)
+
+    /** Whether the power control module is enabled. (Legacy, mapped to strategy) */
+    var powerModuleEnabled: Boolean
+        get() = getActivationStrategy("power") != ActivationStrategy.OFF
+        set(value) = setActivationStrategy("power", if (value) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF)
+
+    /** Whether the network discovery module is enabled. (Legacy, mapped to strategy) */
+    var discoveryModuleEnabled: Boolean
+        get() = getActivationStrategy("discovery") != ActivationStrategy.OFF
+        set(value) = setActivationStrategy("discovery", if (value) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF)
+
+    /** Whether the rich media (WebView/WHEP) module is enabled. (Legacy, mapped to strategy) */
+    var mediaModuleEnabled: Boolean
+        get() = getActivationStrategy("media") != ActivationStrategy.OFF
+        set(value) = setActivationStrategy("media", if (value) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF)
+
     /** The preferred language for the application UI. */
     var language by StringPref("language", "default")
     /** The timestamp of the last daily permission nag. */
@@ -172,7 +260,6 @@ class AppSettings(context: Context) {
         val animationExit: Boolean,
         val mediaTimeout: Int,
         val mediaRetries: Int,
-        val preWarmWebView: Boolean,
         val appTheme: Int,
         val advancedMode: Boolean,
         val powerModuleEnabled: Boolean,
@@ -216,7 +303,6 @@ class AppSettings(context: Context) {
             "animationExit" to animationExit,
             "mediaTimeout" to mediaTimeout,
             "mediaRetries" to mediaRetries,
-            "preWarmWebView" to preWarmWebView,
             "appTheme" to appTheme,
             "advancedMode" to advancedMode,
             "powerModuleEnabled" to powerModuleEnabled,
@@ -261,7 +347,6 @@ class AppSettings(context: Context) {
             putBoolean("animation_exit", data.animationExit)
             putInt("media_timeout", data.mediaTimeout.coerceIn(1, 60))
             putInt("media_retries", data.mediaRetries.coerceIn(0, 10))
-            putBoolean("pre_warm_webview", data.preWarmWebView)
             putInt("app_theme", data.appTheme.coerceIn(0, 1))
             putBoolean("advanced_mode", data.advancedMode)
             putBoolean("power_module_enabled", data.powerModuleEnabled)
@@ -320,6 +405,28 @@ class AppSettings(context: Context) {
         cachedFullBgColor = null
         // Re-initialize default values that were set in init
         updateChannel = if (isBetaBuild) 1 else 0
+    }
+
+    /**
+     * Applies user-configured default settings to a PopupProps instance.
+     */
+    fun applyDefaults(props: PopupProps): PopupProps {
+        return props.copy(
+            backgroundColor = if (props.backgroundColor == "#CC000000") getFullBackgroundColor() else props.backgroundColor,
+            borderColor = if (props.borderColor == "#00000000") borderColor else props.borderColor,
+            borderRadius = if (props.borderRadius == 0) borderRadius else props.borderRadius,
+            borderWidth = if (props.borderWidth == 0) borderWidth else props.borderWidth,
+            titleColor = if (props.titleColor == "#FFFFFF") titleColor else props.titleColor,
+            titleSize = if (props.titleSize == 24f) titleSize else props.titleSize,
+            messageColor = if (props.messageColor == "#FFFFFF") messageColor else props.messageColor,
+            messageSize = if (props.messageSize == 16f) messageSize else props.messageSize,
+            titleAlignment = if (props.titleAlignment == 0) titleAlignment else props.titleAlignment,
+            messageAlignment = if (props.messageAlignment == 0) messageAlignment else props.messageAlignment,
+            mediaPosition = props.mediaPosition ?: mediaPosition,
+            animationType = if (props.animationType == 0) animationType else props.animationType,
+            animationDuration = if (props.animationDuration == 500) animationDuration else props.animationDuration,
+            animationExit = props.animationExit || animationExit
+        )
     }
 
     private class StringPref(val key: String, val defaultValue: String, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, String> {

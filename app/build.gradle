@@ -129,6 +129,14 @@ android {
             // Minification disabled for easier debugging during development
             minifyEnabled = false
         }
+
+        profiling {
+            initWith release
+            debuggable true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro', 'profiling-rules.pro'
+            signingConfig signingConfigs.debug
+            matchingFallbacks = ['release']
+        }
     }
 
     buildFeatures {
@@ -208,6 +216,11 @@ dependencies {
     implementation libs.media3.exoplayer
     implementation libs.media3.ui
     implementation libs.media3.rtsp
+
+    debugImplementation libs.leakcanary
+    debugImplementation libs.leakcanary.studio
+    profilingImplementation libs.leakcanary
+    profilingImplementation libs.leakcanary.studio
 
     testImplementation libs.junit
     androidTestImplementation libs.androidx.test.ext.junit

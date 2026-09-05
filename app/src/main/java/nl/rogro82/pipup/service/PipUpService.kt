@@ -34,15 +34,11 @@ import nl.rogro82.pipup.UpdateManager
 import nl.rogro82.pipup.UpdateWorker
 import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
+import nl.rogro82.pipup.core.ActivationStrategy
 import nl.rogro82.pipup.core.ModuleContext
-import nl.rogro82.pipup.core.ModuleManager
 import nl.rogro82.pipup.core.NotificationManager
 import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.core.WebServer
-import nl.rogro82.pipup.core.modules.DiscoveryModule
-import nl.rogro82.pipup.core.modules.MediaModule
-import nl.rogro82.pipup.core.modules.PowerModule
-import nl.rogro82.pipup.core.modules.SystemModule
 import nl.rogro82.pipup.getLocalizedContext
 import nl.rogro82.pipup.readExactBytes
 import nl.rogro82.pipup.registerProtectedReceiver
@@ -69,21 +65,16 @@ class PipUpService : Service() {
         fun getInstance(): PipUpService? = instance
     }
 
-    /** Returns the module manager for this service. */
-    fun getModuleManager(): ModuleManager = moduleManager
-
     private val handler = Handler(Looper.getMainLooper())
     private val settings = PiPupApp.settings
 
     private lateinit var webServer: WebServer
     private lateinit var notificationManager: NotificationManager
     private lateinit var payloadParser: PayloadParser
-    private lateinit var moduleManager: ModuleManager
+    /** The module manager for this service. */
+    val moduleManager by lazy { (application as PiPupApp).moduleManager }
 
-    private val popupsShown = java.util.concurrent.atomic.AtomicLong(0)
     private val startedAt = SystemClock.elapsedRealtime()
-    @Volatile private var lastPopup: PopupProps? = null
-    @Volatile private var lastPopupAt: Long = 0L
 
     @Volatile private var dreaming = false
     private val dreamReceiver = object : BroadcastReceiver() {
@@ -98,6 +89,7 @@ class PipUpService : Service() {
     /** Concrete implementation of [ModuleContext] for the background service. */
     private val moduleContextImpl = object : ModuleContext {
         override val settings: AppSettings get() = this@PipUpService.settings
+        override val notificationManager: NotificationManager get() = this@PipUpService.notificationManager
         override val androidContext: Context get() = this@PipUpService.applicationContext
         override fun getSystemService(name: String): Any? = this@PipUpService.getSystemService(name)
         override fun getPackageName(): String = this@PipUpService.packageName
@@ -118,15 +110,10 @@ class PipUpService : Service() {
                 // 2. Update Worker schedule
                 UpdateWorker.schedule(applicationContext, settings.updateInterval)
 
-                // 3. Update Modules
-                moduleManager.setModuleEnabled("power", settings.powerModuleEnabled, moduleContextImpl)
-                moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled, moduleContextImpl)
-                moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled, moduleContextImpl)
+                // 3. Update Modules from latest strategies
+                moduleManager.initialize(moduleContextImpl)
 
-                // 4. Update Media pre-warm
-                (moduleManager.getModule("media") as? MediaModule)?.updatePreWarmState()
-
-                // 5. Update Notification
+                // 4. Update Notification
                 updateForegroundNotification(settings.language)
             }
         }
@@ -158,16 +145,7 @@ class PipUpService : Service() {
         notificationManager = NotificationManager(this, wm)
         payloadParser = PayloadParser(applicationContext)
 
-        moduleManager = ModuleManager()
-        moduleManager.registerModule(SystemModule())
-        moduleManager.registerModule(PowerModule())
-        moduleManager.registerModule(DiscoveryModule())
-        moduleManager.registerModule(MediaModule())
-
-        moduleManager.setModuleEnabled("system", true, moduleContextImpl)
-        moduleManager.setModuleEnabled("power", settings.powerModuleEnabled, moduleContextImpl)
-        moduleManager.setModuleEnabled("discovery", settings.discoveryModuleEnabled, moduleContextImpl)
-        moduleManager.setModuleEnabled("media", settings.mediaModuleEnabled, moduleContextImpl)
+        moduleManager.initialize(moduleContextImpl)
 
         registerReceiver(dreamReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_DREAMING_STARTED)
@@ -222,45 +200,34 @@ class PipUpService : Service() {
         val uri = session.uri.lowercase()
         val method = session.method
 
-        // 1. Check if power module is enabled before processing its request
-        if (uri == "/power" && !settings.powerModuleEnabled) {
+        // 1. Check if module-specific routes are blocked by activation strategy
+        if (uri == "/power" && settings.getActivationStrategy("power") == ActivationStrategy.OFF) {
              val localizedContext = getLocalizedContext(settings.language)
              val moduleName = localizedContext.getString(R.string.settings_module_power)
              showToast(localizedContext.getString(R.string.error_module_disabled, moduleName))
              return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Module disabled")
         }
 
-        // 2. Dispatch to ModuleManager
+        // 2. Dispatch to ModuleManager (Handles core API via SystemModule + other modules)
         val moduleResponse = moduleManager.handleRequest(session)
         if (moduleResponse != null) return moduleResponse
 
-        // 3. Core API Fallback
+        // 3. Fallback for unhandled routes
         return try {
             when (uri) {
                 "/" -> {
                     if (method == NanoHTTPD.Method.GET) {
                         handleLandingPage()
                     } else {
-                        // Handle POST/PUT to root as a notification for compatibility
-                        processNotify(session)
+                        // Forward to /notify logic via ModuleManager if possible,
+                        // but root is a special case.
+                        NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, "text/plain", "Not Found")
                     }
                 }
-                "/notify", "/api/notify" -> processNotify(session)
                 "/state" -> {
                     if (method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST) {
                         stateResponse()
                     } else NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
-                }
-                "/cancel" -> {
-                    val id = session.parameters["id"]?.firstOrNull()
-                    handler.post {
-                        val current = notificationManager.getCurrentProps()
-                        if (id == null || current?.id == id) {
-                            notificationManager.cancelAll()
-                            lastPopupAt = 0L // Reset timing on manual cancel
-                        }
-                    }
-                    ok("Cancel requested")
                 }
                 "/settings" -> handleSettingsRequest(session)
                 "/favicon.svg", "/favicon.ico" -> handleFavicon()
@@ -281,29 +248,6 @@ class PipUpService : Service() {
         }
     }
 
-    private fun processNotify(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        val props = payloadParser.parse(session) ?: return invalidRequest("failed to parse input")
-
-        // Check if media module is required and enabled
-        if (!settings.mediaModuleEnabled && (props.media is PopupProps.Media.Web || props.media is PopupProps.Media.Whep)) {
-            val localizedContext = getLocalizedContext(settings.language)
-            val moduleName = localizedContext.getString(R.string.settings_module_media)
-            showToast(localizedContext.getString(R.string.error_module_disabled, moduleName))
-            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Media module disabled")
-        }
-
-        val finalProps = applySettingsDefaults(props)
-
-        // Asynchronous hand-off to notification manager to avoid blocking NanoHTTPD threads
-        // or timing out on the main thread during heavy load.
-        popupsShown.incrementAndGet()
-        lastPopup = finalProps
-        lastPopupAt = SystemClock.elapsedRealtime()
-        notificationManager.enqueue(finalProps)
-
-        return ok("Enqueued: ${finalProps.title ?: "Untitled"}")
-    }
-
     private fun stateResponse(): NanoHTTPD.Response {
         val current = notificationManager.getCurrentProps()
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
@@ -316,7 +260,7 @@ class PipUpService : Service() {
             "visible" to notificationManager.isDisplaying(),
             "screenOn" to powerManager.isInteractive,
             "dreaming" to dreaming,
-            "popupsShown" to popupsShown.get(),
+            "popupsShown" to notificationManager.popupsShown.get(),
             "uptime" to (SystemClock.elapsedRealtime() - startedAt) / 1000,
             "device" to mapOf(
                 "model" to Build.MODEL,
@@ -330,7 +274,7 @@ class PipUpService : Service() {
                 "title" to current.title,
                 "duration" to current.duration,
                 "indefinite" to (current.duration <= 0),
-                "elapsed" to ((SystemClock.elapsedRealtime() - lastPopupAt) / 1000)
+                "elapsed" to ((SystemClock.elapsedRealtime() - notificationManager.lastPopupAt) / 1000)
             )
         }
         state["permissions"] = Permissions.asMap(this)
@@ -345,7 +289,7 @@ class PipUpService : Service() {
         )
         moduleManager.augmentState(state)
 
-        val last = lastPopup
+        val last = notificationManager.lastPopup
         if (last != null) {
             state["lastPopup"] = mapOf(
                 "title" to last.title,
@@ -353,7 +297,7 @@ class PipUpService : Service() {
                 "position" to last.getPositionEnum().name,
                 "muted" to mediaMuted(last),
                 "media" to mediaInfo(last),
-                "secondsAgo" to ((SystemClock.elapsedRealtime() - lastPopupAt) / 1000)
+                "secondsAgo" to ((SystemClock.elapsedRealtime() - notificationManager.lastPopupAt) / 1000)
             )
         }
         return NanoHTTPD.newFixedLengthResponse(
@@ -488,7 +432,7 @@ class PipUpService : Service() {
                         }
                         sendBroadcast(intent)
                     }
-                    ok("Settings updated")
+                    ok()
                 } else invalidRequest("Empty")
             }
             else -> NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
@@ -521,34 +465,15 @@ class PipUpService : Service() {
         }
     }
 
-    private fun applySettingsDefaults(props: PopupProps): PopupProps {
-        return props.copy(
-            backgroundColor = if (props.backgroundColor == "#CC000000") settings.getFullBackgroundColor() else props.backgroundColor,
-            borderColor = if (props.borderColor == "#00000000") settings.borderColor else props.borderColor,
-            borderRadius = if (props.borderRadius == 0) settings.borderRadius else props.borderRadius,
-            borderWidth = if (props.borderWidth == 0) settings.borderWidth else props.borderWidth,
-            titleColor = if (props.titleColor == "#FFFFFF") settings.titleColor else props.titleColor,
-            titleSize = if (props.titleSize == 24f) settings.titleSize else props.titleSize,
-            messageColor = if (props.messageColor == "#FFFFFF") settings.messageColor else props.messageColor,
-            messageSize = if (props.messageSize == 16f) settings.messageSize else props.messageSize,
-            titleAlignment = if (props.titleAlignment == 0) settings.titleAlignment else props.titleAlignment,
-            messageAlignment = if (props.messageAlignment == 0) settings.messageAlignment else props.messageAlignment,
-            mediaPosition = props.mediaPosition ?: settings.mediaPosition,
-            animationType = if (props.animationType == 0) settings.animationType else props.animationType,
-            animationDuration = if (props.animationDuration == 500) settings.animationDuration else props.animationDuration,
-            animationExit = props.animationExit || settings.animationExit
-        )
-    }
-
     private fun initNotificationChannel() {
         val channel = NotificationChannel(CHANNEL_ID, "PiPup Service", AndroidNotificationManager.IMPORTANCE_LOW)
         val manager = getSystemService(NOTIFICATION_SERVICE) as AndroidNotificationManager
         manager.createNotificationChannel(channel)
     }
 
-    private fun ok(message: String?): NanoHTTPD.Response {
-        Log.d(TAG, "Response OK: $message")
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", message ?: "OK")
+    private fun ok(): NanoHTTPD.Response {
+        Log.d(TAG, "Response OK")
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "OK")
     }
 
     private fun invalidRequest(message: String?): NanoHTTPD.Response {

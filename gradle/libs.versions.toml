@@ -14,11 +14,13 @@ junit = "4.13.2"
 junitExt = "1.3.0"
 kotlin = "2.4.10"
 ksp = "2.3.11"
+leakcanary = "2.14"
+leakcanary-studio = "1.0.0"
 leanback = "1.2.0"
 media3 = "1.11.0"
 nanohttpd = "2.3.1"
 # @keep
-pipup = "0.8.3"
+pipup = "0.8.4"
 testRunner = "1.7.0"
 versions-plugin = "0.61.0"
 work = "2.11.2"
@@ -40,6 +42,8 @@ jackson-module-kotlin = { module = "com.fasterxml.jackson.module:jackson-module-
 junit = { module = "junit:junit", version.ref = "junit" }
 kotlin-gradle-plugin = { module = "org.jetbrains.kotlin:kotlin-gradle-plugin", version.ref = "kotlin" }
 kotlin-stdlib = { module = "org.jetbrains.kotlin:kotlin-stdlib", version.ref = "kotlin" }
+leakcanary = { module = "com.squareup.leakcanary:leakcanary-android", version.ref = "leakcanary" }
+leakcanary-studio = { module = "com.android.tools.studio.leakcanary:leakcanary", version.ref = "leakcanary-studio" }
 leanback = { module = "androidx.leanback:leanback", version.ref = "leanback" }
 media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
 media3-rtsp = { module = "androidx.media3:media3-exoplayer-rtsp", version.ref = "media3" }

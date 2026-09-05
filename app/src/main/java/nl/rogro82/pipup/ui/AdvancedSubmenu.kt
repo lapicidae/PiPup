@@ -50,21 +50,6 @@ class AdvancedSubmenu(
             settings.mediaRetries = it
         }
 
-        // Pre-warm WebView Toggle
-        root.findViewById<View>(R.id.container_pre_warm)?.apply {
-            // Hide if media module is disabled
-            visibility = if (settings.mediaModuleEnabled) View.VISIBLE else View.GONE
-
-            val sw = findViewById<SwitchCompat>(R.id.switch_pre_warm)
-            sw.isChecked = settings.preWarmWebView
-            setOnClickListener { sw.toggle() }
-            sw.setOnCheckedChangeListener { _, isChecked ->
-                settings.preWarmWebView = isChecked
-                onSettingsChanged(false)
-            }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
-        }
-
         // Advanced Mode Toggle
         root.findViewById<View>(R.id.container_advanced)?.apply {
             val sw = findViewById<SwitchCompat>(R.id.switch_advanced)
@@ -114,7 +99,7 @@ class AdvancedSubmenu(
 
     private fun showImportDeviceDialog() {
         val service = PipUpService.getInstance()
-        val discovery = service?.getModuleManager()?.getModule("discovery") as? DiscoveryModule
+        val discovery = service?.moduleManager?.getModule("discovery") as? DiscoveryModule
 
         if (discovery == null || !settings.discoveryModuleEnabled) {
             context.showToast(context.getString(R.string.error_module_disabled, context.getString(R.string.settings_module_discovery)))

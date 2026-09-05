@@ -48,6 +48,10 @@
             android:supportsRtl="true"
             android:usesCleartextTraffic="true"
             android:theme="@style/AppTheme">
+
+        <profileable
+            android:shell="true"
+            tools:targetApi="q" />
         <receiver
                 android:name=".Receiver"
                 android:enabled="true"

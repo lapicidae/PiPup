@@ -83,7 +83,6 @@ Content-Type: application/json
   "animationExit": true,
   "mediaTimeout": 15,
   "mediaRetries": 5,
-  "preWarmWebView": true,
   "appTheme": 1,
   "advancedMode": true,
   "updateChannel": 1,

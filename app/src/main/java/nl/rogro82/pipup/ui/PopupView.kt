@@ -35,6 +35,7 @@ import java.lang.ref.WeakReference
 import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.databinding.PopupBinding
 import nl.rogro82.pipup.dpToPx
@@ -128,7 +129,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         if (!isReadyCalled) {
             android.util.Log.w("PopupView", "Media loading timed out, showing placeholder (last error: $lastMediaError)")
             // Use the specific error message if available, otherwise fallback to generic timeout
-            showPlaceholder(lastMediaError ?: context.getString(nl.rogro82.pipup.R.string.media_error_timeout))
+            showPlaceholder(lastMediaError ?: context.getString(R.string.media_error_timeout))
             notifyReady()
         }
     }
@@ -154,7 +155,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val frame = binding.popupMediaFrame
         frame.removeAllViews()
         val iv = ImageView(context).apply {
-            setImageResource(nl.rogro82.pipup.R.drawable.ic_banner)
+            setImageResource(R.drawable.ic_banner)
             alpha = 0.5f
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
@@ -187,9 +188,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             val mainMessage = props.message
 
             binding.popupMessage.text = if (mainMessage.isNullOrBlank()) {
-                context.getString(nl.rogro82.pipup.R.string.media_error_only, prettyError)
+                context.getString(R.string.media_error_only, prettyError)
             } else {
-                context.getString(nl.rogro82.pipup.R.string.media_error_with_message, mainMessage, prettyError)
+                context.getString(R.string.media_error_with_message, mainMessage, prettyError)
             }
             binding.popupMessage.isVisible = true
             binding.popupScrollView.isVisible = true
@@ -202,13 +203,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private fun beautifyErrorMessage(rawError: String): String {
         return when {
             rawError.contains("codecs not matched", ignoreCase = true) ->
-                context.getString(nl.rogro82.pipup.R.string.media_error_codec_mismatch)
+                context.getString(R.string.media_error_codec_mismatch)
             rawError.contains("404") || rawError.contains("not found", ignoreCase = true) ->
-                context.getString(nl.rogro82.pipup.R.string.media_error_not_found)
+                context.getString(R.string.media_error_not_found)
             rawError.contains("ICE", ignoreCase = true) || rawError.contains("connection", ignoreCase = true) ->
-                context.getString(nl.rogro82.pipup.R.string.media_error_connection)
+                context.getString(R.string.media_error_connection)
             rawError.contains("timeout", ignoreCase = true) ->
-                context.getString(nl.rogro82.pipup.R.string.media_error_timeout)
+                context.getString(R.string.media_error_timeout)
             else -> rawError
         }
     }
@@ -942,7 +943,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                         return true
                     }
                     android.util.Log.e("PopupView", "Glide load failed permanently after $retryCount retries: ${e?.message}")
-                    showPlaceholder(context.getString(nl.rogro82.pipup.R.string.media_error_load_failed))
+                    showPlaceholder(context.getString(R.string.media_error_load_failed))
                     notifyReady()
                     return false
                 }

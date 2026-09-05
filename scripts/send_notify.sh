@@ -913,7 +913,14 @@ send_cancel_request() {
   local body
   body=$(printf '%s\n' "${response}" | head -n -1)
 
-  printf "[RESULT] Cancel HTTP %s | Status: %s\n" "${code}" "$(extract_json_val "${body}" "status")"
+  local status
+  status=$(extract_json_val "${body}" "status")
+  local status_display="${status}"
+  if [[ -z "${status_display}" ]]; then
+    status_display=$(printf '%s' "${body}" | head -n 1 | cut -c 1-40)
+  fi
+
+  printf "[RESULT] Cancel HTTP %s | Status: %s\n" "${code}" "${status_display}"
 }
 
 #######################################
@@ -1556,7 +1563,7 @@ main() {
       done
     done
 
-    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${recovery_time}"
+    finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}"
     return 0
   fi
 
@@ -1649,7 +1656,7 @@ main() {
     done
   fi
 
-  finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${recovery_time}"
+  finish_monitoring "${monitor_mem}" "${monitor_pid:-}" "${monitor_duration}"
 }
 
 main "$@"

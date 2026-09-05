@@ -1,15 +1,21 @@
 package nl.rogro82.pipup.core
 
 import android.content.Context
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 
 /**
  * Interface providing restricted access to system services and settings for modules.
  * Decouples modules from the raw Android Context for better testability and safety.
  */
+@OptIn(UnstableApi::class)
 interface ModuleContext {
     /** The application-wide settings. */
     val settings: AppSettings
+
+    /** The notification manager for displaying popups. */
+    val notificationManager: NotificationManager
 
     /** The underlying Android context (for components that strictly require it). */
     val androidContext: Context

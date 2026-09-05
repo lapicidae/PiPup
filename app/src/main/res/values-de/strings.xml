@@ -163,6 +163,9 @@
     <string name="version_placeholder">v?.?.?</string>
 
     <!-- Module & Power-Steuerung -->
+    <string name="settings_resource_mode">Ressourcen-Modus</string>
+    <string name="resource_mode_eco">Eco (Lazy Loading)</string>
+    <string name="resource_mode_performance">Performance (Immer an)</string>
     <string name="settings_module_power">Power-Steuerung</string>
     <string name="settings_module_power_desc">Ermöglicht das ferngesteuerte Aufwecken und Ausschalten des Bildschirms via API.</string>
     <string name="settings_module_discovery">Netzwerk-Entdeckung (NSD)</string>

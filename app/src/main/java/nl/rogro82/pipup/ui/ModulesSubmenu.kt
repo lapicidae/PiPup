@@ -10,6 +10,7 @@ import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.ActivationStrategy
 import nl.rogro82.pipup.core.PowerController
 
 /**
@@ -29,8 +30,8 @@ class ModulesSubmenu(
             root,
             R.id.container_power_module,
             R.id.switch_power_module,
-            { settings.powerModuleEnabled },
-            { settings.powerModuleEnabled = it },
+            { settings.getActivationStrategy("power") != ActivationStrategy.OFF },
+            { settings.setActivationStrategy("power", if (it) settings.getPreferredStrategy("power") else ActivationStrategy.OFF) },
             { if (it && PowerController.getSleepMethod(context) == null) Permissions.showFixDialog(context, Permissions.KEY_POWER) }
         )
 
@@ -39,8 +40,8 @@ class ModulesSubmenu(
             root,
             R.id.container_discovery_module,
             R.id.switch_discovery_module,
-            { settings.discoveryModuleEnabled },
-            { settings.discoveryModuleEnabled = it }
+            { settings.getActivationStrategy("discovery") != ActivationStrategy.OFF },
+            { settings.setActivationStrategy("discovery", if (it) settings.getPreferredStrategy("discovery") else ActivationStrategy.OFF) }
         )
 
         // Rich Media Module
@@ -48,8 +49,8 @@ class ModulesSubmenu(
             root,
             R.id.container_media_module,
             R.id.switch_media_module,
-            { settings.mediaModuleEnabled },
-            { settings.mediaModuleEnabled = it }
+            { settings.getActivationStrategy("media") != ActivationStrategy.OFF },
+            { settings.setActivationStrategy("media", if (it) settings.getPreferredStrategy("media") else ActivationStrategy.OFF) }
         )
     }
 
@@ -73,6 +74,16 @@ class ModulesSubmenu(
                 val newState = !getter()
                 sw.isChecked = newState
                 onToggle(newState)
+                // Notify ModuleManager about the change
+                (context.applicationContext as PiPupApp).moduleManager.updateModuleState(
+                    when (containerId) {
+                        R.id.container_power_module -> "power"
+                        R.id.container_discovery_module -> "discovery"
+                        R.id.container_media_module -> "media"
+                        else -> ""
+                    },
+                    if (newState) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF
+                )
                 notifySettingsChanged()
                 afterToggle?.invoke(newState)
                 onSettingsChanged(false)

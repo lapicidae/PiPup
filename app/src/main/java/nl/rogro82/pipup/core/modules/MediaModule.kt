@@ -7,7 +7,10 @@ import android.util.Log
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import fi.iki.elonen.NanoHTTPD
+import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.ModuleContext
+import nl.rogro82.pipup.core.ModuleMenuDefinition
+import nl.rogro82.pipup.core.ModuleSettingDefinition
 import nl.rogro82.pipup.core.PiPupModule
 
 /**
@@ -22,6 +25,7 @@ class MediaModule : PiPupModule {
 
     override val id: String = "media"
     override val name: String = "Rich Media Support"
+    override val supportedRoutes: List<String> = emptyList()
 
     private val handler = Handler(Looper.getMainLooper())
     private var moduleContext: ModuleContext? = null
@@ -32,9 +36,10 @@ class MediaModule : PiPupModule {
     override fun onEnable(context: ModuleContext) {
         Log.d(TAG, "Media module enabled")
         this.moduleContext = context
-        if (context.settings.preWarmWebView) {
-            preWarmWebView(context)
-        }
+        // Always pre-warm when enabled.
+        // If in PERFORMANCE mode, this happens at boot.
+        // If in ECO mode, this happens on the first request and stays warm until onIdle.
+        preWarmWebView(context)
     }
 
     override fun onDisable() {
@@ -42,6 +47,19 @@ class MediaModule : PiPupModule {
         destroyWebView()
         moduleContext = null
     }
+
+    override fun onIdle() {
+        Log.d(TAG, "Media module idle, destroying warm WebView to save RAM")
+        destroyWebView()
+    }
+
+    override fun getSettingsMetadata(): List<ModuleSettingDefinition> = emptyList()
+
+    override fun getSettingsMenu(): ModuleMenuDefinition = ModuleMenuDefinition(
+        iconRes = R.drawable.ic_module_rmedia,
+        labelRes = R.string.settings_module_media,
+        priority = 75
+    )
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun preWarmWebView(context: ModuleContext) {
@@ -74,18 +92,6 @@ class MediaModule : PiPupModule {
                 } catch (_: Exception) {}
             }
             warmWebView = null
-        }
-    }
-
-    /**
-     * Refreshes the pre-warm state based on settings.
-     */
-    fun updatePreWarmState() {
-        val context = moduleContext ?: return
-        if (context.settings.preWarmWebView) {
-            preWarmWebView(context)
-        } else {
-            destroyWebView()
         }
     }
 

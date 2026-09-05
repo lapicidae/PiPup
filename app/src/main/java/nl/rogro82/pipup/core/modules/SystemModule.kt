@@ -1,21 +1,29 @@
 package nl.rogro82.pipup.core.modules
 
 import android.util.Log
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import fi.iki.elonen.NanoHTTPD
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.R
 import nl.rogro82.pipup.UpdateManager
+import nl.rogro82.pipup.core.ActivationStrategy
 import nl.rogro82.pipup.core.ModuleContext
+import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.PowerController
+import nl.rogro82.pipup.getLocalizedContext
+import nl.rogro82.pipup.showToast
 
 /**
  * Module responsible for system diagnostics and permission management.
  * This module is always active and cannot be disabled.
  */
+@OptIn(UnstableApi::class)
 class SystemModule : PiPupModule {
 
     companion object {
@@ -24,6 +32,7 @@ class SystemModule : PiPupModule {
 
     override val id: String = "system"
     override val name: String = "System Diagnostics"
+    override val supportedRoutes: List<String> = listOf("/notify", "/api/notify", "/cancel")
 
     private var moduleContext: ModuleContext? = null
 
@@ -45,6 +54,8 @@ class SystemModule : PiPupModule {
             "/permissions/diagnose" -> if (method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST) diagnoseResponse() else null
             "/permissions/fix" -> if (method == NanoHTTPD.Method.POST) fixResponse(session) else null
             "/update" -> if (method == NanoHTTPD.Method.POST) updateResponse() else null
+            "/notify", "/api/notify" -> if (method == NanoHTTPD.Method.POST) notifyResponse(session) else null
+            "/cancel" -> if (method == NanoHTTPD.Method.POST) cancelResponse(session) else null
             else -> null
         }
     }
@@ -140,6 +151,56 @@ class SystemModule : PiPupModule {
             "application/json",
             body
         )
+    }
+
+    private fun notifyResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val context = moduleContext?.androidContext ?: return NanoHTTPD.newFixedLengthResponse("Missing context")
+        val nm = moduleContext?.notificationManager ?: return NanoHTTPD.newFixedLengthResponse("Service not ready")
+        val settings = moduleContext?.settings ?: return NanoHTTPD.newFixedLengthResponse("Settings not ready")
+
+        val parser = PayloadParser(context)
+        var props = parser.parse(session) ?: return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Failed to parse input")
+
+        // Guard: Check if media module is required and enabled
+        if (props.media != null || props.image != null) {
+            val mediaStrategy = settings.getActivationStrategy("media")
+            if (mediaStrategy == ActivationStrategy.OFF) {
+                val localizedContext = context.getLocalizedContext(settings.language)
+                val msg = localizedContext.getString(R.string.error_module_disabled, localizedContext.getString(R.string.settings_module_media))
+                context.showToast(msg)
+                return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Media module is disabled")
+            }
+
+            // If ECO mode, ensure module is activated
+            (context.applicationContext as? PiPupApp)?.moduleManager?.let { mm ->
+                if (mediaStrategy == ActivationStrategy.ECO) {
+                    mm.activateModule("media")
+                }
+            }
+        }
+
+        props = settings.applyDefaults(props)
+
+        nm.enqueue(props)
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "OK: Enqueued")
+    }
+
+    private fun cancelResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val id = session.parameters["id"]?.firstOrNull()
+        val nm = moduleContext?.notificationManager ?: return NanoHTTPD.newFixedLengthResponse("Service not ready")
+
+        val current = nm.getCurrentProps()
+        val isDisplaying = nm.isDisplaying()
+
+        // Match fork logic: Only report mismatch if a popup is visible AND an ID was provided AND it doesn't match
+        if (id != null && isDisplaying && current?.id != id) {
+            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "ID mismatch: visible is ${current?.id}")
+        }
+
+        nm.cancelAll()
+
+        val msg = if (isDisplaying) "OK: Cancelled" else "OK: Nothing to cancel"
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", msg)
     }
 
     override fun augmentState(state: MutableMap<String, Any?>) {

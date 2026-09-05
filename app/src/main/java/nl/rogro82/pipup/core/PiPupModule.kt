@@ -15,6 +15,12 @@ interface PiPupModule {
     val name: String
 
     /**
+     * List of HTTP routes supported by this module.
+     * Used for on-demand activation in Eco mode.
+     */
+    val supportedRoutes: List<String> get() = emptyList()
+
+    /**
      * Called when the module is enabled.
      *
      * @param context The module context providing access to settings and services.
@@ -23,6 +29,12 @@ interface PiPupModule {
 
     /** Called when the module is disabled or the service is destroyed. */
     fun onDisable()
+
+    /**
+     * Called when the module is in Eco mode and has been inactive for a while.
+     * Use this to release heavy resources (like WebViews) while remaining logically enabled.
+     */
+    fun onIdle() {}
 
     /**
      * Handles an incoming HTTP request.
@@ -46,4 +58,14 @@ interface PiPupModule {
      * @return A list of permission keys.
      */
     fun getRequiredPermissions(): List<String> = emptyList()
+
+    /**
+     * Returns metadata for dynamically rendered settings in the UI.
+     */
+    fun getSettingsMetadata(): List<ModuleSettingDefinition> = emptyList()
+
+    /**
+     * Returns the menu definition for integration into the Settings UI.
+     */
+    fun getSettingsMenu(): ModuleMenuDefinition? = null
 }
