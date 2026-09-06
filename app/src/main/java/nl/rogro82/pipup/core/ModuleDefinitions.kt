@@ -17,6 +17,30 @@ enum class SettingType {
 }
 
 /**
+ * Target categories for settings to be placed in global UI tabs.
+ */
+enum class SettingCategory {
+    /** The central performance settings tab. */
+    PERFORMANCE,
+    /** The general settings tab. */
+    GENERAL,
+    /** The background settings tab. */
+    BACKGROUND,
+    /** The text styling settings tab. */
+    TEXT,
+    /** The border styling settings tab. */
+    BORDER,
+    /** The animation settings tab. */
+    ANIMATION,
+    /** The advanced settings tab. */
+    ADVANCED,
+    /** The updates settings tab. */
+    UPDATES,
+    /** The permissions settings tab. */
+    PERMISSIONS
+}
+
+/**
  * Definition of a single setting exposed by a module.
  */
 data class ModuleSettingDefinition(
@@ -25,7 +49,8 @@ data class ModuleSettingDefinition(
     @StringRes val labelRes: Int,
     @StringRes val descriptionRes: Int? = null,
     val defaultValue: Any,
-    val options: Map<String, Int>? = null // For STRING_SELECT: Map of value to labelRes
+    val options: Map<String, Int>? = null, // For STRING_SELECT: Map of value to labelRes
+    val category: SettingCategory? = null
 )
 
 /**

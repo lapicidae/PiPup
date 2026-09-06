@@ -60,5 +60,7 @@ class TextSubmenu(
         val alignmentItems = context.resources.getStringArray(R.array.alignment_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
         setupSpinner(root, R.id.spinner_title_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.titleAlignment) { settings.titleAlignment = it }
         setupSpinner(root, R.id.spinner_message_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.messageAlignment) { settings.messageAlignment = it }
+
+        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.TEXT)
     }
 }

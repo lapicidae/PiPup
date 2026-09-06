@@ -7,6 +7,7 @@
     <item name="nav_item_animation" type="id" />
     <item name="nav_item_updates" type="id" />
     <item name="nav_item_modules" type="id" />
+	<item name="nav_item_performance" type="id" />
     <item name="nav_item_permissions" type="id" />
     <item name="nav_item_advanced" type="id" />
 

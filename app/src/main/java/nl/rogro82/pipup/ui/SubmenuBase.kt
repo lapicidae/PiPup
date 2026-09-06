@@ -1,12 +1,15 @@
 package nl.rogro82.pipup.ui
 
 import android.content.Context
+import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.KeyEvent
+import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -14,10 +17,17 @@ import android.widget.FrameLayout
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.ActivationStrategy
+import nl.rogro82.pipup.core.ModuleSettingDefinition
+import nl.rogro82.pipup.core.PiPupModule
+import nl.rogro82.pipup.core.SettingCategory
+import nl.rogro82.pipup.core.SettingType
 import nl.rogro82.pipup.findActivity
 import nl.rogro82.pipup.showHexInputDialog
 
@@ -223,5 +233,96 @@ abstract class SubmenuBase(
             onSet(newHex)
             onSettingsChanged(false)
         }
+    }
+
+    /**
+     * Renders settings from all active modules that belong to the specified category.
+     */
+    protected fun renderModuleSettings(container: ViewGroup, category: SettingCategory) {
+        val mm = (context.applicationContext as PiPupApp).moduleManager
+        val modules = mm.getAllModules()
+
+        modules.forEach { module ->
+            // Only show settings for logically active modules (Eco or Performance)
+            if (module.id != "system" && settings.getActivationStrategy(module.id) == ActivationStrategy.OFF) {
+                return@forEach
+            }
+
+            val metadata = module.getSettingsMetadata().filter { it.category == category }
+            metadata.forEach { def ->
+                renderSetting(container, module, def)
+            }
+        }
+    }
+
+    protected fun renderSetting(container: ViewGroup, module: PiPupModule, def: ModuleSettingDefinition) {
+        when (def.type) {
+            SettingType.BOOLEAN -> renderBooleanSetting(container, module, def)
+            SettingType.STRING_SELECT -> renderSelectSetting(container, module, def)
+            else -> {}
+        }
+    }
+
+    protected fun renderBooleanSetting(container: ViewGroup, module: PiPupModule, def: ModuleSettingDefinition) {
+        val defaultValue = def.defaultValue as? Boolean ?: return
+
+        val view = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle, container, false)
+        val label = context.getString(def.labelRes)
+        view.findViewById<TextView>(R.id.setting_label)?.text = context.getString(R.string.settings_module_setting_format, module.name, label)
+        val switch = view.findViewById<SwitchCompat>(R.id.setting_switch)
+
+        val current = settings.getModuleSetting(module.id, def.key, defaultValue)
+        switch?.isChecked = current
+
+        view.setOnClickListener {
+            val next = !settings.getModuleSetting(module.id, def.key, defaultValue)
+            settings.setModuleSetting(module.id, def.key, next)
+            switch?.isChecked = next
+            onSettingsChanged(false)
+        }
+
+        container.addView(view)
+    }
+
+    protected fun renderSelectSetting(container: ViewGroup, module: PiPupModule, def: ModuleSettingDefinition) {
+        val view = LayoutInflater.from(context).inflate(R.layout.item_setting_select, container, false)
+        val label = context.getString(def.labelRes)
+        view.findViewById<TextView>(R.id.setting_label)?.text = context.getString(R.string.settings_module_setting_format, module.name, label)
+
+        val valueText = view.findViewById<TextView>(R.id.setting_value)
+        val options = def.options ?: return
+
+        fun updateText(value: String) {
+            val resId = options[value] ?: return
+            valueText?.text = context.getString(resId)
+        }
+
+        if (def.key == "resource_mode") {
+            // Special handling for legacy ActivationStrategy
+            val current = settings.getActivationStrategy(module.id)
+            updateText(if (current == ActivationStrategy.PERFORMANCE) "performance" else "eco")
+
+            view.setOnClickListener {
+                val currentStrategy = settings.getActivationStrategy(module.id)
+                val next = if (currentStrategy == ActivationStrategy.ECO) ActivationStrategy.PERFORMANCE else ActivationStrategy.ECO
+                settings.setActivationStrategy(module.id, next)
+                updateText(if (next == ActivationStrategy.PERFORMANCE) "performance" else "eco")
+                (context.applicationContext as PiPupApp).moduleManager.updateModuleState(module.id, next)
+                notifySettingsChanged()
+            }
+        } else {
+            val current = settings.getModuleSetting(module.id, def.key, def.defaultValue as String)
+            updateText(current)
+            // Generic STRING_SELECT click handler not yet implemented
+        }
+
+        container.addView(view)
+    }
+
+    protected fun notifySettingsChanged() {
+        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
+            setPackage(context.packageName)
+        }
+        context.sendBroadcast(intent)
     }
 }

@@ -53,13 +53,32 @@ class MediaModule : PiPupModule {
         destroyWebView()
     }
 
-    override fun getSettingsMetadata(): List<ModuleSettingDefinition> = emptyList()
-
-    override fun getSettingsMenu(): ModuleMenuDefinition = ModuleMenuDefinition(
-        iconRes = R.drawable.ic_module_rmedia,
-        labelRes = R.string.settings_module_media,
-        priority = 75
+    override fun getSettingsMetadata(): List<ModuleSettingDefinition> = listOf(
+        ModuleSettingDefinition(
+            key = "resource_mode",
+            type = nl.rogro82.pipup.core.SettingType.STRING_SELECT,
+            labelRes = R.string.settings_resource_mode,
+            defaultValue = "eco",
+            options = mapOf(
+                "eco" to R.string.resource_mode_eco,
+                "performance" to R.string.resource_mode_performance
+            ),
+            category = nl.rogro82.pipup.core.SettingCategory.PERFORMANCE
+        )
     )
+
+    override fun getSettingsMenu(): ModuleMenuDefinition? {
+        // Only show a dedicated menu tab if there are settings for the protected area (category == null).
+        if (getSettingsMetadata().none { it.category == null }) {
+            return null
+        }
+
+        return ModuleMenuDefinition(
+            iconRes = R.drawable.ic_module_rmedia,
+            labelRes = R.string.settings_module_media,
+            priority = 75
+        )
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun preWarmWebView(context: ModuleContext) {

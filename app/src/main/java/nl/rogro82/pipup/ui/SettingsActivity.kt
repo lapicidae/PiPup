@@ -169,12 +169,31 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun refreshDynamicNavItemsList() {
         val moduleManager = (application as PiPupApp).moduleManager
-        val newDynamicItems = moduleManager.getEnabledModules()
+        val newDynamicItems = mutableListOf<NavItem>()
+
+        // 1. Central Performance Tab (if needed)
+        if (PerformanceSubmenu.hasContent(this, settings)) {
+            newDynamicItems.add(
+                NavItem(
+                    id = R.id.nav_item_performance,
+                    labelRes = R.string.settings_nav_performance,
+                    iconRes = R.drawable.ic_performance,
+                    priority = 78,
+                    layoutRes = R.layout.submenu_performance
+                )
+            )
+        }
+
+        // 2. Module specific tabs
+        val moduleItems = moduleManager.getEnabledModules()
             .mapNotNull { it.getSettingsMenu()?.let { menu -> it.id to menu } }
             .map { (moduleId, menu) ->
                 val existingId = dynamicRailItems.find { it.moduleId == moduleId }?.id ?: View.generateViewId()
                 NavItem(existingId, menu.labelRes, menu.iconRes, menu.priority, moduleId = moduleId)
             }
+
+        newDynamicItems.addAll(moduleItems)
+
         dynamicRailItems.clear()
         dynamicRailItems.addAll(newDynamicItems)
     }
@@ -370,6 +389,7 @@ class SettingsActivity : AppCompatActivity() {
             107 -> R.id.stub_modules
             108 -> R.id.stub_permissions
             109 -> R.id.stub_advanced
+            R.id.nav_item_performance -> R.id.stub_performance
             else -> R.id.stub_module_dynamic
         }
     }
@@ -405,6 +425,7 @@ class SettingsActivity : AppCompatActivity() {
                 R.layout.submenu_border -> BorderSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_animation -> AnimationSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_advanced -> AdvancedSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_performance -> PerformanceSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_updates -> UpdatesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_permissions -> PermissionsSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_modules -> ModulesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
@@ -422,6 +443,21 @@ class SettingsActivity : AppCompatActivity() {
      */
     fun getCurrentSubmenuLayout(): Int = currentLayoutRes
 
+    private fun findFocusableChildrenRecursive(view: View): List<View> {
+        val result = mutableListOf<View>()
+        if (view is ViewGroup) {
+            for (i in 0 until view.childCount) {
+                val child = view.getChildAt(i)
+                if (child.isFocusable && child.isVisible) {
+                    result.add(child)
+                } else if (child is ViewGroup) {
+                    result.addAll(findFocusableChildrenRecursive(child))
+                }
+            }
+        }
+        return result
+    }
+
     /**
      * Configures the focus navigation between the navigation rail and the submenu content.
      * @param targetNavId The ID of the currently active navigation rail item. Defaults to current if -1.
@@ -434,10 +470,7 @@ class SettingsActivity : AppCompatActivity() {
         val stubId = getStubIdForNavItem(item)
         val container = inflatedSubmenus[stubId] as? ViewGroup ?: return
 
-        val focusableChildren = (0 until container.childCount).asSequence()
-            .map { container.getChildAt(it) }
-            .filter { it.isFocusable && it.isVisible }
-            .toList()
+        val focusableChildren = findFocusableChildrenRecursive(container)
 
         if (focusableChildren.isNotEmpty()) {
             findViewById<View>(navId)?.nextFocusRightId = focusableChildren[0].id
@@ -503,10 +536,7 @@ class SettingsActivity : AppCompatActivity() {
         val stubId = getStubIdForNavItem(item)
         val container = inflatedSubmenus[stubId] as? ViewGroup ?: return
 
-        (0 until container.childCount).asSequence()
-            .map { container.getChildAt(it) }
-            .firstOrNull { it.isFocusable && it.isVisible }
-            ?.requestFocus()
+        findFocusableChildrenRecursive(container).firstOrNull()?.requestFocus()
     }
 
     private fun updatePreview(animate: Boolean = false) {

@@ -149,6 +149,11 @@ class ModuleManager {
     fun getModule(id: String): PiPupModule? = modules[id]
 
     /**
+     * Returns all registered modules.
+     */
+    fun getAllModules(): List<PiPupModule> = modules.values.toList()
+
+    /**
      * Returns all modules that are logically enabled (not OFF).
      */
     fun getEnabledModules(): List<PiPupModule> {

@@ -30,7 +30,7 @@ class PermissionsSubmenu(
             val root = rootView
             // Only continue if we are still the active submenu.
             // We wait for attachment if it hasn't happened yet.
-            if (root != null && settingsActivity?.getCurrentSubmenuLayout() == R.layout.submenu_permissions) {
+            if (root != null && (settingsActivity?.getCurrentSubmenuLayout() == R.layout.submenu_permissions)) {
                 if (root.isAttachedToWindow) {
                     refreshPermissionList(root)
                 }
@@ -86,19 +86,24 @@ class PermissionsSubmenu(
         addSectionHeader(submenuRoot, context.getString(R.string.permission_header_required))
         addPermissionRow(submenuRoot, Permissions.KEY_OVERLAY, isOptional = false)
 
-        if (powerModuleEnabled) {
-            val label = if (sleepMethod != null) {
-                val methodLabel = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) context.getString(R.string.permission_admin) else context.getString(R.string.permission_accessibility)
-                context.getString(R.string.settings_module_power) + " (via $methodLabel)"
-            } else {
-                context.getString(R.string.settings_module_power)
-            }
+        // Dynamically add module-required permissions
+        val mm = (context.applicationContext as nl.rogro82.pipup.PiPupApp).moduleManager
+        val modulePermissions = mm.getEnabledModules().flatMap { it.getRequiredPermissions() }.toSet()
 
-            // Always use KEY_POWER as the stable ID for this row to survive status changes
+        modulePermissions.forEach { key ->
+            val label = if (key == Permissions.KEY_ADMIN || key == Permissions.KEY_ACCESSIBILITY || key == Permissions.KEY_POWER) {
+                if (sleepMethod != null) {
+                    val methodLabel = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) context.getString(R.string.permission_admin) else context.getString(R.string.permission_accessibility)
+                    context.getString(R.string.settings_module_power) + " (via $methodLabel)"
+                } else {
+                    context.getString(R.string.settings_module_power)
+                }
+            } else null
+
             addPermissionRow(
                 submenuRoot,
-                if (sleepMethod != null) (if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) Permissions.KEY_ADMIN else Permissions.KEY_ACCESSIBILITY) else Permissions.KEY_POWER,
-                idOverride = Permissions.KEY_POWER,
+                key,
+                idOverride = if (key == Permissions.KEY_ADMIN || key == Permissions.KEY_ACCESSIBILITY) Permissions.KEY_POWER else null,
                 overrideLabel = label,
                 isOptional = false
             )
@@ -109,18 +114,22 @@ class PermissionsSubmenu(
         addPermissionRow(submenuRoot, Permissions.KEY_INSTALL, isOptional = true)
         addPermissionRow(submenuRoot, Permissions.KEY_ENERGY, isOptional = true)
 
+        renderModuleSettings(submenuRoot, nl.rogro82.pipup.core.SettingCategory.PERMISSIONS)
+
         // 4. Trigger focus recalculation
         settingsActivity?.setupSubmenuFocus()
     }
 
     private fun addSectionHeader(container: LinearLayout, title: String, marginTop: Int = 16) {
-        container.addView(TextView(context).apply {
-            text = title.uppercase()
-            textSize = 14f
-            setTypeface(null, Typeface.BOLD)
-            setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
-            setPadding(context.dpToPx(16), context.dpToPx(marginTop), 0, context.dpToPx(8))
-        })
+        container.addView(
+            TextView(context).apply {
+                text = title.uppercase()
+                textSize = 14f
+                setTypeface(null, Typeface.BOLD)
+                setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
+                setPadding(context.dpToPx(16), context.dpToPx(marginTop), 0, context.dpToPx(8))
+            }
+        )
     }
 
     private fun addPermissionRow(container: LinearLayout, key: String, idOverride: String? = null, overrideLabel: String? = null, isOptional: Boolean = false) {

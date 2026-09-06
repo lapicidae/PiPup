@@ -22,6 +22,8 @@
     <string name="settings_nav_modules">Modules</string>
     <string name="settings_nav_permissions">Permissions</string>
     <string name="settings_nav_advanced">Advanced</string>
+    <string name="settings_nav_performance">Performance</string>
+    <string name="settings_module_setting_format">%1$s: %2$s</string>
 
     <!-- App UI & Themes -->
     <string name="settings_language">Language</string>

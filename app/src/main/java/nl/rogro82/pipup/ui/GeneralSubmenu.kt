@@ -97,5 +97,7 @@ class GeneralSubmenu(
             }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
+
+        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.GENERAL)
     }
 }

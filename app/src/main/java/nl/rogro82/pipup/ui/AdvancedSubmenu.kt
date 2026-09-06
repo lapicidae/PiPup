@@ -69,6 +69,8 @@ class AdvancedSubmenu(
             setOnClickListener { showResetConfirmation() }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
+
+        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.ADVANCED)
     }
 
     private fun showResetConfirmation() {

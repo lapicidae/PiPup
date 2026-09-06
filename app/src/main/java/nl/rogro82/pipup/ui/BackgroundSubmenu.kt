@@ -37,5 +37,7 @@ class BackgroundSubmenu(
         setupSeekBar(root, R.id.seekbar_bg_alpha, R.id.text_bg_alpha_value, settings.backgroundAlpha) {
             settings.backgroundAlpha = it
         }
+
+        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.BACKGROUND)
     }
 }

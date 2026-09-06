@@ -1,7 +1,6 @@
 package nl.rogro82.pipup.ui
 
 import android.content.Context
-import android.content.Intent
 import android.view.View
 import android.widget.FrameLayout
 import androidx.appcompat.widget.SwitchCompat
@@ -75,14 +74,15 @@ class ModulesSubmenu(
                 sw.isChecked = newState
                 onToggle(newState)
                 // Notify ModuleManager about the change
+                val moduleId = when (containerId) {
+                    R.id.container_power_module -> "power"
+                    R.id.container_discovery_module -> "discovery"
+                    R.id.container_media_module -> "media"
+                    else -> ""
+                }
                 (context.applicationContext as PiPupApp).moduleManager.updateModuleState(
-                    when (containerId) {
-                        R.id.container_power_module -> "power"
-                        R.id.container_discovery_module -> "discovery"
-                        R.id.container_media_module -> "media"
-                        else -> ""
-                    },
-                    if (newState) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF
+                    moduleId,
+                    if (newState) settings.getActivationStrategy(moduleId) else ActivationStrategy.OFF
                 )
                 notifySettingsChanged()
                 afterToggle?.invoke(newState)
@@ -92,10 +92,4 @@ class ModulesSubmenu(
         }
     }
 
-    private fun notifySettingsChanged() {
-        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
-            setPackage(context.packageName)
-        }
-        context.sendBroadcast(intent)
-    }
 }

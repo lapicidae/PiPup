@@ -6,6 +6,7 @@
     <!-- %1$s: Versionsname -->
     <string name="version_number_debug">v%1$s (debug)</string>
     <string name="version_number">v%1$s</string>
+    <string name="settings_module_setting_format">%1$s: %2$s</string>
     <string name="server_running">Der Server ist erreichbar unter:</string>
     <!-- %1$s: IP-Adresse, %2$d: Port -->
     <string name="server_address">%1$s:%2$d</string>
@@ -22,6 +23,7 @@
     <string name="settings_nav_modules">Module</string>
     <string name="settings_nav_permissions">Berechtigungen</string>
     <string name="settings_nav_advanced">Erweitert</string>
+    <string name="settings_nav_performance">Leistung</string>
 
     <!-- App UI & Designs -->
     <string name="settings_language">Sprache</string>
