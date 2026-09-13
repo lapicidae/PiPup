@@ -15,6 +15,16 @@ interface PiPupModule {
     val name: String
 
     /**
+     * List of modes supported by this module.
+     */
+    val supportedModes: List<ModuleMode>
+
+    /**
+     * The default mode for this module when no setting is saved.
+     */
+    val defaultMode: ModuleMode
+
+    /**
      * List of HTTP routes supported by this module.
      * Used for on-demand activation in Eco mode.
      */
@@ -31,10 +41,13 @@ interface PiPupModule {
     fun onDisable()
 
     /**
-     * Called when the module is in Eco mode and has been inactive for a while.
-     * Use this to release heavy resources (like WebViews) while remaining logically enabled.
+     * Called when the module has been inactive for a while (Eco mode).
+     * Use this to release heavy resources like WebViews.
      */
-    fun onIdle() {}
+    @Suppress("EmptyMethod")
+    fun onIdle() {
+        // Optional hook for releasing resources
+    }
 
     /**
      * Handles an incoming HTTP request.
@@ -42,14 +55,16 @@ interface PiPupModule {
      * @param session The NanoHTTPD session.
      * @return A [NanoHTTPD.Response] if the module handles this request, null otherwise.
      */
-    fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response?
+    fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? = null
 
     /**
      * Allows enabled modules to add their own information to the global state report.
      *
      * @param state The mutable state map to add information to.
      */
-    fun augmentState(state: MutableMap<String, Any?>)
+    fun augmentState(state: MutableMap<String, Any?>) {
+        // Optional hook for adding state info
+    }
 
     /**
      * Returns a list of permission keys required by this module.

@@ -2,27 +2,46 @@ package nl.rogro82.pipup
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.core.content.edit
 import androidx.core.graphics.toColorInt
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import nl.rogro82.pipup.core.ActivationStrategy
+import org.json.JSONObject
+import nl.rogro82.pipup.core.ModuleMode
 import java.util.UUID
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
 
 /**
  * Manages application-wide settings using [SharedPreferences].
+ * Uses device-protected storage to ensure background service accessibility.
  */
 class AppSettings(context: Context) {
 
     private val appContext = context.applicationContext
     private val prefs = run {
         val deviceProtectedContext = appContext.createDeviceProtectedStorageContext()
-        if (!deviceProtectedContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).contains("position_index")) {
-            // One-time migration from credential-protected storage
-            runCatching { deviceProtectedContext.moveSharedPreferencesFrom(appContext, PREFS_NAME) }
+        val p = deviceProtectedContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+        if (!p.contains("migration_done")) {
+            Log.i("AppSettings", "Checking for legacy settings migration...")
+            val legacyPrefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+            // Check if there is anything to migrate
+            if (legacyPrefs.all.isNotEmpty()) {
+                Log.i("AppSettings", "Migrating settings from legacy storage...")
+                runCatching {
+                    // 1. Move file at OS level
+                    deviceProtectedContext.moveSharedPreferencesFrom(appContext, PREFS_NAME)
+                    // 2. Hard-clear the old instance to prevent any ghost data
+                    legacyPrefs.edit(commit = true) { clear() }
+                    Log.i("AppSettings", "Migration successful and legacy storage cleared.")
+                }.onFailure {
+                    Log.e("AppSettings", "Migration failed: ${it.message}")
+                }
+            }
+            p.edit(commit = true) { putBoolean("migration_done", true) }
         }
-        deviceProtectedContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        p
     }
 
     /**
@@ -46,50 +65,47 @@ class AppSettings(context: Context) {
     }
 
     /**
-     * Retrieves the activation strategy for a specific module.
+     * Retrieves the mode for a specific module.
      */
-    fun getActivationStrategy(moduleId: String): Int {
-        val legacyKey = when (moduleId) {
-            "power" -> "power_module_enabled"
-            "discovery" -> "discovery_module_enabled"
-            "media" -> "media_module_enabled"
-            else -> null
+    fun getModuleMode(moduleId: String): ModuleMode {
+        val mm = (appContext as? PiPupApp)?.moduleManager
+        val module = mm?.getModule(moduleId)
+        val default = module?.defaultMode ?: ModuleMode.OFF
+
+        val savedValue = prefs.getInt("module_mode_$moduleId", -1)
+        if (savedValue != -1) {
+            return ModuleMode.entries.find { it.value == savedValue } ?: default
         }
-
-        val default = if (moduleId == "system") ActivationStrategy.PERFORMANCE else ActivationStrategy.ECO
-        val strategy = prefs.getInt("module_strategy_$moduleId", -1)
-
-        if (strategy != -1) return strategy
-
-        // Migration from legacy boolean flags
-        if (legacyKey != null && prefs.contains(legacyKey)) {
-            val enabled = prefs.getBoolean(legacyKey, true)
-            return if (enabled) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF
-        }
-
         return default
     }
 
     /**
-     * Sets the activation strategy for a specific module.
-     * Remembers the last non-OFF strategy to restore it upon re-activation.
+     * Sets the mode for a specific module.
+     * Automatically handles fallbacks when enabling a module without a preferred mode.
      */
-    fun setActivationStrategy(moduleId: String, strategy: Int) {
+    fun setModuleMode(moduleId: String, mode: ModuleMode) {
+        val finalMode = if (mode != ModuleMode.OFF) mode else ModuleMode.OFF
         prefs.edit {
-            putInt("module_strategy_$moduleId", strategy)
-            if (strategy != ActivationStrategy.OFF) {
-                putInt("module_preferred_strategy_$moduleId", strategy)
+            putInt("module_mode_$moduleId", finalMode.value)
+            if (finalMode != ModuleMode.OFF) {
+                putInt("module_preferred_mode_$moduleId", finalMode.value)
             }
         }
     }
 
     /**
-     * Retrieves the last used active strategy (Eco/Performance) for a module.
-     * Defaults to PERFORMANCE for System, ECO for others.
+     * Retrieves the last used active mode (Eco/On) for a module.
      */
-    fun getPreferredStrategy(moduleId: String): Int {
-        val default = if (moduleId == "system") ActivationStrategy.PERFORMANCE else ActivationStrategy.ECO
-        return prefs.getInt("module_preferred_strategy_$moduleId", default)
+    fun getPreferredMode(moduleId: String): ModuleMode {
+        val mm = (appContext as? PiPupApp)?.moduleManager
+        val module = mm?.getModule(moduleId)
+        val default = module?.defaultMode ?: ModuleMode.OFF
+
+        val savedValue = prefs.getInt("module_preferred_mode_$moduleId", -1)
+        if (savedValue != -1) {
+            return ModuleMode.entries.find { it.value == savedValue } ?: default
+        }
+        return default
     }
 
     /**
@@ -170,20 +186,20 @@ class AppSettings(context: Context) {
     /** The application theme (0: Dark, 1: Light). */
     var appTheme by IntPref("app_theme", 0)
 
-    /** Whether the power control module is enabled. (Legacy, mapped to strategy) */
+    /** Whether the power control module is enabled. */
     var powerModuleEnabled: Boolean
-        get() = getActivationStrategy("power") != ActivationStrategy.OFF
-        set(value) = setActivationStrategy("power", if (value) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF)
+        get() = getModuleMode("power") != ModuleMode.OFF
+        set(value) = setModuleMode("power", if (value) getPreferredMode("power").takeIf { it != ModuleMode.OFF } ?: ModuleMode.ON else ModuleMode.OFF)
 
-    /** Whether the network discovery module is enabled. (Legacy, mapped to strategy) */
+    /** Whether the network discovery module is enabled. */
     var discoveryModuleEnabled: Boolean
-        get() = getActivationStrategy("discovery") != ActivationStrategy.OFF
-        set(value) = setActivationStrategy("discovery", if (value) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF)
+        get() = getModuleMode("discovery") != ModuleMode.OFF
+        set(value) = setModuleMode("discovery", if (value) ModuleMode.ON else ModuleMode.OFF)
 
-    /** Whether the rich media (WebView/WHEP) module is enabled. (Legacy, mapped to strategy) */
+    /** Whether the rich media (WebView/WHEP) module is enabled. */
     var mediaModuleEnabled: Boolean
-        get() = getActivationStrategy("media") != ActivationStrategy.OFF
-        set(value) = setActivationStrategy("media", if (value) ActivationStrategy.PERFORMANCE else ActivationStrategy.OFF)
+        get() = getModuleMode("media") != ModuleMode.OFF
+        set(value) = setModuleMode("media", if (value) getPreferredMode("media").takeIf { it != ModuleMode.OFF } ?: ModuleMode.ECO else ModuleMode.OFF)
 
     /** The preferred language for the application UI. */
     var language by StringPref("language", "default")
@@ -218,16 +234,17 @@ class AppSettings(context: Context) {
      * Determines if the current application is a beta or pre-release build.
      */
     val isBetaBuild: Boolean by lazy {
+        if (BuildConfig.DEBUG) return@lazy true
+        if (BuildConfig.APP_STATUS.contains("beta", true)) return@lazy true
+        if (BuildConfig.APP_STATUS.contains("prerelease", true)) return@lazy true
+
         val versionName = try {
             appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName
         } catch (_: Exception) { null }
 
-        versionName?.let { v ->
-            listOf("prerelease", "beta", "rc").any { v.contains(it, true) } || v.contains("-")
-        } == true ||
-                BuildConfig.APP_STATUS.contains("beta", true) ||
-                BuildConfig.APP_STATUS.contains("prerelease", true) ||
-                BuildConfig.DEBUG
+        versionName?.let {
+            listOf("beta", "prerelease", "rc").any { tag -> it.contains(tag, true) } || it.contains("-")
+        } ?: false
     }
 
     init {
@@ -239,7 +256,6 @@ class AppSettings(context: Context) {
     /**
      * Data class representing a snapshot of all application settings.
      */
-    @JsonIgnoreProperties(ignoreUnknown = true)
     data class SettingsData(
         val positionIndex: Int,
         val backgroundColor: String,
@@ -275,95 +291,183 @@ class AppSettings(context: Context) {
         val pendingUpdateId: Long,
         val pendingUpdateDigest: String,
         val pendingUpdateTagName: String,
-        val language: String
-    )
+        val language: String,
+        val moduleModeMedia: Int? = null
+    ) {
+        fun toJSONObject(): JSONObject {
+            return JSONObject().apply {
+                put("positionIndex", positionIndex)
+                put("backgroundColor", backgroundColor)
+                put("backgroundAlpha", backgroundAlpha)
+                put("titleColor", titleColor)
+                put("titleSize", titleSize.toDouble())
+                put("messageColor", messageColor)
+                put("messageSize", messageSize.toDouble())
+                put("borderRadius", borderRadius)
+                put("borderWidth", borderWidth)
+                put("borderColor", borderColor)
+                put("contentPadding", contentPadding)
+                put("titleAlignment", titleAlignment)
+                put("messageAlignment", messageAlignment)
+                put("mediaPosition", mediaPosition)
+                put("animationType", animationType)
+                put("animationDuration", animationDuration)
+                put("animationExit", animationExit)
+                put("mediaTimeout", mediaTimeout)
+                put("mediaRetries", mediaRetries)
+                put("appTheme", appTheme)
+                put("advancedMode", advancedMode)
+                put("powerModuleEnabled", powerModuleEnabled)
+                put("discoveryModuleEnabled", discoveryModuleEnabled)
+                put("mediaModuleEnabled", mediaModuleEnabled)
+                put("updateChannel", updateChannel)
+                put("updateInterval", updateInterval)
+                put("updateNotificationStyle", updateNotificationStyle)
+                put("lastUpdateCheck", lastUpdateCheck)
+                put("updateAvailableTag", updateAvailableTag)
+                put("updateRepeat", updateRepeat)
+                put("lastNotifiedTag", lastNotifiedTag)
+                put("pendingUpdateId", pendingUpdateId)
+                put("pendingUpdateDigest", pendingUpdateDigest)
+                put("pendingUpdateTagName", pendingUpdateTagName)
+                put("language", language)
+                moduleModeMedia?.let { put("moduleModeMedia", it) }
+            }
+        }
+
+        companion object {
+            fun fromJson(jsonStr: String): SettingsData {
+                val j = JSONObject(jsonStr)
+                return SettingsData(
+                    positionIndex = j.optInt("positionIndex", 0),
+                    backgroundColor = j.optString("backgroundColor", ""),
+                    backgroundAlpha = j.optInt("backgroundAlpha", 225),
+                    titleColor = j.optString("titleColor", ""),
+                    titleSize = j.optDouble("titleSize", 22.0).toFloat(),
+                    messageColor = j.optString("messageColor", ""),
+                    messageSize = j.optDouble("messageSize", 16.0).toFloat(),
+                    borderRadius = j.optInt("borderRadius", 16),
+                    borderWidth = j.optInt("borderWidth", 0),
+                    borderColor = j.optString("borderColor", ""),
+                    contentPadding = j.optInt("contentPadding", 20),
+                    titleAlignment = j.optInt("titleAlignment", 0),
+                    messageAlignment = j.optInt("messageAlignment", 0),
+                    mediaPosition = j.optInt("mediaPosition", 0),
+                    animationType = j.optInt("animationType", 0),
+                    animationDuration = j.optInt("animationDuration", 500),
+                    animationExit = j.optBoolean("animationExit", false),
+                    mediaTimeout = j.optInt("mediaTimeout", 10),
+                    mediaRetries = j.optInt("mediaRetries", 3),
+                    appTheme = j.optInt("appTheme", 0),
+                    advancedMode = j.optBoolean("advancedMode", false),
+                    powerModuleEnabled = j.optBoolean("powerModuleEnabled", false),
+                    discoveryModuleEnabled = j.optBoolean("discoveryModuleEnabled", false),
+                    mediaModuleEnabled = j.optBoolean("mediaModuleEnabled", false),
+                    updateChannel = j.optInt("updateChannel", 0),
+                    updateInterval = j.optInt("updateInterval", 4),
+                    updateNotificationStyle = j.optInt("updateNotificationStyle", 1),
+                    lastUpdateCheck = j.optLong("lastUpdateCheck", 0L),
+                    updateAvailableTag = j.optString("updateAvailableTag", ""),
+                    updateRepeat = j.optBoolean("updateRepeat", false),
+                    lastNotifiedTag = j.optString("lastNotifiedTag", ""),
+                    pendingUpdateId = j.optLong("pendingUpdateId", -1L),
+                    pendingUpdateDigest = j.optString("pendingUpdateDigest", ""),
+                    pendingUpdateTagName = j.optString("pendingUpdateTagName", ""),
+                    language = j.optString("language", "default"),
+                    moduleModeMedia = if (j.has("moduleModeMedia")) j.getInt("moduleModeMedia") else null
+                )
+            }
+        }
+    }
 
     /**
      * Retrieves all current settings as a [SettingsData] object.
-     * Uses Jackson to convert the instance directly to reduce manual field mapping.
      */
     fun getAll(): SettingsData {
-        val map = mapOf(
-            "positionIndex" to positionIndex,
-            "backgroundColor" to backgroundColor,
-            "backgroundAlpha" to backgroundAlpha,
-            "titleColor" to titleColor,
-            "titleSize" to titleSize,
-            "messageColor" to messageColor,
-            "messageSize" to messageSize,
-            "borderRadius" to borderRadius,
-            "borderWidth" to borderWidth,
-            "borderColor" to borderColor,
-            "contentPadding" to contentPadding,
-            "titleAlignment" to titleAlignment,
-            "messageAlignment" to messageAlignment,
-            "mediaPosition" to mediaPosition,
-            "animationType" to animationType,
-            "animationDuration" to animationDuration,
-            "animationExit" to animationExit,
-            "mediaTimeout" to mediaTimeout,
-            "mediaRetries" to mediaRetries,
-            "appTheme" to appTheme,
-            "advancedMode" to advancedMode,
-            "powerModuleEnabled" to powerModuleEnabled,
-            "discoveryModuleEnabled" to discoveryModuleEnabled,
-            "mediaModuleEnabled" to mediaModuleEnabled,
-            "updateChannel" to updateChannel,
-            "updateInterval" to updateInterval,
-            "updateNotificationStyle" to updateNotificationStyle,
-            "lastUpdateCheck" to lastUpdateCheck,
-            "updateAvailableTag" to updateAvailableTag,
-            "updateRepeat" to updateRepeat,
-            "lastNotifiedTag" to lastNotifiedTag,
-            "pendingUpdateId" to pendingUpdateId,
-            "pendingUpdateDigest" to pendingUpdateDigest,
-            "pendingUpdateTagName" to pendingUpdateTagName,
-            "language" to language
+        return SettingsData(
+            positionIndex = positionIndex,
+            backgroundColor = backgroundColor,
+            backgroundAlpha = backgroundAlpha,
+            titleColor = titleColor,
+            titleSize = titleSize,
+            messageColor = messageColor,
+            messageSize = messageSize,
+            borderRadius = borderRadius,
+            borderWidth = borderWidth,
+            borderColor = borderColor,
+            contentPadding = contentPadding,
+            titleAlignment = titleAlignment,
+            messageAlignment = messageAlignment,
+            mediaPosition = mediaPosition,
+            animationType = animationType,
+            animationDuration = animationDuration,
+            animationExit = animationExit,
+            mediaTimeout = mediaTimeout,
+            mediaRetries = mediaRetries,
+            appTheme = appTheme,
+            advancedMode = advancedMode,
+            powerModuleEnabled = powerModuleEnabled,
+            discoveryModuleEnabled = discoveryModuleEnabled,
+            mediaModuleEnabled = mediaModuleEnabled,
+            updateChannel = updateChannel,
+            updateInterval = updateInterval,
+            updateNotificationStyle = updateNotificationStyle,
+            lastUpdateCheck = lastUpdateCheck,
+            updateAvailableTag = updateAvailableTag,
+            updateRepeat = updateRepeat,
+            lastNotifiedTag = lastNotifiedTag,
+            pendingUpdateId = pendingUpdateId,
+            pendingUpdateDigest = pendingUpdateDigest,
+            pendingUpdateTagName = pendingUpdateTagName,
+            language = language,
+            moduleModeMedia = getModuleMode("media").value
         )
-        return Json.mapper.convertValue(map, SettingsData::class.java)
     }
 
     /**
      * Applies new settings from a [SettingsData] object.
      */
     fun apply(data: SettingsData) {
-        prefs.edit {
-            putInt("position_index", data.positionIndex)
-            putString("background_color", validateHexColor(data.backgroundColor, appContext.colorToHex(R.color.preset_deep_slate)))
-            putInt("background_alpha", data.backgroundAlpha.coerceIn(0, 255))
-            putString("title_color", validateHexColor(data.titleColor, appContext.colorToHex(R.color.preset_platinum)))
-            putFloat("title_size", data.titleSize.coerceIn(10f, 100f))
-            putString("message_color", validateHexColor(data.messageColor, appContext.colorToHex(R.color.preset_silver)))
-            putFloat("message_size", data.messageSize.coerceIn(8f, 80f))
-            putInt("border_radius", data.borderRadius.coerceIn(0, 200))
-            putInt("border_width", data.borderWidth.coerceIn(0, 50))
-            putString("border_color", validateHexColor(data.borderColor, appContext.colorToHex(R.color.preset_gunmetal)))
-            putInt("content_padding", data.contentPadding.coerceIn(0, 200))
-            putInt("title_alignment", data.titleAlignment.coerceIn(0, 2))
-            putInt("message_alignment", data.messageAlignment.coerceIn(0, 2))
-            putInt("media_position", data.mediaPosition.coerceIn(0, 3))
-            putInt("animation_type", data.animationType.coerceIn(0, 10))
-            putInt("animation_duration", data.animationDuration.coerceIn(0, 5000))
-            putBoolean("animation_exit", data.animationExit)
-            putInt("media_timeout", data.mediaTimeout.coerceIn(1, 60))
-            putInt("media_retries", data.mediaRetries.coerceIn(0, 10))
-            putInt("app_theme", data.appTheme.coerceIn(0, 1))
-            putBoolean("advanced_mode", data.advancedMode)
-            putBoolean("power_module_enabled", data.powerModuleEnabled)
-            putBoolean("discovery_module_enabled", data.discoveryModuleEnabled)
-            putBoolean("media_module_enabled", data.mediaModuleEnabled)
-            putInt("update_channel", data.updateChannel.coerceIn(-1, 1))
-            putInt("update_interval", data.updateInterval.coerceIn(0, 4))
-            putInt("update_notification_style", data.updateNotificationStyle.coerceIn(0, 2))
-            putLong("last_update_check", data.lastUpdateCheck)
-            putString("update_available_tag", data.updateAvailableTag)
-            putBoolean("update_repeat", data.updateRepeat)
-            putString("last_notified_tag", data.lastNotifiedTag)
-            putLong("pending_update_id", data.pendingUpdateId)
-            putString("pending_update_digest", data.pendingUpdateDigest)
-            putString("pending_update_tag_name", data.pendingUpdateTagName)
-            putString("language", data.language)
+        positionIndex = data.positionIndex
+        backgroundColor = validateHexColor(data.backgroundColor, appContext.colorToHex(R.color.preset_deep_slate))
+        backgroundAlpha = data.backgroundAlpha.coerceIn(0, 255)
+        titleColor = validateHexColor(data.titleColor, appContext.colorToHex(R.color.preset_platinum))
+        titleSize = data.titleSize.coerceIn(10f, 100f)
+        messageColor = validateHexColor(data.messageColor, appContext.colorToHex(R.color.preset_silver))
+        messageSize = data.messageSize.coerceIn(8f, 80f)
+        borderRadius = data.borderRadius.coerceIn(0, 200)
+        borderWidth = data.borderWidth.coerceIn(0, 50)
+        borderColor = validateHexColor(data.borderColor, appContext.colorToHex(R.color.preset_gunmetal))
+        contentPadding = data.contentPadding.coerceIn(0, 200)
+        titleAlignment = data.titleAlignment.coerceIn(0, 2)
+        messageAlignment = data.messageAlignment.coerceIn(0, 2)
+        mediaPosition = data.mediaPosition.coerceIn(0, 3)
+        animationType = data.animationType.coerceIn(0, 10)
+        animationDuration = data.animationDuration.coerceIn(0, 5000)
+        animationExit = data.animationExit
+        mediaTimeout = data.mediaTimeout.coerceIn(1, 60)
+        mediaRetries = data.mediaRetries.coerceIn(0, 10)
+        appTheme = data.appTheme.coerceIn(0, 1)
+        advancedMode = data.advancedMode
+        powerModuleEnabled = data.powerModuleEnabled
+        discoveryModuleEnabled = data.discoveryModuleEnabled
+        mediaModuleEnabled = data.mediaModuleEnabled
+        updateChannel = data.updateChannel.coerceIn(-1, 1)
+        updateInterval = data.updateInterval.coerceIn(0, 4)
+        updateNotificationStyle = data.updateNotificationStyle.coerceIn(0, 2)
+        lastUpdateCheck = data.lastUpdateCheck
+        updateAvailableTag = data.updateAvailableTag
+        updateRepeat = data.updateRepeat
+        lastNotifiedTag = data.lastNotifiedTag
+        pendingUpdateId = data.pendingUpdateId
+        pendingUpdateDigest = data.pendingUpdateDigest
+        pendingUpdateTagName = data.pendingUpdateTagName
+        language = data.language
+
+        data.moduleModeMedia?.let {
+            ModuleMode.entries.find { m -> m.value == it }?.let { m -> setModuleMode("media", m) }
         }
+
         cachedFullBgColor = null
     }
 
@@ -396,12 +500,21 @@ class AppSettings(context: Context) {
     }
 
     /**
-     * Resets all settings to their default values.
+     * Resets all settings to their default values in the active storage.
+     * Sets the migration flag to prevent restoring old data after reset.
      */
     fun resetToDefaults() {
+        // 1. Clear active device-protected storage and ensure migration flag is set
         prefs.edit(commit = true) {
             clear()
+            putBoolean("migration_done", true)
         }
+
+        // 2. Also clear legacy storage just in case it wasn't cleared during migration
+        appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit(commit = true) {
+            clear()
+        }
+
         cachedFullBgColor = null
         // Re-initialize default values that were set in init
         updateChannel = if (isBetaBuild) 1 else 0

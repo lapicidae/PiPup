@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.AppSettings
-import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.readExactBytes
@@ -71,7 +70,7 @@ class PayloadParser(private val context: Context) {
         val contentLength = session.headers["content-length"]?.toIntOrNull() ?: 0
         if (contentLength in 1..MAX_PAYLOAD_SIZE) {
             val content = session.inputStream.readExactBytes(contentLength)
-            Json.mapper.readValue(content, PopupProps::class.java)
+            PopupProps.fromJson(String(content, Charsets.UTF_8))
         } else {
             if (contentLength > MAX_PAYLOAD_SIZE) {
                 Log.w(TAG, "Rejecting JSON payload: too large ($contentLength bytes)")

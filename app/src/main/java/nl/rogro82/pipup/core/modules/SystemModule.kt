@@ -11,7 +11,7 @@ import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.UpdateManager
-import nl.rogro82.pipup.core.ActivationStrategy
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.core.PiPupModule
@@ -32,7 +32,13 @@ class SystemModule : PiPupModule {
 
     override val id: String = "system"
     override val name: String = "System Diagnostics"
-    override val supportedRoutes: List<String> = listOf("/notify", "/api/notify", "/cancel")
+
+    override val supportedModes: List<ModuleMode> = listOf(ModuleMode.ON)
+    override val defaultMode: ModuleMode = ModuleMode.ON
+
+    override val supportedRoutes: List<String> = listOf(
+        "/notify", "/api/notify", "/cancel", "/update", "/permissions/diagnose", "/permissions/fix"
+    )
 
     private var moduleContext: ModuleContext? = null
 
@@ -162,9 +168,10 @@ class SystemModule : PiPupModule {
         var props = parser.parse(session) ?: return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Failed to parse input")
 
         // Guard: Check if media module is required and enabled
-        if (props.media != null || props.image != null) {
-            val mediaStrategy = settings.getActivationStrategy("media")
-            if (mediaStrategy == ActivationStrategy.OFF) {
+        val isRichMedia = props.media is nl.rogro82.pipup.PopupProps.Media.Web || props.media is nl.rogro82.pipup.PopupProps.Media.Whep
+        val mediaMode = settings.getModuleMode("media")
+        if (isRichMedia) {
+            if (mediaMode == ModuleMode.OFF) {
                 val localizedContext = context.getLocalizedContext(settings.language)
                 val msg = localizedContext.getString(R.string.error_module_disabled, localizedContext.getString(R.string.settings_module_media))
                 context.showToast(msg)
@@ -173,7 +180,7 @@ class SystemModule : PiPupModule {
 
             // If ECO mode, ensure module is activated
             (context.applicationContext as? PiPupApp)?.moduleManager?.let { mm ->
-                if (mediaStrategy == ActivationStrategy.ECO) {
+                if (mediaMode == ModuleMode.ECO) {
                     mm.activateModule("media")
                 }
             }
@@ -201,9 +208,5 @@ class SystemModule : PiPupModule {
 
         val msg = if (isDisplaying) "OK: Cancelled" else "OK: Nothing to cancel"
         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", msg)
-    }
-
-    override fun augmentState(state: MutableMap<String, Any?>) {
-        // Core state already includes permissions via PipUpService's stateResponse
     }
 }

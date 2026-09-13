@@ -9,7 +9,7 @@
 # --- Code Shrinking & Obfuscation Settings ---
 
 # Maintain line numbers and source file names for readable stack traces in production logs
--keepattributes SourceFile,LineNumberTable
+-keepattributes SourceFile,LineNumberTable,Signature,*Annotation*,EnclosingMethod
 -renamesourcefileattribute SourceFile
 
 
@@ -20,45 +20,25 @@
 -dontwarn java.beans.**
 -dontwarn javax.annotation.**
 -dontwarn org.w3c.dom.bootstrap.DOMImplementationRegistry
--dontwarn com.fasterxml.jackson.databind.ext.Java7SupportImpl
 
 
-# --- Jackson (JSON Framework) ---
-# Ensure Jackson can access annotations and handle reflection for JSON mapping
--keepattributes *Annotation*,EnclosingMethod,Signature
--dontwarn com.fasterxml.jackson.databind.**
--keep class com.fasterxml.jackson.annotation.** { *; }
--keep class com.fasterxml.jackson.databind.annotation.** { *; }
--keep class com.fasterxml.jackson.core.type.TypeReference { *; }
+# --- Application Models & Rendering ---
 
-# --- Jackson Kotlin Module ---
--keep class com.fasterxml.jackson.module.kotlin.KotlinModule { *; }
--keep class com.fasterxml.jackson.module.kotlin.KotlinModule$Builder { *; }
--keep class com.fasterxml.jackson.module.kotlin.KotlinFeature { *; }
-
-
-# --- Application Models ---
-
-# Prevent R8 from stripping or renaming data classes used for JSON reflection
+# Prevent R8 from stripping or renaming data classes and rendering components
 -keep class nl.rogro82.pipup.GitHubRelease { *; }
 -keep class nl.rogro82.pipup.GitHubAsset { *; }
 -keep class nl.rogro82.pipup.PopupProps { *; }
 -keep class nl.rogro82.pipup.PopupProps$** { *; }
--keep class nl.rogro82.pipup.models.** { *; }
 -keep class nl.rogro82.pipup.AppSettings { *; }
 -keep class nl.rogro82.pipup.AppSettings$** { *; }
 
-# CRITICAL: Keep all members (fields and methods) within these classes.
--keepclassmembers class nl.rogro82.pipup.PopupProps { *; }
--keepclassmembers class nl.rogro82.pipup.models.** { *; }
--keepclassmembers class nl.rogro82.pipup.AppSettings { *; }
--keepclassmembers class nl.rogro82.pipup.AppSettings$** { *; }
+# Keep rendering and animation logic
+-keep class nl.rogro82.pipup.ui.** { *; }
 
-# Preserve specific Jackson annotations to ensure mapping works at runtime
+# Preserve WebView JavaScript interfaces and annotations
+-keepattributes *Annotation*,EnclosingMethod,Signature,JavascriptInterface
 -keepclassmembers class * {
-    @com.fasterxml.jackson.annotation.JsonCreator *;
-    @com.fasterxml.jackson.annotation.JsonProperty *;
-    @com.fasterxml.jackson.annotation.JsonValue *;
+    @android.webkit.JavascriptInterface <methods>;
 }
 
 
@@ -72,7 +52,6 @@
 
 # Specifically keep our application's Glide modules
 -keep class nl.rogro82.pipup.PipUpGlideAppModule { *; }
--keep class nl.rogro82.pipup.OkHttpLibraryGlideModule { *; }
 
 
 # --- OkHttp / Conscrypt ---
@@ -87,8 +66,4 @@
 -keep class fi.iki.elonen.NanoHTTPD* { *; }
 -keepclassmembers class fi.iki.elonen.NanoHTTPD* { *; }
 
-# --- WebView Pre-Warming ---
-# Ensure the WebView engine isn't stripped during release optimization
--keepclassmembers class nl.rogro82.pipup.core.modules.MediaModule {
-    android.webkit.WebView warmWebView;
-}
+# --- WebView Singletons ---

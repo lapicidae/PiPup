@@ -1,17 +1,14 @@
 package nl.rogro82.pipup.ui
 
 import android.content.Context
-import android.content.Intent
-import android.view.LayoutInflater
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.SettingCategory
 
 /**
@@ -47,7 +44,7 @@ class PerformanceSubmenu(
             val modules = mm.getAllModules()
 
             return modules.any { module ->
-                (module.id == "system" || settings.getActivationStrategy(module.id) != nl.rogro82.pipup.core.ActivationStrategy.OFF) &&
+                (module.id == "system" || settings.getModuleMode(module.id) != ModuleMode.OFF) &&
                 module.getSettingsMetadata().any { it.category == SettingCategory.PERFORMANCE }
             }
         }

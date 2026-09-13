@@ -5,6 +5,7 @@ import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.PowerController
@@ -20,6 +21,9 @@ class PowerModule : PiPupModule {
 
     override val id: String = "power"
     override val name: String = "Power Control"
+
+    override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
+    override val defaultMode: ModuleMode = ModuleMode.OFF
 
     private var moduleContext: ModuleContext? = null
 
@@ -90,7 +94,6 @@ class PowerModule : PiPupModule {
     }
 
     override fun getRequiredPermissions(): List<String> = listOf(
-        Permissions.KEY_ADMIN,
-        Permissions.KEY_ACCESSIBILITY
+        Permissions.KEY_POWER
     )
 }

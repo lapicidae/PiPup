@@ -1,6 +1,8 @@
 package nl.rogro82.pipup.core
 
 import android.util.Log
+import androidx.annotation.OptIn
+import androidx.media3.common.util.UnstableApi
 import fi.iki.elonen.NanoHTTPD
 
 /**
@@ -15,7 +17,7 @@ class ModuleManager {
 
     private val modules = mutableMapOf<String, PiPupModule>()
     private val activeModules = mutableSetOf<String>()
-    private val dormantModules = mutableSetOf<String>() // Eco mode: logically on, but not initialized
+    private val lastActivityMap = mutableMapOf<String, Long>()
 
     /**
      * The timeout in milliseconds before an Eco module is considered idle and released.
@@ -24,7 +26,6 @@ class ModuleManager {
 
     private var moduleContext: ModuleContext? = null
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
-    private val lastActivityMap = mutableMapOf<String, Long>()
 
     private val idleWatchdog = object : Runnable {
         override fun run() {
@@ -46,81 +47,54 @@ class ModuleManager {
      */
     fun initialize(context: ModuleContext) {
         this.moduleContext = context
+        handler.removeCallbacks(idleWatchdog)
         modules.values.forEach { module ->
-            val strategy = context.settings.getActivationStrategy(module.id)
-            updateModuleState(module.id, strategy)
+            val mode = context.settings.getModuleMode(module.id)
+            updateModuleState(module.id, mode)
         }
         handler.postDelayed(idleWatchdog, 60000)
     }
 
     /**
-     * Updates the state of a module based on the requested strategy.
+     * Updates the state of a module based on the requested mode.
      */
-    fun updateModuleState(id: String, strategy: Int) {
+    fun updateModuleState(id: String, mode: ModuleMode) {
         val module = modules[id] ?: return
         val context = moduleContext ?: return
 
-        when (strategy) {
-            ActivationStrategy.OFF -> {
+        when (mode) {
+            ModuleMode.OFF -> {
                 if (activeModules.remove(id)) {
                     Log.i(TAG, "Disabling module: $id")
                     module.onDisable()
                 }
-                dormantModules.remove(id)
                 lastActivityMap.remove(id)
             }
-            ActivationStrategy.ECO -> {
-                if (activeModules.contains(id)) {
-                    // Stay active if already active, but mark as eligible for idle cleanup
-                } else {
-                    dormantModules.add(id)
-                }
+            ModuleMode.ECO -> {
+                // Eco modules start in inactive state; they are activated on demand.
             }
-            ActivationStrategy.PERFORMANCE -> {
-                dormantModules.remove(id)
+            ModuleMode.ON -> {
                 if (activeModules.add(id)) {
-                    Log.i(TAG, "Activating module (Performance): $id")
+                    Log.i(TAG, "Activating module (Always On): $id")
                     module.onEnable(context)
                 }
+                lastActivityMap.remove(id) // On modules don't idle
             }
         }
     }
 
     /**
-     * Forces a dormant module to activate (onEnable).
-     * Useful for cross-module activation triggers.
+     * Forces a module to activate (onEnable).
      */
     fun activateModule(id: String) {
         val module = modules[id] ?: return
         val context = moduleContext ?: return
 
-        if (dormantModules.remove(id)) {
-            if (activeModules.add(id)) {
-                Log.i(TAG, "Activating dormant module (Manual Trigger): $id")
-                module.onEnable(context)
-            }
+        if (activeModules.add(id)) {
+            Log.i(TAG, "Activating module: $id")
+            module.onEnable(context)
         }
         lastActivityMap[id] = android.os.SystemClock.elapsedRealtime()
-    }
-
-    /**
-     * Forces an immediate check and cleanup of idle modules, regardless of the timeout.
-     */
-    fun forceIdleCleanup() {
-        Log.i(TAG, "Forced idle cleanup triggered")
-        val context = moduleContext ?: return
-
-        activeModules.toList().forEach { id ->
-            val module = modules[id] ?: return@forEach
-            // Only Eco modules are eligible for idle cleanup
-            if (context.settings.getActivationStrategy(id) == ActivationStrategy.ECO) {
-                Log.i(TAG, "Module $id forced to idle, releasing resources")
-                module.onIdle()
-                activeModules.remove(id)
-                dormantModules.add(id)
-                lastActivityMap.remove(id)
-            }
-        }
     }
 
     private fun checkIdleModules() {
@@ -130,14 +104,11 @@ class ModuleManager {
         activeModules.toList().forEach { id ->
             val module = modules[id] ?: return@forEach
             // Only Eco modules are eligible for idle cleanup
-            if (context.settings.getActivationStrategy(id) == ActivationStrategy.ECO) {
+            if (context.settings.getModuleMode(id) == ModuleMode.ECO) {
                 val lastActivity = lastActivityMap[id] ?: 0L
                 if (now - lastActivity > idleTimeoutMs) {
-                    Log.i(TAG, "Module $id is idle, releasing resources")
+                    Log.i(TAG, "Module $id is idle, releasing heavy resources")
                     module.onIdle()
-                    activeModules.remove(id)
-                    dormantModules.add(id)
-                    lastActivityMap.remove(id)
                 }
             }
         }
@@ -157,34 +128,35 @@ class ModuleManager {
      * Returns all modules that are logically enabled (not OFF).
      */
     fun getEnabledModules(): List<PiPupModule> {
-        val enabledIds = activeModules + dormantModules
-        return enabledIds.mapNotNull { modules[it] }
+        val context = moduleContext ?: return emptyList()
+        return modules.values.filter { context.settings.getModuleMode(it.id) != ModuleMode.OFF }
     }
 
     /**
-     * Dispatches an HTTP request to all enabled modules.
+     * Dispatches an HTTP request to enabled modules.
      */
     fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? {
         val uri = session.uri.lowercase()
+        val context = moduleContext ?: return null
 
-        // 1. Check active modules first
-        for (id in activeModules) {
-            val module = modules[id] ?: continue
+        // Check all modules that are NOT turned OFF
+        for (module in modules.values) {
+            val mode = context.settings.getModuleMode(module.id)
+            if (mode == ModuleMode.OFF) continue
+
+            // If not active yet, check if it should be activated by this request
+            if (!activeModules.contains(module.id)) {
+                if (module.supportedRoutes.any { uri.startsWith(it.lowercase()) }) {
+                    activateModule(module.id)
+                } else {
+                    continue
+                }
+            }
+
             val response = module.handleRequest(session)
             if (response != null) {
-                lastActivityMap[id] = android.os.SystemClock.elapsedRealtime()
+                lastActivityMap[module.id] = android.os.SystemClock.elapsedRealtime()
                 return response
-            }
-        }
-
-        // 2. Check dormant modules for route matching
-        for (id in dormantModules) {
-            val module = modules[id] ?: continue
-            if (module.supportedRoutes.any { uri.startsWith(it.lowercase()) }) {
-                Log.d(TAG, "Route $uri matches dormant module $id, triggering activation")
-                activateModule(id)
-                val response = module.handleRequest(session)
-                if (response != null) return response
             }
         }
 
@@ -195,24 +167,43 @@ class ModuleManager {
      * Allows enabled modules to add their own information to the global state report.
      */
     fun augmentState(state: MutableMap<String, Any?>) {
-        // Both active and dormant (eco) modules can report state
-        (activeModules + dormantModules).forEach { id ->
+        activeModules.forEach { id ->
             modules[id]?.augmentState(state)
         }
     }
 
     /**
-     * Gracefully shuts down all enabled modules and clears the module registry.
+     * Gracefully shuts down all active modules and resets the context.
+     * Note: The module registry (modules map) is preserved for service restarts.
      */
     fun shutdown() {
-        Log.d(TAG, "Shutting down all modules...")
+        Log.d(TAG, "Shutting down all active modules...")
         handler.removeCallbacks(idleWatchdog)
         activeModules.toList().forEach { id ->
             modules[id]?.onDisable()
         }
         activeModules.clear()
-        dormantModules.clear()
-        modules.clear()
+        lastActivityMap.clear()
         moduleContext = null
+    }
+
+    /**
+     * Legacy/Debug: Triggered by DebugModule to clean up memory.
+     */
+    @OptIn(UnstableApi::class)
+    fun forceIdleCleanup() {
+        Log.i(TAG, "Forced module cleanup triggered")
+        activeModules.toList().forEach { id ->
+            val module = modules[id] ?: return@forEach
+            // Only non-system modules can be unloaded
+            if (id != "system") {
+                Log.i(TAG, "Module $id forced to disable to save RAM")
+                module.onDisable()
+                activeModules.remove(id)
+            }
+        }
+
+        // Deep cleanup: View pool removal handled by NotificationManager
+        moduleContext?.notificationManager?.cancelAll()
     }
 }

@@ -1,21 +1,14 @@
 package nl.rogro82.pipup.ui
 
-import android.content.Context
-import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.TextView
 import androidx.annotation.OptIn
-import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
-import nl.rogro82.pipup.core.ModuleSettingDefinition
 import nl.rogro82.pipup.core.PiPupModule
-import nl.rogro82.pipup.core.SettingCategory
-import nl.rogro82.pipup.core.SettingType
 
 /**
  * Dynamically rendered settings screen for a specific module.

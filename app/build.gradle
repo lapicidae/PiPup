@@ -202,10 +202,6 @@ dependencies {
     ksp libs.compiler
     implementation libs.okhttp3.integration
 
-    // Jackson for JSON parsing
-    implementation libs.jackson.databind
-    implementation libs.jackson.module.kotlin
-
     // Web server functionality
     implementation libs.nanohttpd
 

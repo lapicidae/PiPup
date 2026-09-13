@@ -23,7 +23,7 @@ import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
-import nl.rogro82.pipup.core.ActivationStrategy
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleSettingDefinition
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.SettingCategory
@@ -243,8 +243,8 @@ abstract class SubmenuBase(
         val modules = mm.getAllModules()
 
         modules.forEach { module ->
-            // Only show settings for logically active modules (Eco or Performance)
-            if (module.id != "system" && settings.getActivationStrategy(module.id) == ActivationStrategy.OFF) {
+            // Only show settings for logically active modules (Eco or On)
+            if (module.id != "system" && settings.getModuleMode(module.id) == ModuleMode.OFF) {
                 return@forEach
             }
 
@@ -298,22 +298,21 @@ abstract class SubmenuBase(
         }
 
         if (def.key == "resource_mode") {
-            // Special handling for legacy ActivationStrategy
-            val current = settings.getActivationStrategy(module.id)
-            updateText(if (current == ActivationStrategy.PERFORMANCE) "performance" else "eco")
+            // Internal mapping for the UI switch: On (ON) vs Eco (ECO)
+            val current = settings.getModuleMode(module.id)
+            updateText(if (current == ModuleMode.ON) "performance" else "eco")
 
             view.setOnClickListener {
-                val currentStrategy = settings.getActivationStrategy(module.id)
-                val next = if (currentStrategy == ActivationStrategy.ECO) ActivationStrategy.PERFORMANCE else ActivationStrategy.ECO
-                settings.setActivationStrategy(module.id, next)
-                updateText(if (next == ActivationStrategy.PERFORMANCE) "performance" else "eco")
+                val currentMode = settings.getModuleMode(module.id)
+                val next = if (currentMode == ModuleMode.ECO) ModuleMode.ON else ModuleMode.ECO
+                settings.setModuleMode(module.id, next)
+                updateText(if (next == ModuleMode.ON) "performance" else "eco")
                 (context.applicationContext as PiPupApp).moduleManager.updateModuleState(module.id, next)
                 notifySettingsChanged()
             }
         } else {
             val current = settings.getModuleSetting(module.id, def.key, def.defaultValue as String)
             updateText(current)
-            // Generic STRING_SELECT click handler not yet implemented
         }
 
         container.addView(view)

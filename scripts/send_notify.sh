@@ -10,7 +10,7 @@ set -euo pipefail
 #######################################
 readonly DEFAULT_IP='127.0.0.1'
 readonly PORT='7979'
-readonly DURATION=10
+readonly DURATION=5
 STRESS_ITERATIONS=50
 
 readonly WHEP_STATE_FILE='/dev/shm/pipup_whep.state'
@@ -44,6 +44,8 @@ readonly MONITOR_TEST_BUFFER=2
 readonly MONITOR_SETUP_BUFFER=10
 monitor_pid=""
 MONITOR_START_TIME=0
+adb_full_cmd="adb"
+print_mem_before_global="false"
 
 # Fallback Configuration
 readonly WHEP_FALLBACK_PORT="${STREAM_WHEP_PORT}"
@@ -82,8 +84,8 @@ readonly ALIGN_NAMES=("Left" "Center" "Right")
 readonly THEME_KEYS=("${!THEMES[@]}")
 
 # Test Assets
-readonly JPG_URL="https://loremflickr.com/427/240/all"
-# readonly JPG_URL="https://picsum.photos/427/240.jpg"
+readonly JPG_URL="https://picsum.photos/427/240.jpg"
+# readonly JPG_URL="https://loremflickr.com/427/240/all"
 PNG_URL=$(printf 'https://robohash.org/hash_%s.png?size=427x240' "$RANDOM")
 readonly PNG_URL
 readonly SVG_URL="https://upload.wikimedia.org/wikipedia/commons/1/16/Eye_svg.svg"
@@ -180,13 +182,15 @@ monitor_memory() {
     meminfo=$(${adb_cmd} shell dumpsys meminfo "${MEM_PACKAGE}" 2>/dev/null || printf "")
 
     if [[ -n "${meminfo}" ]]; then
-      local total_pss java_heap native_heap
+      local total_pss java_heap native_heap activities contexts
       total_pss=$(get_mem_val "${meminfo}" "TOTAL PSS:")
       java_heap=$(get_mem_val "${meminfo}" "Java Heap:")
       native_heap=$(get_mem_val "${meminfo}" "Native Heap:")
+      activities=$(get_mem_val "${meminfo}" "Activities:")
+      contexts=$(get_mem_val "${meminfo}" "AppContexts:")
 
       if [[ "${total_pss}" != "0" ]]; then
-        printf "%s,%s,%s,%s\n" "${timestamp}" "${total_pss}" "${java_heap}" "${native_heap}" >> "${MEM_LOG_FILE}"
+        printf "%s,%s,%s,%s,%s,%s\n" "${timestamp}" "${total_pss}" "${java_heap}" "${native_heap}" "${activities}" "${contexts}" >> "${MEM_LOG_FILE}"
       fi
     fi
     sleep "${interval}"
@@ -221,7 +225,79 @@ send_debug_unload() {
 }
 
 #######################################
-# Analyzes the collected memory log and prints a summary.
+# Internal helper to format kilobytes into a MB string with 2 decimals.
+# Arguments:
+#   raw: String/Integer value in KB.
+# Outputs:
+#   Writes the formatted MB string to STDOUT.
+#######################################
+format_mb() {
+  local raw="${1:-0}"
+  local sign=""
+  [[ "${raw}" == -* ]] && sign="-"
+  local val=${raw//[!0-9]/}
+  val=${val:-0}
+  local integer=$(( val / 1024 ))
+  local decimal=$(( (val % 1024) * 100 / 1024 ))
+  printf "%s%d.%02d MB" "${sign}" "${integer}" "${decimal}"
+}
+
+#######################################
+# Internal helper to return a formatted MB string (for alignment).
+# Arguments:
+#   raw: String/Integer value in KB.
+# Outputs:
+#   Formatted string to STDOUT.
+#######################################
+get_mb_str() {
+  local raw="${1:-0}"
+  local sign=""
+  [[ "${raw}" == -* ]] && sign="-"
+  local val=${raw//[!0-9]/}
+  val=${val:-0}
+  local integer=$(( val / 1024 ))
+  local decimal=$(( (val % 1024) * 100 / 1024 ))
+  printf "%s%d.%02d MB" "${sign}" "${integer}" "${decimal}"
+}
+
+#######################################
+# Internal helper to print the current memory state of the app.
+# Arguments:
+#   adb_cmd: String, the full adb command with serial.
+#   label: String, optional prefix label (default: [SYSTEM]).
+# Outputs:
+#   Memory stats to STDOUT.
+#######################################
+print_current_mem() {
+  local adb_cmd="${1}"
+  local label="${2:-[SYSTEM]}"
+  local info
+  info=$(${adb_cmd} shell dumpsys meminfo "${MEM_PACKAGE}" 2>/dev/null || printf "")
+
+  if [[ -n "${info}" ]]; then
+     local pss java native activities contexts
+     pss=$(get_mem_val "${info}" "TOTAL PSS:")
+     java=$(get_mem_val "${info}" "Java Heap:")
+     native=$(get_mem_val "${info}" "Native Heap:")
+     activities=$(get_mem_val "${info}" "Activities:")
+     contexts=$(get_mem_val "${info}" "AppContexts:")
+     if [[ "${pss}" != "0" ]]; then
+       printf "%b%s Baseline Memory:%b  Total: " "${CLR_MONITOR}" "${label}" "${CLR_RESET}"
+       format_mb "${pss}"
+       printf " | Java: "
+       format_mb "${java}"
+       printf " | Native: "
+       format_mb "${native}"
+       printf " | Act: %s | Ctx: %s\n" "${activities}" "${contexts}"
+       return 0
+     fi
+  fi
+  printf "%b%s Baseline Memory:%b  App not running or not found.\n" "${CLR_MONITOR}" "${label}" "${CLR_RESET}"
+  return 1
+}
+
+#######################################
+# Analyzes the collected memory log and prints a detailed comparison.
 # Globals:
 #   MEM_LOG_FILE
 #   CLR_MONITOR
@@ -230,55 +306,92 @@ send_debug_unload() {
 # Arguments:
 #   None
 # Outputs:
-#   Memory statistics summary to STDOUT
+#   Memory statistics comparison table to STDOUT.
 #######################################
 print_memory_summary() {
   [[ ! -f "${MEM_LOG_FILE}" ]] && return
 
   local max_pss=0 max_java=0 max_native=0
-  local first_pss=0 last_pss=0
+  local first_pss=0 first_java=0 first_native=0 first_act=0 first_ctx=0
+  local last_pss=0 last_java=0 last_native=0 last_act=0 last_ctx=0
   local count=0
 
-  format_mb() {
-    local raw="${1:-0}"
-    local val=${raw//[!0-9]/}
-    val=${val:-0}
-    local integer=$(( val / 1024 ))
-    local decimal=$(( (val % 1024) * 100 / 1024 ))
-    printf "%6d.%02d MB" "${integer}" "${decimal}"
-  }
-
-  printf "\n${CLR_MONITOR}[ANALYSIS] Memory Statistics (from %s):${CLR_RESET}\n" "${MEM_LOG_FILE}"
-
-  while IFS=',' read -r _ pss_val java_val native_val || [[ -n "${pss_val}" ]]; do
+  while IFS=',' read -r _ pss_val java_val native_val act_val ctx_val || [[ -n "${pss_val}" ]]; do
     [[ "${pss_val}" == "TotalPSS" || -z "${pss_val}" ]] && continue
     local pss=${pss_val//[!0-9]/}
     local java=${java_val//[!0-9]/}
     local native=${native_val//[!0-9]/}
+    local act=${act_val//[!0-9]/}
+    local ctx=${ctx_val//[!0-9]/}
     [[ -z "${pss}" ]] && continue
 
     count=$(( count + 1 ))
-    if [ "${pss}" -gt "${max_pss}" ]; then max_pss="${pss}"; fi
-    if [ "${java}" -gt "${max_java}" ]; then max_java="${java}"; fi
-    if [ "${native}" -gt "${max_native}" ]; then max_native="${native}"; fi
+    [[ "${pss}" -gt "${max_pss}" ]] && max_pss="${pss}"
+    [[ "${java}" -gt "${max_java}" ]] && max_java="${java}"
+    [[ "${native}" -gt "${max_native}" ]] && max_native="${native}"
 
+    if [[ "${count}" -eq 1 ]]; then
+      first_pss="${pss}"
+      first_java="${java}"
+      first_native="${native}"
+      first_act="${act}"
+      first_ctx="${ctx}"
+    fi
     last_pss="${pss}"
-    if [ "${count}" -eq 1 ]; then first_pss="${pss}"; fi
+    last_java="${java}"
+    last_native="${native}"
+    last_act="${act}"
+    last_ctx="${ctx}"
   done < "${MEM_LOG_FILE}"
 
-  if [[ $count -gt 0 ]]; then
-    printf "  - Peak Total RAM:   " ; format_mb "$max_pss" ; printf "\n"
-    printf "  - Java Heap (Peak): " ; format_mb "$max_java" ; printf "\n"
-    printf "  - Native Heap (Pk): " ; format_mb "$max_native" ; printf "\n"
-    printf "  - Recovery:         " ; format_mb "$last_pss" ; printf " (Baseline: " ; format_mb "$first_pss" ; printf ")\n"
+  if [[ "${count}" -gt 0 ]]; then
+    printf "\n%b[ANALYSIS] Memory Usage Comparison:%b\n" "${CLR_MONITOR}" "${CLR_RESET}"
+    printf "%b--------------------------------------------------------------------------------%b\n" "${CLR_PARAM}" "${CLR_RESET}"
+    printf "%-15s | %-18s | %-18s | %s\n" "METRIC" "BEFORE (Baseline)" "AFTER (Recovery)" "DIFF (Impact)"
+    printf "%b--------------------------------------------------------------------------------%b\n" "${CLR_PARAM}" "${CLR_RESET}"
 
-    if [[ $(( last_pss )) -le $(( first_pss * 125 / 100 )) ]]; then
-      printf "  - Health Status:    %bPASSED (Stable)%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
-    else
-      printf "  - Health Status:    %bWARNING (High Retention)%b\n" "${CLR_MONITOR}" "${CLR_RESET}"
+    print_row() {
+      local label="${1}"
+      local before="${2}"
+      local after="${3}"
+      local is_count="${4:-false}"
+      local diff=$(( after - before ))
+      local sign=""
+      [[ "${diff}" -gt 0 ]] && sign="+"
+
+      local before_str after_str diff_str
+      if [[ "${is_count}" == "true" ]]; then
+        before_str="${before}"
+        after_str="${after}"
+        diff_str="${sign}${diff}"
+      else
+        before_str=$(get_mb_str "${before}")
+        after_str=$(get_mb_str "${after}")
+        diff_str="${sign}$(get_mb_str "${diff}")"
+      fi
+
+      printf "%-15s | %18s | %18s | %s\n" "${label}" "${before_str}" "${after_str}" "${diff_str}"
+    }
+
+    print_row "Total PSS" "${first_pss}" "${last_pss}"
+    print_row "Java Heap" "${first_java}" "${last_java}"
+    print_row "Native Heap" "${first_native}" "${last_native}"
+    print_row "Activities" "${first_act}" "${last_act}" "true"
+    print_row "AppContexts" "${first_ctx}" "${last_ctx}" "true"
+
+    printf "%b--------------------------------------------------------------------------------%b\n" "${CLR_PARAM}" "${CLR_RESET}"
+    printf "Peak Usage:      " ; format_mb "${max_pss}"
+    printf " (Total PSS during test)\n"
+
+    local health_color="${CLR_SUCCESS}"
+    local health_label="PASSED (Stable)"
+    if [[ "${last_pss}" -gt $(( first_pss * 120 / 100 )) ]]; then
+      health_color="${CLR_MONITOR}"
+      health_label="WARNING (Retention detected)"
     fi
+    printf "Health Status:   %b%s%b\n\n" "${health_color}" "${health_label}" "${CLR_RESET}"
   else
-    printf "  - No data collected for analysis.\n"
+    printf "  - No data collected for memory analysis.\n"
   fi
 }
 
@@ -304,34 +417,42 @@ finish_monitoring() {
 
   [[ "${is_mon}" != "true" ]] && return
 
-  # Trigger unload before waiting for recovery if requested
-  if [[ "${trigger_unload}" == "true" && -n "${target_ip}" ]]; then
-      # Small buffer for last popup animation
-      sleep 1.5
-      send_debug_unload "${target_ip}"
-  fi
-
   local now
   now=$(date +%s)
   local target_end=$(( MONITOR_START_TIME + duration ))
   local remaining=$(( target_end - now ))
 
-  if [ "${remaining}" -gt 0 ]; then
+  if [[ "${remaining}" -gt 0 ]]; then
     local h=$((remaining / 3600))
     local m=$(( (remaining % 3600) / 60 ))
     local s=$((remaining % 60))
     local time_str=""
-    [[ $h -gt 0 ]] && time_str+="${h}h "
-    [[ $m -gt 0 || $h -gt 0 ]] && time_str+="${m}m "
+    [[ "${h}" -gt 0 ]] && time_str+="${h}h "
+    [[ "${m}" -gt 0 || "${h}" -gt 0 ]] && time_str+="${m}m "
     time_str+="${s}s"
 
-    printf "\n${CLR_MONITOR}[SYSTEM] Waiting for popups to finish and memory to stabilize (%s)...${CLR_RESET}\n" "${time_str}"
+    printf "\n%b[SYSTEM] Waiting for popups to finish and memory to stabilize (%s)...%b\n" \
+      "${CLR_MONITOR}" "${time_str}" "${CLR_RESET}"
     sleep "${remaining}"
+  fi
+
+  # Trigger unload AFTER the normal stabilization wait to ensure popups are gone
+  if [[ "${trigger_unload}" == "true" && -n "${target_ip}" ]]; then
+      send_debug_unload "${target_ip}"
+      # Give Android a few seconds to actually release resources and let GC work
+      printf "[SYSTEM] Post-unload recovery wait (3s)... "
+      sleep 3
+      printf "DONE\n"
   fi
 
   printf "[SYSTEM] Processing final monitoring data...\n"
   kill "${mon_pid}" 2>/dev/null || true
   printf "%b[SYSTEM] Monitoring finished.%b\n" "${CLR_MONITOR}" "${CLR_RESET}"
+
+  if [[ "${print_mem_before_global:-false}" == "true" ]]; then
+     print_current_mem "${adb_full_cmd}" "[AFTER]"
+  fi
+
   print_memory_summary
 }
 
@@ -440,10 +561,10 @@ get_random_theme_colors() {
 #   Writes the table header to STDOUT.
 #######################################
 print_table_header() {
-  printf "${CLR_HEADER}%-12s | %-15s | %-76s | %-15s | %-6s | %-20s${CLR_RESET}\n" \
-    "TEST TYPE" "THEME" "STYLE PARAMETERS" "ENDPOINT" "HTTP" "JSON STATUS"
-  printf "${CLR_PARAM}%s${CLR_RESET}\n" \
-    "--------------------------------------------------------------------------------------------------------------------------------------------------------"
+  printf "%b%-12s | %-15s | %-76s | %-15s | %-6s | %-20s%b\n" \
+    "${CLR_HEADER}" "TEST TYPE" "THEME" "STYLE PARAMETERS" "ENDPOINT" "HTTP" "JSON STATUS" "${CLR_RESET}"
+  printf "%b%s%b\n" \
+    "${CLR_PARAM}" "--------------------------------------------------------------------------------------------------------------------------------------------------------" "${CLR_RESET}"
 }
 
 #######################################
@@ -542,8 +663,13 @@ print_result_row() {
     status_display=$(printf '%s' "${body}" | head -n 1 | cut -c 1-40)
   fi
 
-  printf "${CLR_TEST}%-12s${CLR_RESET} | ${CLR_THEME}%-15s${CLR_RESET} | ${CLR_PARAM}%-76s${CLR_RESET} | %-15s | ${status_color}%-6s${CLR_RESET} | ${status_color}%-20s${CLR_RESET}\n" \
-    "${type}" "${theme}" "${style}" "${target}" "${code}" "${status_display}"
+  printf "%b%-12s%b | %b%-15s%b | %b%-76s%b | %-15s | %b%-6s%b | %b%-20s%b\n" \
+    "${CLR_TEST}" "${type}" "${CLR_RESET}" \
+    "${CLR_THEME}" "${theme}" "${CLR_RESET}" \
+    "${CLR_PARAM}" "${style}" "${CLR_RESET}" \
+    "${target}" \
+    "${status_color}" "${code}" "${CLR_RESET}" \
+    "${status_color}" "${status_display}" "${CLR_RESET}"
 }
 
 #######################################
@@ -1146,6 +1272,7 @@ Options:
   -s    Execute a high-frequency parallel stress test
   -g    Gallery mode: Systematic walkthrough of all animations and positions
   -m    Monitor RAM usage in background. Optional: seconds, and 'u' to trigger unload (e.g. -m 60 u)
+  -M    Monitor RAM usage like -m, but also output memory statistics before the test
   -k    Stop the active WHEP pipeline and server
   -h, --help, -?  Show this help message and exit
 EOF
@@ -1196,7 +1323,7 @@ main() {
   local repeat_count=1
   local repeat_explicit="false"
 
-  while getopts "d:t:u:alockswmghrC?" opt; do
+  while getopts "d:t:u:alockswmghrCM?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       C) USE_CACHE="false" ;;
@@ -1217,6 +1344,20 @@ main() {
           repeat_count="${next_val}"
           OPTIND=$((OPTIND + 1))
         fi
+        ;;
+      M)
+        print_mem_before_global="true"
+        monitor_mem="true"
+        # Peek at multiple optional arguments: duration and/or 'u'
+        while [[ ${!OPTIND:-} =~ ^([0-9]+|auto|u|unload)$ ]]; do
+          local val="${!OPTIND}"
+          if [[ "${val}" =~ ^[0-9]+$ || "${val}" == "auto" ]]; then
+            monitor_duration="${val}"
+          elif [[ "${val}" == "u" || "${val}" == "unload" ]]; then
+            trigger_unload="true"
+          fi
+          OPTIND=$((OPTIND + 1))
+        done
         ;;
       m)
         monitor_mem="true"
@@ -1374,18 +1515,24 @@ main() {
     # Ensure monitor duration is at least setup + recovery + some buffer
     [[ "${monitor_duration}" -lt $(( MONITOR_SETUP_BUFFER + recovery_time + 10 )) ]] && monitor_duration=$(( MONITOR_SETUP_BUFFER + recovery_time + 10 ))
 
-    printf "Timestamp,TotalPSS,JavaHeap,NativeHeap\n" > "${MEM_LOG_FILE}"
-    printf "${CLR_MONITOR}[SYSTEM] Starting background RAM monitoring (Duration: %ss, Target: %s)...${CLR_RESET}\n" \
-      "${monitor_duration}" "${adb_full_cmd}"
+    printf "Timestamp,TotalPSS,JavaHeap,NativeHeap,Activities,AppContexts\n" > "${MEM_LOG_FILE}"
+    printf "%b[SYSTEM] Starting background RAM monitoring (Duration: %ss, Target: %s)...%b\n" \
+      "${CLR_MONITOR}" "${monitor_duration}" "${adb_full_cmd}" "${CLR_RESET}"
+
+    if [[ "${print_mem_before_global}" == "true" ]]; then
+       print_current_mem "${adb_full_cmd}" "[BEFORE]"
+    fi
 
     # Take initial synchronous baseline to ensure the log is not empty for fast tests
     baseline_info=$(${adb_full_cmd} shell dumpsys meminfo "${MEM_PACKAGE}" 2>/dev/null || printf "")
     if [[ -n "${baseline_info}" ]]; then
-       local pss java native
+       local pss java native act ctx
        pss=$(get_mem_val "${baseline_info}" "TOTAL PSS:")
        java=$(get_mem_val "${baseline_info}" "Java Heap:")
        native=$(get_mem_val "${baseline_info}" "Native Heap:")
-       [[ "${pss}" != "0" ]] && printf "%s,%s,%s,%s\n" "$(date +"%H:%M:%S")" "${pss}" "${java}" "${native}" >> "${MEM_LOG_FILE}"
+       act=$(get_mem_val "${baseline_info}" "Activities:")
+       ctx=$(get_mem_val "${baseline_info}" "AppContexts:")
+       [[ "${pss}" != "0" ]] && printf "%s,%s,%s,%s,%s,%s\n" "$(date +"%H:%M:%S")" "${pss}" "${java}" "${native}" "${act}" "${ctx}" >> "${MEM_LOG_FILE}"
     fi
 
     MONITOR_START_TIME=$(date +%s)
@@ -1443,7 +1590,7 @@ main() {
     local rand_m_a=$(( RANDOM % 3 ))
 
     local info_msg fit_label=""
-    [[ -n "${fit}" ]] && fit_label=" | Fit: ${fit}"
+    [[ "${type}" == "whep" ]] && fit_label=" | Fit: ${fit}"
     info_msg=$(printf "Theme: %s\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
       "${theme_name}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${rand_media_pos}" "${padding}" \
       "${anim_type}" "${anim_dur}" "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${overwrite}" "${suffix}")
@@ -1455,7 +1602,16 @@ main() {
       "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}")
 
     local table_type="${type^^}"
-    [[ -n "${fit}" ]] && table_type="${table_type}(${fit:0:1})"
+    if [[ "${type}" == "whep" ]]; then
+      local fit_short="???"
+      case "${fit}" in
+        cover)   fit_short="cov" ;;
+        contain) fit_short="con" ;;
+        fill)    fit_short="fil" ;;
+        *)       fit_short="${fit:0:3}" ;;
+      esac
+      table_type="${table_type}(${fit_short})"
+    fi
 
     local style_info
     style_info=$(printf "Pos:%s MedPos:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
@@ -1580,7 +1736,7 @@ main() {
     for t in "${TEST_TYPES[@]}"; do [[ "$t" != "cancel" ]] && test_count=$((test_count + 1)); done
 
     for ((r = 1; r <= repeat_count; r++)); do
-      [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
+      [[ "${repeat_count}" -gt 1 ]] && printf "%b[RUN %d/%d]%b\n" "${CLR_MONITOR}" "${r}" "${repeat_count}" "${CLR_RESET}"
 
       local pos_list
       mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 0 1 2 3 4 | shuf)
@@ -1653,7 +1809,7 @@ main() {
   if [[ "${test_type}" == "multipart" ]]; then
     print_table_header
     for ((r = 1; r <= repeat_count; r++)); do
-      [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
+      [[ "${repeat_count}" -gt 1 ]] && printf "%b[RUN %d/%d]%b\n" "${CLR_MONITOR}" "${r}" "${repeat_count}" "${CLR_RESET}"
 
       trigger_test "multipart" "Multipart Test" "$(( RANDOM % 5 ))" "${target_ip}" "" "${overwrite}" "${suffix}" "false"
       [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
@@ -1686,7 +1842,7 @@ main() {
     fi
     print_table_header
     for ((r = 1; r <= repeat_count; r++)); do
-      [[ "${repeat_count}" -gt 1 ]] && printf "${CLR_MONITOR}[RUN %d/%d]${CLR_RESET}\n" "${r}" "${repeat_count}"
+      [[ "${repeat_count}" -gt 1 ]] && printf "%b[RUN %d/%d]%b\n" "${CLR_MONITOR}" "${r}" "${repeat_count}" "${CLR_RESET}"
 
       trigger_test "${test_type}" "${test_type^^} Test" "$(( RANDOM % 5 ))" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "false"
       [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"

@@ -37,7 +37,7 @@ class SettingsSyncTest {
             val response = connection.inputStream.bufferedReader().use { it.readText() }
             assertTrue(response.contains("positionIndex"))
 
-            val data = Json.mapper.readValue(response, AppSettings.SettingsData::class.java)
+            val data = AppSettings.SettingsData.fromJson(response)
             assertNotNull(data)
         } finally {
             connection.disconnect()
@@ -59,9 +59,10 @@ class SettingsSyncTest {
             connection.requestMethod = "POST"
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json")
-            connection.setRequestProperty("Content-Length", Json.mapper.writeValueAsBytes(newSettings).size.toString())
+            val jsonBytes = newSettings.toJSONObject().toString().toByteArray(Charsets.UTF_8)
+            connection.setRequestProperty("Content-Length", jsonBytes.size.toString())
 
-            connection.outputStream.use { it.write(Json.mapper.writeValueAsBytes(newSettings)) }
+            connection.outputStream.use { it.write(jsonBytes) }
 
             assertEquals(200, connection.responseCode)
             Thread.sleep(500)
@@ -86,10 +87,9 @@ class SettingsSyncTest {
             PiPupApp.settings.backgroundAlpha = 200
             PiPupApp.settings.borderRadius = 50
 
-            val service = PipUpService()
-            // Test the 'internal' method for logic verification
+            // Test the logic verification via AppSettings
             val inputProps = PopupProps(title = "Default", message = "Test")
-            val enqueuedProps = service.applySettingsDefaults(inputProps)
+            val enqueuedProps = PiPupApp.settings.applyDefaults(inputProps)
 
             // Verify injection (Alpha is prepended in getFullBackgroundColor)
             assertEquals("#C8112233", enqueuedProps.backgroundColor)

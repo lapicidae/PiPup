@@ -26,10 +26,11 @@ import java.io.InputStream
 class PipUpGlideAppModule : AppGlideModule() {
 
     override fun applyOptions(context: Context, builder: GlideBuilder) {
-        // Drastically reduce memory consumption by favoring Disk Cache over RAM Cache
+        // Drastically reduce memory consumption by using minimal RAM caches.
+        // PiPup displays transient notifications, so long-term bitmap caching is not needed.
         val calculator = MemorySizeCalculator.Builder(context)
-            .setMemoryCacheScreens(0.5f) // Use only half a screen worth of RAM cache
-            .setBitmapPoolScreens(0.5f)
+            .setMemoryCacheScreens(0.1f) // Very small RAM cache
+            .setBitmapPoolScreens(0.05f) // Minimal bitmap pool to prevent Native Heap retention
             .build()
 
         builder.setMemoryCache(LruResourceCache(calculator.memoryCacheSize.toLong()))

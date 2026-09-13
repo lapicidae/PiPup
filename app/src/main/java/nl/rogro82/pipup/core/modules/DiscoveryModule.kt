@@ -5,9 +5,9 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
-import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.core.ModuleContext
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.PiPupModule
 
 /**
@@ -23,6 +23,9 @@ class DiscoveryModule : PiPupModule {
 
     override val id: String = "discovery"
     override val name: String = "Network Discovery"
+
+    override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
+    override val defaultMode: ModuleMode = ModuleMode.ON
 
     private var moduleContext: ModuleContext? = null
     private var nsdManager: NsdManager? = null
@@ -279,8 +282,6 @@ class DiscoveryModule : PiPupModule {
         return android.provider.Settings.Global.getString(context.contentResolver, android.provider.Settings.Global.DEVICE_NAME)
             ?: Build.MODEL
     }
-
-    override fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response? = null
 
     override fun augmentState(state: MutableMap<String, Any?>) {
         state["discovery"] = mapOf(

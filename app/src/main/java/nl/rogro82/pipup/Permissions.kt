@@ -164,6 +164,7 @@ object Permissions {
             val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
             pm.isIgnoringBatteryOptimizations(context.packageName)
         }
+        KEY_POWER -> PowerController.getSleepMethod(context) != null
         else -> null
     }
 
