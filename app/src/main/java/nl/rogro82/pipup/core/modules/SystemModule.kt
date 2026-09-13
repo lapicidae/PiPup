@@ -37,7 +37,7 @@ class SystemModule : PiPupModule {
     override val defaultMode: ModuleMode = ModuleMode.ON
 
     override val supportedRoutes: List<String> = listOf(
-        "/notify", "/api/notify", "/cancel", "/update", "/permissions/diagnose", "/permissions/fix"
+        "/notify", "/cancel", "/update", "/permissions/diagnose", "/permissions/fix"
     )
 
     private var moduleContext: ModuleContext? = null
@@ -60,7 +60,7 @@ class SystemModule : PiPupModule {
             "/permissions/diagnose" -> if (method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST) diagnoseResponse() else null
             "/permissions/fix" -> if (method == NanoHTTPD.Method.POST) fixResponse(session) else null
             "/update" -> if (method == NanoHTTPD.Method.POST) updateResponse() else null
-            "/notify", "/api/notify" -> if (method == NanoHTTPD.Method.POST) notifyResponse(session) else null
+            "/notify" -> if (method == NanoHTTPD.Method.POST) notifyResponse(session) else null
             "/cancel" -> if (method == NanoHTTPD.Method.POST) cancelResponse(session) else null
             else -> null
         }

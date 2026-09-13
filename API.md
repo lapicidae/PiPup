@@ -1,146 +1,107 @@
 # PiPup HTTP API Reference
 
-This document describes the REST API for PiPup. The API is designed to be 100% compatible with the reference fork.
-
-## Base URL
-
-`http://<tv-ip-address>:7979`
+This document provides a precise technical specification of the PiPup REST API. All endpoints listen on port **7979**.
 
 ---
 
-## Endpoints
+## 1. Notifications
 
-### 1. Send Notification
+### Display Notification
 
 `POST /notify`
 
-Displays a popup notification on the TV screen.
+Displays an overlay on the TV. Supports `application/json` and `multipart/form-data`.
 
-**Request Body (JSON):**
+**JSON Payload Properties:**
 | Field | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `id` | string | null | Optional identifier for the popup. |
-| `duration` | integer | 10 | Duration in seconds to show the popup. |
-| `position` | integer | 0 | 0: Top-Right, 1: Top-Left, 2: Bottom-Right, 3: Bottom-Left, 4: Center. |
-| `title` | string | null | Primary heading text. |
-| `message` | string | null | Descriptive message text. |
-| `media` | object | null | Media payload (image, video, web, or whep). |
+| `duration` | Int | 10 | Seconds to display. |
+| `position` | Int | 0 | 0:TR, 1:TL, 2:BR, 3:BL, 4:Center. |
+| `title` | String | null | Heading text. |
+| `message` | String | null | Main body text. |
+| `media` | Object | null | Media configuration (see below). |
+| `animationType`| Int | 0 | 0..10 (Fade, Slide, Scale, etc.). |
+| `overwrite` | Bool | false | Interrupt current popup. |
 
-**Media Object Examples:**
+**Media Object Types:**
 
-- **Image:** `{"image": {"uri": "https://example.com/pic.jpg", "width": 480}}`
-- **Video:** `{"video": {"uri": "https://example.com/stream.m3u8", "width": 480, "muted": true}}`
-- **Web:** `{"web": {"uri": "https://example.com", "width": 640, "height": 480}}`
+- **Image:** `{"image": {"uri": "url", "width": 480, "cache": true}}`
+- **Video:** `{"video": {"uri": "url", "width": 480, "muted": true}}`
+- **Web:** `{"web": {"uri": "url", "width": 640, "height": 480}}`
+- **WHEP:** `{"whep": {"uri": "url", "width": 640, "videoFit": "cover"}}`
 
-**Response:**
+**Multipart Form Fields:**
+Supports all top-level JSON keys as form fields. Local image upload uses the `image` field.
 
-- `200 OK`: Returns the string representation of the parsed properties.
+**Responses:**
+
+- `200 OK`: `OK: Enqueued`
 - `400 Bad Request`: `invalid request: <reason>`
+- `403 Forbidden`: Media module is disabled.
+
+### Cancel Notification
+
+`POST /cancel` | `POST /cancel?id=<id>`
+
+**Responses:**
+
+- `200 OK`: `OK: Cancelled` or `OK: Nothing to cancel`
+- `200 OK`: `ID mismatch: visible is <active-id>`
 
 ---
 
-### 2. Get Server State
+## 2. System & Power
 
-`GET /state`
-
-Returns detailed information about the current application state.
-
-**Response (JSON):**
-
-```json
-{
-    "app": "PiPup",
-    "version": "0.6.10",
-    "id": "unique-device-id",
-    "name": "TV Name",
-    "visible": true,
-    "screenOn": true,
-    "popupsShown": 42,
-    "uptime": 3600,
-    "permissions": {
-        "overlay": true,
-        "installPackages": true,
-        "autoStart": null,
-        "deviceAdmin": true,
-        "accessibility": true,
-        "complete": true,
-        "fixable": {
-            "overlay": true,
-            "install": true,
-            "admin": true,
-            "accessibility": true
-        }
-    },
-    "update": {
-        "available": false,
-        "latest": "0.6.10",
-        "installing": false,
-        "silent": true,
-        "checkedSecondsAgo": 300
-    },
-    "lastPopup": {
-        "title": "API Test",
-        "duration": 15,
-        "position": "TopRight",
-        "muted": true,
-        "media": { "type": "image", "width": 480 }
-    }
-}
-```
-
----
-
-### 3. Power Control
+### Power Control
 
 `POST /power?state=on|off|toggle`
 
-Remotely controls the TV screen power state.
-
-**Response:**
+**Responses:**
 
 - `200 OK`: `{"state":"on","ok":true,"method":"wake_activity","screenOn":true}`
-- `501 Not Implemented`: Returned if permissions are missing for the requested action.
+- `403 Forbidden`: Power module is disabled.
+- `501 Not Implemented`: Permissions missing (Admin/Accessibility needed for `off`).
+
+### Server State
+
+`GET /state`
+
+Returns a comprehensive JSON snapshot of the application, including:
+
+- **`visible`**: Boolean, current popup visibility.
+- **`screenOn`**: Boolean, hardware display state.
+- **`power`**: Detailed block with `canSleep` and `sleepMethod`.
+- **`permissions`**: Status of Overlay, Admin, and Accessibility.
+- **`discovery`**: Count of other PiPup peers found.
 
 ---
 
-### 4. Cancel Notification
+## 3. Maintenance
 
-`POST /cancel`
-`POST /cancel?id=<popup-id>`
-
-Closes the current notification. If an `id` is provided, the popup is only closed if its ID matches.
-
-**Response:**
-
-- `200 OK`: `Queue cleared`
-- `200 OK`: `id mismatch: visible popup is <active-id>` (if ID provided but didn't match)
-
----
-
-### 5. Diagnostics
+### Diagnostics
 
 `GET /permissions/diagnose`
+Returns a detailed report on system permissions and intent resolution for troubleshooting.
 
-Returns a detailed report on system permissions and intent resolution. Used for troubleshooting restricted devices.
+### Trigger Update
+
+`POST /update`
+Triggers an immediate check for updates and starts the background installation process.
 
 ---
 
-### 6. Debug & Development (Debug Builds Only)
+## 4. Application Settings
 
-These endpoints are only available when the application is compiled in `debug` mode and are intended for testing and performance tuning.
+### Get/Update Settings
 
-#### Get Memory Statistics
-`GET /debug/memory`
+`GET /settings` | `POST /settings` (application/json)
 
-Returns a snapshot of the current memory usage (Java Heap, Native Heap) and module statuses.
+Styling and module configuration. The JSON structure matches the `SettingsData` class in `AppSettings.kt`.
 
-#### Set Idle Timeout
-`POST /debug/idle?ms=<milliseconds>`
+---
 
-Sets the timeout duration after which Eco-mode modules (like WebView) are automatically unloaded.
-- **Example:** `POST /debug/idle?ms=15000` (Sets timeout to 15 seconds)
+## 5. Development (Debug Only)
 
-#### Force Immediate Unload
-`POST /debug/unload`
-
-Triggers an immediate cleanup of all dormant/Eco modules, destroying active WebViews and freeing associated resources.
+- `GET /debug/memory`: Memory usage metrics.
+- `POST /debug/idle?ms=<val>`: Set Eco-mode timeout.
+- `POST /debug/unload`: Immediate cleanup of dormant modules.

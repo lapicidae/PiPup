@@ -188,11 +188,11 @@ object Permissions {
     fun adbCommand(key: String, context: Context): String {
         val pkg = context.packageName
         return when (key) {
-            KEY_OVERLAY -> "adb shell appops set $pkg SYSTEM_ALERT_WINDOW allow"
-            KEY_INSTALL -> "adb shell appops set $pkg REQUEST_INSTALL_PACKAGES allow"
+            KEY_OVERLAY -> "adb shell appops set --user current $pkg SYSTEM_ALERT_WINDOW allow"
+            KEY_INSTALL -> "adb shell appops set --user current $pkg REQUEST_INSTALL_PACKAGES allow"
             KEY_ADMIN -> "adb shell dpm set-active-admin --user current $pkg/.service.AdminReceiver"
-            KEY_ACCESSIBILITY -> "adb shell settings put secure --user current enabled_accessibility_services $pkg/.service.PiPupAccessibilityService && adb shell settings put secure --user current accessibility_enabled 1"
-            KEY_AUTO_START -> "adb shell cmd appops set $pkg android:auto_start allow"
+            KEY_ACCESSIBILITY -> "adb shell settings put secure --user current enabled_accessibility_services <current_services>:$pkg/.service.PiPupAccessibilityService && adb shell settings put secure --user current accessibility_enabled 1"
+            KEY_AUTO_START -> "adb shell cmd appops set --user current $pkg android:auto_start allow"
             KEY_ENERGY -> "adb shell dumpsys deviceidle whitelist +$pkg"
             else -> ""
         }
