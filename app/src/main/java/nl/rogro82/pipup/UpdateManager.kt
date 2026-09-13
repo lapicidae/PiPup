@@ -8,11 +8,11 @@ import android.os.Environment
 import android.util.Log
 import androidx.core.content.FileProvider
 import androidx.core.net.toUri
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties
-import com.fasterxml.jackson.annotation.JsonProperty
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
+import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
 import java.net.HttpURLConnection
@@ -23,25 +23,53 @@ import nl.rogro82.pipup.service.PipUpService
 /**
  * Data class representing a release on GitHub.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class GitHubRelease(
-    @get:JsonProperty("tag_name") val tagName: String,
+    val tagName: String,
     val name: String?,
     val prerelease: Boolean,
     val body: String?,
     val assets: List<GitHubAsset>
-)
+) {
+    companion object {
+        fun fromJsonObject(j: JSONObject): GitHubRelease {
+            val assetList = mutableListOf<GitHubAsset>()
+            val assetsArray = j.optJSONArray("assets")
+            if (assetsArray != null) {
+                for (i in 0 until assetsArray.length()) {
+                    assetList.add(GitHubAsset.fromJsonObject(assetsArray.getJSONObject(i)))
+                }
+            }
+            return GitHubRelease(
+                tagName = j.optString("tag_name", ""),
+                name = if (j.has("name") && !j.isNull("name")) j.getString("name") else null,
+                prerelease = j.optBoolean("prerelease", false),
+                body = if (j.has("body") && !j.isNull("body")) j.getString("body") else null,
+                assets = assetList
+            )
+        }
+    }
+}
 
 /**
  * Data class representing an asset within a GitHub release.
  */
-@JsonIgnoreProperties(ignoreUnknown = true)
 data class GitHubAsset(
     val name: String,
-    @get:JsonProperty("browser_download_url") val browserDownloadUrl: String,
-    @get:JsonProperty("content_type") val contentType: String,
+    val browserDownloadUrl: String,
+    val contentType: String,
     val digest: String? = null
-)
+) {
+    companion object {
+        fun fromJsonObject(j: JSONObject): GitHubAsset {
+            return GitHubAsset(
+                name = j.optString("name", ""),
+                browserDownloadUrl = j.optString("browser_download_url", ""),
+                contentType = j.optString("content_type", ""),
+                digest = if (j.has("digest") && !j.isNull("digest")) j.getString("digest") else null
+            )
+        }
+    }
+}
 
 /**
  * Manages the application update process, including checking for new releases,
@@ -70,30 +98,14 @@ class UpdateManager(context: Context) {
                 lastCheckedAt = System.currentTimeMillis()
                 lastError = null
 
-                val rootNode = Json.mapper.readTree(json)
-                if (!rootNode.isArray) {
-                    return@withContext Result.failure(Exception(appContext.getString(R.string.update_error_invalid_api)))
-                }
-
                 val releases = mutableListOf<GitHubRelease>()
-                for (node in rootNode) {
-                    val assets = mutableListOf<GitHubAsset>()
-                    node.get("assets")?.forEach { assetNode ->
-                        assets.add(GitHubAsset(
-                            name = assetNode.get("name")?.asText() ?: "",
-                            browserDownloadUrl = assetNode.get("browser_download_url")?.asText() ?: "",
-                            contentType = assetNode.get("content_type")?.asText() ?: "",
-                            digest = assetNode.get("digest")?.asText()
-                        ))
+                try {
+                    val rootArray = JSONArray(json)
+                    for (i in 0 until rootArray.length()) {
+                        releases.add(GitHubRelease.fromJsonObject(rootArray.getJSONObject(i)))
                     }
-
-                    releases.add(GitHubRelease(
-                        tagName = node.get("tag_name")?.asText() ?: "",
-                        name = node.get("name")?.asText(),
-                        prerelease = node.get("prerelease")?.asBoolean() ?: false,
-                        body = node.get("body")?.asText(),
-                        assets = assets
-                    ))
+                } catch (_: Exception) {
+                    return@withContext Result.failure(Exception(appContext.getString(R.string.update_error_invalid_api)))
                 }
 
                 val latest = if (includeBeta) {
@@ -166,7 +178,7 @@ class UpdateManager(context: Context) {
 
         val serviceIntent = Intent(appContext, PipUpService::class.java).apply {
             action = "DISPLAY_NOTIFICATION"
-            putExtra("props", Json.mapper.writeValueAsString(props))
+            putExtra("props", props.toJson())
         }
         appContext.startService(serviceIntent)
     }

@@ -91,20 +91,9 @@ class PermissionsSubmenu(
         val modulePermissions = mm.getEnabledModules().flatMap { it.getRequiredPermissions() }.toSet()
 
         modulePermissions.forEach { key ->
-            val label = if (key == Permissions.KEY_ADMIN || key == Permissions.KEY_ACCESSIBILITY || key == Permissions.KEY_POWER) {
-                if (sleepMethod != null) {
-                    val methodLabel = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) context.getString(R.string.permission_admin) else context.getString(R.string.permission_accessibility)
-                    context.getString(R.string.settings_module_power) + " (via $methodLabel)"
-                } else {
-                    context.getString(R.string.settings_module_power)
-                }
-            } else null
-
             addPermissionRow(
                 submenuRoot,
                 key,
-                idOverride = if (key == Permissions.KEY_ADMIN || key == Permissions.KEY_ACCESSIBILITY) Permissions.KEY_POWER else null,
-                overrideLabel = label,
                 isOptional = false
             )
         }
@@ -132,20 +121,29 @@ class PermissionsSubmenu(
         )
     }
 
-    private fun addPermissionRow(container: LinearLayout, key: String, idOverride: String? = null, overrideLabel: String? = null, isOptional: Boolean = false) {
+    private fun addPermissionRow(container: LinearLayout, key: String, isOptional: Boolean = false) {
         val granted = Permissions.granted(context, key) ?: false
-        val label = overrideLabel ?: when(key) {
+        val label = when(key) {
             Permissions.KEY_OVERLAY -> context.getString(R.string.permission_overlay)
             Permissions.KEY_ENERGY -> context.getString(R.string.energy_optimization_title)
             Permissions.KEY_INSTALL -> context.getString(R.string.permission_install)
             Permissions.KEY_ADMIN -> context.getString(R.string.permission_admin)
             Permissions.KEY_ACCESSIBILITY -> context.getString(R.string.permission_accessibility)
+            Permissions.KEY_POWER -> {
+                val sleepMethod = PowerController.getSleepMethod(context)
+                if (sleepMethod != null) {
+                    val methodLabel = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) context.getString(R.string.permission_admin) else context.getString(R.string.permission_accessibility)
+                    context.getString(R.string.settings_module_power) + " ($methodLabel)"
+                } else {
+                    context.getString(R.string.settings_module_power)
+                }
+            }
             else -> key
         }
 
         val row = LinearLayout(context).apply {
             // Stable ID is crucial: Android uses it to restore focus after a list refresh.
-            id = (idOverride ?: key).hashCode() and 0x7FFFFFFF
+            id = key.hashCode() and 0x7FFFFFFF
             orientation = LinearLayout.VERTICAL
             setPadding(context.dpToPx(16), context.dpToPx(12), context.dpToPx(16), context.dpToPx(16))
             background = ContextCompat.getDrawable(context, R.drawable.focus_background)

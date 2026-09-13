@@ -64,10 +64,13 @@ data class ModuleMenuDefinition(
 )
 
 /**
- * Activation strategies for modules.
+ * Internal modes for modules.
+ * OFF: Module is disabled and released from memory.
+ * ON: Module is active and ready.
+ * ECO: Module is active on-demand and idles when not in use.
  */
-object ActivationStrategy {
-    const val OFF = 0
-    const val ECO = 1
-    const val PERFORMANCE = 2
+enum class ModuleMode(val value: Int) {
+    OFF(0),
+    ON(1),
+    ECO(2)
 }

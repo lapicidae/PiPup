@@ -3,12 +3,17 @@ package nl.rogro82.pipup.core.modules
 import android.app.ActivityManager
 import android.content.Context
 import android.os.Debug
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 
 /**
  * Module providing debug and diagnostic endpoints.
@@ -22,6 +27,9 @@ class DebugModule : PiPupModule {
 
     override val id: String = "debug"
     override val name: String = "Debug & Diagnostics"
+
+    override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
+    override val defaultMode: ModuleMode = ModuleMode.OFF
     override val supportedRoutes: List<String> = listOf("/debug/idle", "/debug/unload", "/debug/memory")
 
     private var moduleContext: ModuleContext? = null
@@ -61,9 +69,33 @@ class DebugModule : PiPupModule {
 
     private fun handleUnload(): NanoHTTPD.Response {
         val app = moduleContext?.androidContext?.applicationContext as? PiPupApp
-        app?.moduleManager?.forceIdleCleanup()
 
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "Forced idle cleanup triggered")
+        val latch = CountDownLatch(1)
+        val mainHandler = Handler(Looper.getMainLooper())
+
+        mainHandler.post {
+            try {
+                // 1. Clear Glide memory immediately on UI thread
+                com.bumptech.glide.Glide.get(app!!.applicationContext).clearMemory()
+
+                // 2. Perform deep module cleanup (includes synchronous WebView destruction)
+                app.moduleManager.forceIdleCleanup()
+
+                // 3. Trigger manual GC
+                nl.rogro82.pipup.triggerSystemGc()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during forced unload: ${e.message}")
+            } finally {
+                latch.countDown()
+            }
+        }
+
+        // Wait for cleanup to finish before responding to ensure accurate leak test results
+        try {
+            latch.await(3, TimeUnit.SECONDS)
+        } catch (_: InterruptedException) {}
+
+        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "Forced module cleanup finished")
     }
 
     private fun handleMemoryStats(): NanoHTTPD.Response {
@@ -88,7 +120,7 @@ class DebugModule : PiPupModule {
         val app = context.applicationContext as? PiPupApp
         app?.moduleManager?.let { mm ->
             val mediaModule = mm.getModule("media") as? MediaModule
-            stats["media_module_prewarmed"] = mediaModule?.warmWebView != null
+            stats["media_module_active"] = mediaModule != null
         }
 
         return NanoHTTPD.newFixedLengthResponse(
@@ -99,6 +131,9 @@ class DebugModule : PiPupModule {
     }
 
     override fun augmentState(state: MutableMap<String, Any?>) {
-        state["debug_enabled"] = true
+        state["debug"] = mapOf(
+            "active" to true,
+            "canUnload" to true
+        )
     }
 }

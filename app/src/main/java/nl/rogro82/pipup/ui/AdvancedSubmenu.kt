@@ -78,17 +78,23 @@ class AdvancedSubmenu(
             .setTitle(R.string.settings_reset_confirm_title)
             .setMessage(R.string.settings_reset_confirm_msg)
             .setPositiveButton(R.string.settings_yes) { _, _ ->
+                // 1. Clear all persistent storage (active and legacy)
                 settings.resetToDefaults()
-                applyAppLocaleAndTheme(settings.language, settings.appTheme)
 
-                // Notify service AND all activities to clear caches and update states
-                // origin=remote ensures MainActivity also recreates.
+                // 2. Reset system components immediately using default values from the recently cleared settings
+                androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(androidx.core.os.LocaleListCompat.getEmptyLocaleList())
+                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+
+                // 3. Notify all components about the global state change
+                // Use "reset" origin so MainActivity doesn't trigger a redundant recreate()
+                // while we are already performing a full task restart.
                 val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
                     setPackage(context.packageName)
-                    putExtra("origin", "remote")
+                    putExtra("origin", "reset")
                 }
                 context.sendBroadcast(intent)
 
+                // 4. Force UI refresh via full app task restart
                 settingsActivity?.resetSettingsUI()
             }
             .setNegativeButton(R.string.settings_no, null)
@@ -267,17 +273,15 @@ class AdvancedSubmenu(
                 connection.connectTimeout = 5000; connection.readTimeout = 5000
                 if (connection.responseCode == 200) {
                     val json = connection.inputStream.bufferedReader().use { it.readText() }
-                    val data = settingsActivity?.mapper?.readValue(json, AppSettings.SettingsData::class.java)
+                    val data = AppSettings.SettingsData.fromJson(json)
                     settingsActivity?.runOnUiThread {
-                        if (data != null) {
-                            settings.apply(data)
+                        settings.apply(data)
                         // Notify system about settings change
                         val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
                             setPackage(context.packageName)
                             putExtra("origin", "remote")
                         }
                         context.sendBroadcast(intent)
-                        }
                         settingsActivity?.recreate()
                         context.showToast(context.getString(R.string.settings_import_success))
                     }

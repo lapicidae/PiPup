@@ -34,7 +34,7 @@ import nl.rogro82.pipup.UpdateManager
 import nl.rogro82.pipup.UpdateWorker
 import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
-import nl.rogro82.pipup.core.ActivationStrategy
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.NotificationManager
 import nl.rogro82.pipup.core.WebServer
@@ -197,8 +197,8 @@ class PipUpService : Service() {
         val uri = session.uri.lowercase()
         val method = session.method
 
-        // 1. Check if module-specific routes are blocked by activation strategy
-        if (uri == "/power" && settings.getActivationStrategy("power") == ActivationStrategy.OFF) {
+        // 1. Check if module-specific routes are blocked by activation mode
+        if (uri == "/power" && settings.getModuleMode("power") == ModuleMode.OFF) {
              val localizedContext = getLocalizedContext(settings.language)
              val moduleName = localizedContext.getString(R.string.settings_module_power)
              showToast(localizedContext.getString(R.string.error_module_disabled, moduleName))
@@ -409,27 +409,30 @@ class PipUpService : Service() {
     private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         return when (session.method) {
             NanoHTTPD.Method.GET -> {
-                val json = Json.mapper.writeValueAsString(settings.getAll())
+                val json = settings.getAll().toJSONObject().toString()
                 NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json).apply { setGzipEncoding(false) }
             }
             NanoHTTPD.Method.POST -> {
                 val length = session.headers["content-length"]?.toIntOrNull() ?: 0
                 if (length > 0) {
                     val content = session.inputStream.readExactBytes(length)
-                    val data = Json.mapper.readValue(content, AppSettings.SettingsData::class.java)
-                    handler.post {
-                        if (data != null) {
+                    try {
+                        val data = AppSettings.SettingsData.fromJson(String(content, Charsets.UTF_8))
+                        handler.post {
                             settings.apply(data)
                             applyGlobalSettings(data)
+
+                            // Notify UI about settings change
+                            val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
+                                setPackage(packageName)
+                                putExtra("origin", "remote")
+                            }
+                            sendBroadcast(intent)
                         }
-                        // Notify UI about settings change
-                        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
-                            setPackage(packageName)
-                            putExtra("origin", "remote")
-                        }
-                        sendBroadcast(intent)
+                        ok()
+                    } catch (e: Exception) {
+                        invalidRequest(e.message)
                     }
-                    ok()
                 } else invalidRequest("Empty")
             }
             else -> NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")

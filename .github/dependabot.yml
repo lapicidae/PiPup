@@ -34,8 +34,3 @@ updates:
           - "androidx.*"
           - "com.android.*"
           - "org.jetbrains.kotlin.*"
-
-      # Data Processing: Groups Jackson library updates
-      jackson-stack:
-        patterns:
-          - "com.fasterxml.jackson.*"

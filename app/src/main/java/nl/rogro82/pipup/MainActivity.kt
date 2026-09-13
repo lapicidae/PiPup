@@ -34,6 +34,7 @@ class MainActivity : AppCompatActivity() {
 
     private val appSettings = PiPupApp.settings
     private val handler = Handler(Looper.getMainLooper())
+    private var nagDialog: AlertDialog? = null
 
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -111,14 +112,21 @@ class MainActivity : AppCompatActivity() {
             UpdateManager(this).resumePendingUpdate()
         }
 
-        // Daily Nag handles all required permissions (including Overlay after first start)
-        checkAndShowPermissionNag()
+        // Daily Nag: Add a small delay to ensure lifecycle stability and prevent double popups
+        // during rapid transitions (like settings reset)
+        handler.postDelayed({
+            if (!isFinishing && !isDestroyed) {
+                checkAndShowPermissionNag()
+            }
+        }, 500)
     }
 
     override fun onPause() {
         super.onPause()
         Permissions.onActivityPaused()
         handler.removeCallbacks(refreshTask)
+        nagDialog?.dismiss()
+        nagDialog = null
     }
 
     override fun onDestroy() {
@@ -179,6 +187,7 @@ class MainActivity : AppCompatActivity() {
     private fun checkAndShowPermissionNag() {
         val missing = getMissingRequiredPermissions()
         if (missing.isEmpty()) return
+        if (nagDialog?.isShowing == true) return
 
         // Daily nag logic
         val today = Calendar.getInstance()
@@ -192,7 +201,7 @@ class MainActivity : AppCompatActivity() {
 
         val appName = getString(R.string.app_name)
 
-        AlertDialog.Builder(this)
+        nagDialog = AlertDialog.Builder(this)
             .setTitle(R.string.nag_title)
             .setMessage(getString(R.string.nag_message, appName))
             .setPositiveButton(R.string.settings_nav_permissions) { _, _ ->
@@ -203,8 +212,10 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton(android.R.string.cancel) { _, _ ->
                 appSettings.lastPermissionNagDate = System.currentTimeMillis()
             }
+            .setOnDismissListener { nagDialog = null }
             .show()
-            .getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
+
+        nagDialog?.getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
     }
 
     private fun refreshVersionAndUpdates() {

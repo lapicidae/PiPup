@@ -11,5 +11,3 @@
 -keep interface com.android.tools.studio.leakcanary.** { *; }
 
 # Ensure metadata/service loaders for LeakCanary are preserved
--keep class * extends leakcanary.LeakCanary$Config { *; }
--keep class * implements leakcanary.OnObjectRetainedListener { *; }

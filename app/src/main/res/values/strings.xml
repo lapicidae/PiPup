@@ -42,8 +42,6 @@
         <item quantity="one">%1$d retry</item>
         <item quantity="other">%1$d retries</item>
     </plurals>
-    <string name="settings_pre_warm_webview">Pre-warm WebView</string>
-    <string name="settings_pre_warm_webview_desc">Initializes and keeps the WebView engine active in the background to ensure immediate loading of Web/WHEP content. Increases background RAM usage (~50MB).</string>
     <!-- %1$d: Seconds -->
     <plurals name="settings_media_timeout_seconds">
         <item quantity="one">%1$d second</item>

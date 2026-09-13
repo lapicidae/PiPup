@@ -54,6 +54,7 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:clipToPadding="false"
+        android:fillViewport="true"
         android:saveEnabled="false"
         android:fadeScrollbars="false"
         android:scrollbarStyle="outsideOverlay"
@@ -70,7 +71,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="48dp">
+            android:paddingTop="48dp"
+            android:paddingStart="48dp"
+            android:paddingEnd="48dp"
+            android:paddingBottom="240dp">
 
             <ViewStub
                 android:id="@+id/stub_general"

@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <title>PiPup WHEP Player</title>
     <style>
-        body, video { margin: 0; padding: 0; width: 100vw; height: 100vh; overflow: hidden; background: transparent; }
-        video { object-fit: cover; display: block; width: 100%; height: 100%; }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+        video { object-fit: cover; display: block; width: 100vw; height: 100vh; }
     </style>
 </head>
 <body>
@@ -18,10 +18,22 @@
         let pc = null;
 
         async function start() {
-            const urlParams = new URLSearchParams(window.location.search);
-            const streamUrl = urlParams.get('url');
-            if (!streamUrl) return;
+            // Give the DOM a tiny bit of time to settle before starting WebRTC
+            await new Promise(r => setTimeout(r, 50));
 
+            // URL injection placeholder (MediaRenderer targets this)
+            const streamUrl = '{{STREAM_URL}}';
+            if (!streamUrl || streamUrl.startsWith('{{')) {
+                const urlParams = new URLSearchParams(window.location.search);
+                const url = urlParams.get('url');
+                if (!url) return;
+                run(url);
+            } else {
+                run(streamUrl);
+            }
+        }
+
+        async function run(streamUrl) {
             const startTime = Date.now();
             let lastError = null;
 
@@ -41,16 +53,13 @@
                     });
 
                     const hostname = new URL(streamUrl).hostname;
-                    // Improved local detection (IPv4 private, IPv6 local, .local domains, localhost)
                     const isLocal = /^(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|127\.|localhost|10\.0\.2\.2|\[?fe80:)/i.test(hostname) || hostname.endsWith('.local');
-
-                    console.log('WHEP: ' + (isLocal ? 'Local' : 'Remote') + ' connection detected for ' + hostname);
 
                     const config = {
                         iceServers: isLocal ? [] : [{ urls: 'stun:stun.l.google.com:19302' }],
                         iceTransportPolicy: 'all',
                         bundlePolicy: 'max-bundle',
-                        iceCandidatePoolSize: 1 // Pre-warm ICE engine
+                        iceCandidatePoolSize: 1
                     };
 
                     pc = new RTCPeerConnection(config);
@@ -62,17 +71,8 @@
                         }
                     };
 
-                    pc.onicegatheringstatechange = () => {
-                        console.log(`WHEP: [${Date.now() - startTime}ms] ICE Gathering State: ${pc.iceGatheringState}`);
-                    };
-
-                    pc.onsignalingstatechange = () => {
-                        console.log(`WHEP: [${Date.now() - startTime}ms] Signaling State: ${pc.signalingState}`);
-                    };
-
                     video.onplaying = () => {
-                        const elapsed = Date.now() - startTime;
-                        console.log('WHEP: Video playing after ' + elapsed + 'ms');
+                        console.log('WHEP: Video playing after ' + (Date.now() - startTime) + 'ms');
                         if (window.PiPup) window.PiPup.onMediaPlaying();
                     };
 
@@ -88,84 +88,48 @@
                         pc.addTransceiver('video', { direction: 'recvonly' });
                     }
 
-                    const offerOptions = pc.addTransceiver ? {} : { offerToReceiveVideo: true };
-                    const offer = await pc.createOffer(offerOptions);
+                    const offer = await pc.createOffer(pc.addTransceiver ? {} : { offerToReceiveVideo: true });
                     await pc.setLocalDescription(offer);
 
-                    // Wait for initial ICE candidates (Non-trickle WHEP)
                     await new Promise(resolve => {
-                        if (pc.iceGatheringState === 'complete') {
-                            resolve();
-                        } else {
+                        if (pc.iceGatheringState === 'complete') resolve();
+                        else {
                             const checkState = () => {
-                                // Resolve if we have at least one candidate (faster on local networks)
                                 if (pc.iceGatheringState === 'complete' || pc.localDescription.sdp.includes('a=candidate')) {
                                     pc.removeEventListener('icegatheringstatechange', checkState);
                                     resolve();
                                 }
                             };
                             pc.addEventListener('icegatheringstatechange', checkState);
-                            // Hard timeout after 1.0 seconds to avoid hanging
                             setTimeout(resolve, 1000);
                         }
                     });
 
-                    console.log(`WHEP: [${Date.now() - startTime}ms] Fetching SDP answer...`);
                     const response = await fetch(streamUrl, {
                         method: 'POST',
                         body: pc.localDescription.sdp,
                         headers: { 'Content-Type': 'application/sdp' }
                     });
 
-                    if (!response.ok) {
-                        const errorText = await response.text().catch(() => '');
-                        throw new Error('HTTP error ' + response.status + (errorText ? ': ' + errorText.substring(0, 100) : ''));
-                    }
+                    if (!response.ok) throw new Error('HTTP error ' + response.status);
 
                     const answerSdpRaw = await response.text();
-                    if (!answerSdpRaw.trim()) {
-                        throw new Error('No SDP answer: Received empty response from server.');
-                    }
+                    if (!answerSdpRaw.trim() || answerSdpRaw.trim().startsWith('<')) throw new Error('Invalid SDP answer');
 
-                    if (answerSdpRaw.trim().startsWith('<')) {
-                        throw new Error('No SDP answer: Received HTML instead of WebRTC stream.');
-                    }
-
-                    // Strip a=end-of-candidates as it causes parsing errors in some WebView versions
                     const answerSdp = answerSdpRaw.replace(/a=end-of-candidates\s?\r?\n?/g, "");
-
-                    if (!answerSdp.trim().startsWith('v=')) {
-                        throw new Error('No SDP answer: Response does not start with v=0');
-                    }
-
-                    console.log(`WHEP: [${Date.now() - startTime}ms] Setting remote description...`);
                     await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
-                    console.log(`WHEP: [${Date.now() - startTime}ms] Setup complete, waiting for tracks...`);
-
-                    return; // Success, exit the loop
+                    return;
                 } catch (e) {
                     lastError = e;
                     console.warn(`WHEP: Attempt ${attempt} failed: ${e.message}`);
-                    if (attempt < 3) {
-                        await new Promise(r => setTimeout(r, 500)); // Short delay for local networks
-                    }
+                    if (attempt < 3) await new Promise(r => setTimeout(r, 500));
                 }
             }
 
-            // If we reached here, all attempts failed
-            console.error('WHEP Error: All connection attempts failed.', lastError);
-            if (window.PiPup) window.PiPup.onMediaError(lastError ? lastError.message : 'Connection failed after 3 attempts');
+            if (window.PiPup) window.PiPup.onMediaError(lastError ? lastError.message : 'Connection failed');
         }
 
-        // Cleanup function for explicitly closing connection
-        window.addEventListener('unload', () => {
-            if (pc) {
-                console.log('WHEP: Closing RTCPeerConnection');
-                pc.close();
-                pc = null;
-            }
-        });
-
+        window.addEventListener('unload', () => { if (pc) { pc.close(); pc = null; } });
         start();
     </script>
 </body>

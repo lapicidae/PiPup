@@ -7,9 +7,7 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.Permissions
-import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
-import nl.rogro82.pipup.core.ActivationStrategy
 import nl.rogro82.pipup.core.PowerController
 
 /**
@@ -29,8 +27,8 @@ class ModulesSubmenu(
             root,
             R.id.container_power_module,
             R.id.switch_power_module,
-            { settings.getActivationStrategy("power") != ActivationStrategy.OFF },
-            { settings.setActivationStrategy("power", if (it) settings.getPreferredStrategy("power") else ActivationStrategy.OFF) },
+            { settings.powerModuleEnabled },
+            { settings.powerModuleEnabled = it },
             { if (it && PowerController.getSleepMethod(context) == null) Permissions.showFixDialog(context, Permissions.KEY_POWER) }
         )
 
@@ -39,8 +37,8 @@ class ModulesSubmenu(
             root,
             R.id.container_discovery_module,
             R.id.switch_discovery_module,
-            { settings.getActivationStrategy("discovery") != ActivationStrategy.OFF },
-            { settings.setActivationStrategy("discovery", if (it) settings.getPreferredStrategy("discovery") else ActivationStrategy.OFF) }
+            { settings.discoveryModuleEnabled },
+            { settings.discoveryModuleEnabled = it }
         )
 
         // Rich Media Module
@@ -48,8 +46,8 @@ class ModulesSubmenu(
             root,
             R.id.container_media_module,
             R.id.switch_media_module,
-            { settings.getActivationStrategy("media") != ActivationStrategy.OFF },
-            { settings.setActivationStrategy("media", if (it) settings.getPreferredStrategy("media") else ActivationStrategy.OFF) }
+            { settings.mediaModuleEnabled },
+            { settings.mediaModuleEnabled = it }
         )
     }
 
@@ -73,17 +71,7 @@ class ModulesSubmenu(
                 val newState = !getter()
                 sw.isChecked = newState
                 onToggle(newState)
-                // Notify ModuleManager about the change
-                val moduleId = when (containerId) {
-                    R.id.container_power_module -> "power"
-                    R.id.container_discovery_module -> "discovery"
-                    R.id.container_media_module -> "media"
-                    else -> ""
-                }
-                (context.applicationContext as PiPupApp).moduleManager.updateModuleState(
-                    moduleId,
-                    if (newState) settings.getActivationStrategy(moduleId) else ActivationStrategy.OFF
-                )
+
                 notifySettingsChanged()
                 afterToggle?.invoke(newState)
                 onSettingsChanged(false)

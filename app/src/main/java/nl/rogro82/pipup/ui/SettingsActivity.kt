@@ -27,11 +27,11 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.databinding.ActivitySettingsBinding
 import nl.rogro82.pipup.registerProtectedReceiver
@@ -49,12 +49,12 @@ class SettingsActivity : AppCompatActivity() {
     lateinit var binding: ActivitySettingsBinding
     private val settings = PiPupApp.settings
     private val handler = Handler(Looper.getMainLooper())
-    val mapper = jacksonObjectMapper()
 
     private var currentLayoutRes: Int = -1
     private var currentNavId: Int = -1
     private var isInitializing = false
     private var lastFocusedViewId: Int = View.NO_ID
+    private var shouldFocusSubmenuOnStart = false
 
     private val adminLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -67,15 +67,15 @@ class SettingsActivity : AppCompatActivity() {
     private val inflatedSubmenus = mutableMapOf<Int, View>()
 
     private val coreRailItems = listOf(
-        NavItem(101, R.string.settings_nav_general, R.drawable.ic_general_style, 10, R.layout.submenu_general),
-        NavItem(102, R.string.settings_nav_background, R.drawable.ic_bg, 20, R.layout.submenu_background),
-        NavItem(103, R.string.settings_nav_text, R.drawable.ic_text_style, 30, R.layout.submenu_text),
-        NavItem(104, R.string.settings_nav_border, R.drawable.ic_border_style, 40, R.layout.submenu_border),
-        NavItem(105, R.string.settings_nav_animation, R.drawable.ic_animation, 50, R.layout.submenu_animation),
-        NavItem(106, R.string.settings_nav_updates, R.drawable.ic_updates, 60, R.layout.submenu_updates),
-        NavItem(107, R.string.settings_nav_modules, R.drawable.ic_modules, 70, R.layout.submenu_modules),
-        NavItem(108, R.string.settings_nav_permissions, R.drawable.ic_permissions, 80, R.layout.submenu_permissions),
-        NavItem(109, R.string.settings_nav_advanced, R.drawable.ic_advanced, 90, R.layout.submenu_advanced)
+        NavItem(R.id.nav_item_general, R.string.settings_nav_general, R.drawable.ic_general_style, 10, R.layout.submenu_general),
+        NavItem(R.id.nav_item_background, R.string.settings_nav_background, R.drawable.ic_bg, 20, R.layout.submenu_background),
+        NavItem(R.id.nav_item_text_style, R.string.settings_nav_text, R.drawable.ic_text_style, 30, R.layout.submenu_text),
+        NavItem(R.id.nav_item_border, R.string.settings_nav_border, R.drawable.ic_border_style, 40, R.layout.submenu_border),
+        NavItem(R.id.nav_item_animation, R.string.settings_nav_animation, R.drawable.ic_animation, 50, R.layout.submenu_animation),
+        NavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, 60, R.layout.submenu_updates),
+        NavItem(R.id.nav_item_modules, R.string.settings_nav_modules, R.drawable.ic_modules, 70, R.layout.submenu_modules),
+        NavItem(R.id.nav_item_permissions, R.string.settings_nav_permissions, R.drawable.ic_permissions, 80, R.layout.submenu_permissions),
+        NavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, 90, R.layout.submenu_advanced)
     )
 
     private var dynamicRailItems = mutableListOf<NavItem>()
@@ -130,6 +130,8 @@ class SettingsActivity : AppCompatActivity() {
     private var cachedPlaceholder: android.graphics.Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Apply theme and locale before super.onCreate to ensure the UI reflects settings
+        applyAppLocaleAndTheme(settings.language, settings.appTheme)
         setTheme(R.style.SettingsTheme)
         super.onCreate(savedInstanceState)
         binding = ActivitySettingsBinding.inflate(layoutInflater)
@@ -145,6 +147,10 @@ class SettingsActivity : AppCompatActivity() {
         val restoredNavId = savedInstanceState?.getInt("currentNavId", -1).takeIf { it != null && it != -1 }
             ?: intent.getIntExtra(EXTRA_NAV_ID, -1).takeIf { it != -1 }
             ?: allRailIds.firstOrNull() ?: -1
+
+        if (savedInstanceState == null && intent.hasExtra(EXTRA_NAV_ID)) {
+            shouldFocusSubmenuOnStart = true
+        }
 
         val restoredItem = allItems.find { it.id == restoredNavId }
 
@@ -223,6 +229,13 @@ class SettingsActivity : AppCompatActivity() {
         super.onPostResume()
         handler.postDelayed({
             isInitializing = false
+
+            if (shouldFocusSubmenuOnStart) {
+                focusFirstInSubmenu()
+                shouldFocusSubmenuOnStart = false
+                return@postDelayed
+            }
+
             if (lastFocusedViewId != View.NO_ID) {
                 val target = findViewById<View>(lastFocusedViewId)
                 if (target != null && target.isFocusable && target.isVisible) {
@@ -380,27 +393,40 @@ class SettingsActivity : AppCompatActivity() {
         return if (item.moduleId != null) {
             R.id.stub_module_dynamic
         } else when (item.id) {
-            101 -> R.id.stub_general
-            102 -> R.id.stub_background
-            103 -> R.id.stub_text
-            104 -> R.id.stub_border
-            105 -> R.id.stub_animation
-            106 -> R.id.stub_updates
-            107 -> R.id.stub_modules
-            108 -> R.id.stub_permissions
-            109 -> R.id.stub_advanced
+            R.id.nav_item_general -> R.id.stub_general
+            R.id.nav_item_background -> R.id.stub_background
+            R.id.nav_item_text_style -> R.id.stub_text
+            R.id.nav_item_border -> R.id.stub_border
+            R.id.nav_item_animation -> R.id.stub_animation
+            R.id.nav_item_updates -> R.id.stub_updates
+            R.id.nav_item_modules -> R.id.stub_modules
+            R.id.nav_item_permissions -> R.id.stub_permissions
+            R.id.nav_item_advanced -> R.id.stub_advanced
             R.id.nav_item_performance -> R.id.stub_performance
             else -> R.id.stub_module_dynamic
         }
     }
 
     /**
-     * Resets the UI state of the settings activity to its initial values and recreates it.
+     * Resets the UI state of the settings activity by restarting the application task.
+     * Ensures MainActivity is at the root so the user can navigate back to it.
      */
     fun resetSettingsUI() {
+        android.util.Log.i("SettingsActivity", "Resetting Settings UI and restarting app task")
         lastFocusedViewId = View.NO_ID
-        currentNavId = 101 // Default to General
-        recreate()
+        currentNavId = R.id.nav_item_general
+
+        // 1. Prepare intent for MainActivity (the root)
+        val mainIntent = Intent(this, nl.rogro82.pipup.MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        }
+
+        // 2. Prepare intent for SettingsActivity (the current screen)
+        val settingsIntent = Intent(this, SettingsActivity::class.java)
+
+        // 3. Start both to restore the stack: [Main] -> [Settings]
+        startActivities(arrayOf(mainIntent, settingsIntent))
+        finish()
     }
 
     /**

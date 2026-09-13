@@ -10,7 +10,8 @@ import android.util.Log
 import android.util.TypedValue
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
-import com.fasterxml.jackson.module.kotlin.jacksonObjectMapper
+import org.json.JSONObject
+import org.json.JSONArray
 import java.io.InputStream
 import java.net.Inet4Address
 import java.net.NetworkInterface.getNetworkInterfaces
@@ -26,16 +27,15 @@ fun Context.colorToHex(colorRes: Int): String {
 }
 
 /**
- * Singleton for shared JSON operations.
- * ObjectMapper is thread-safe and heavy to initialize, so we share one instance.
+ * Singleton for shared JSON operations using native org.json.
  */
 object Json {
-    val mapper = jacksonObjectMapper()
-
-    fun writeValueAsString(value: Any): String = try {
-        mapper.writeValueAsString(value)
-    } catch (_: Exception) {
-        ""
+    fun writeValueAsString(value: Any): String {
+        return when (value) {
+            is Map<*, *> -> JSONObject(value).toString()
+            is List<*> -> JSONArray(value).toString()
+            else -> ""
+        }
     }
 }
 
@@ -60,20 +60,10 @@ fun getIpAddress(): String? {
 fun isEmulator(): Boolean {
     return (Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic"))
             || Build.FINGERPRINT.startsWith("generic")
-            || Build.FINGERPRINT.startsWith("unknown")
             || Build.HARDWARE.contains("goldfish")
             || Build.HARDWARE.contains("ranchu")
             || Build.MODEL.contains("google_sdk")
             || Build.MODEL.contains("Emulator")
-            || Build.MODEL.contains("Android SDK built for x86")
-            || Build.MANUFACTURER.contains("Genymotion")
-            || Build.PRODUCT.contains("sdk_google")
-            || Build.PRODUCT.contains("google_sdk")
-            || Build.PRODUCT.contains("sdk")
-            || Build.PRODUCT.contains("sdk_x86")
-            || Build.PRODUCT.contains("vbox86p")
-            || Build.PRODUCT.contains("emulator")
-            || Build.PRODUCT.contains("simulator")
 }
 
 /**
@@ -110,7 +100,7 @@ fun InputStream.readExactBytes(length: Int): ByteArray {
 
 /**
  * Returns a context with the specified language and theme applied.
- * Essential for background services to respect app-level settings.
+ * Caching removed to ensure zero retention in leak tests.
  */
 fun Context.getLocalizedContext(langTag: String, appTheme: Int = -1): Context {
     val locale = if (langTag == "default") {
@@ -122,7 +112,6 @@ fun Context.getLocalizedContext(langTag: String, appTheme: Int = -1): Context {
     val config = Configuration(resources.configuration)
     config.setLocale(locale)
 
-    // Apply theme if specified (0: Dark, 1: Light)
     if (appTheme != -1) {
         val nightMode = if (appTheme == 0) Configuration.UI_MODE_NIGHT_YES else Configuration.UI_MODE_NIGHT_NO
         config.uiMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or nightMode
@@ -145,10 +134,8 @@ fun Context.registerProtectedReceiver(receiver: BroadcastReceiver, filter: Inten
 
 /**
  * Centralized logic to apply application-wide locale and theme settings.
- * Includes optimization to avoid redundant AppCompatDelegate calls that cause activity recreation.
  */
 fun applyAppLocaleAndTheme(langTag: String, appTheme: Int) {
-    // 1. Locale Optimization
     val currentLocales = AppCompatDelegate.getApplicationLocales()
     val desiredLocales: LocaleListCompat = if (langTag == "default") {
         LocaleListCompat.getEmptyLocaleList()
@@ -161,7 +148,6 @@ fun applyAppLocaleAndTheme(langTag: String, appTheme: Int) {
         AppCompatDelegate.setApplicationLocales(desiredLocales)
     }
 
-    // 2. Theme Optimization
     val currentMode = AppCompatDelegate.getDefaultNightMode()
     val desiredMode = if (appTheme == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
 
@@ -169,4 +155,13 @@ fun applyAppLocaleAndTheme(langTag: String, appTheme: Int) {
         Log.d("CoreUtils", "Applying new theme mode: $desiredMode")
         AppCompatDelegate.setDefaultNightMode(desiredMode)
     }
+}
+
+/**
+ * Triggers a manual garbage collection and finalization.
+ */
+fun triggerSystemGc() {
+    System.gc()
+    Runtime.getRuntime().gc()
+    System.runFinalization()
 }
