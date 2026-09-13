@@ -6,12 +6,25 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.WindowManager
+import nl.rogro82.pipup.Permissions
 
 /**
  * A transparent activity used to force the screen to wake up.
  * This is particularly effective for HDMI-CEC devices.
  */
 class WakeActivity : Activity() {
+
+    override fun onResume() {
+        super.onResume()
+        // Counts towards the background-activity-launch exemption just like any other
+        // window of this app.
+        Permissions.onActivityResumed()
+    }
+
+    override fun onPause() {
+        super.onPause()
+        Permissions.onActivityPaused()
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -31,11 +44,11 @@ class WakeActivity : Activity() {
         )
 
         // The activity itself is transparent (via theme).
-        // We finish it shortly after it has served its purpose of waking the screen.
+        // We finish it after enough time for the panel and CEC link to wake.
         Handler(Looper.getMainLooper()).postDelayed({
             if (!isFinishing) {
                 finish()
             }
-        }, 500)
+        }, 1500)
     }
 }

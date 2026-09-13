@@ -58,14 +58,21 @@ object PowerController {
     fun wake(context: Context): Boolean {
         var success = false
         try {
-            // CPU WakeLock: Ensure the processor stays awake while we launch the Activity.
-            // Screen wakeup is handled by WakeActivity's WindowManager flags (M3 standard).
+            // CPU & Screen WakeLock: Force the screen to turn on immediately.
+            // SCREEN_BRIGHT_WAKE_LOCK is deprecated but remains the most reliable way
+            // for sideloaded apps to force a hardware wake on many TV OEMs.
             val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
-            val lock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "PiPup:wake")
+            @Suppress("DEPRECATION")
+            val lock = pm.newWakeLock(
+                PowerManager.SCREEN_BRIGHT_WAKE_LOCK or
+                        PowerManager.ACQUIRE_CAUSES_WAKEUP or
+                        PowerManager.ON_AFTER_RELEASE,
+                "PiPup:wake"
+            )
             lock.acquire(WAKE_LOCK_TIMEOUT_MS)
             success = true
         } catch (e: Exception) {
-            Log.e(TAG, "CPU wake lock failed", e)
+            Log.e(TAG, "Wake lock failed", e)
         }
 
         try {
