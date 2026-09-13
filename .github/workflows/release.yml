@@ -47,7 +47,7 @@ jobs:
       # Automates Gradle environment setup, including dependency caching
       # and build-scan integration.
       - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.2.0
+        uses: gradle/actions/setup-gradle@v6.3.0
 
       # Step 4: Extract the exact version string first via your Gradle task
       - name: Get Version from Gradle Task
