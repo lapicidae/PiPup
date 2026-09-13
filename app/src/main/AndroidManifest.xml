@@ -120,6 +120,14 @@
         </activity>
 
         <activity
+                android:name=".ui.WakeActivity"
+                android:exported="false"
+                android:excludeFromRecents="true"
+                android:noHistory="true"
+                android:taskAffinity=""
+                android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <activity
                 android:name=".MainActivity"
                 android:exported="true"
                 android:launchMode="singleTask"
