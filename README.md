@@ -24,14 +24,16 @@ The most common use-case for this application is for sending notifications, from
 - **Customizable Overlays:** Display rich notifications over any Android TV app.
 - **Flexible Media Positioning:** Place images, videos, or web views at the Top, Bottom, Left, or Right of your text.
 - **Live Preview Settings:** Fine-tune colors, borders, and padding with a real-time preview dashboard right on your TV.
+- **Modular Design:** Enable or disable optional modules to optimize performance and minimize required permissions.
+- **Reliable Power Control:** Remote wake and sleep functionality.
 - **Settings Backup & Sync:** Easily export or clone your customized styling configurations from one PiPup device to another over the network.
+- **Update Engine:** Built-in self-updater with support for Stable and Beta channels.
 - **Smart Queueing & Sync:** Built-in notification service synchronization ensuring alerts are handled smoothly.
-- **Media3 ExoPlayer Integration:** Seamless local and external video/audio streaming support.
-- **Customizable Entrance Animations:** Choose from 10 different entrance animations (like Slide, Scale, or Bounce) and customize the duration to make alerts dynamic.
+- **Customizable Animations:** Choose from 10 different animations (like Slide, Scale, or Bounce).
 
 ---
 
-:exclamation: _Important: after installation / updating it is currently advised to restart your TV and open the application once to make sure the background-service is running_ :exclamation:
+:exclamation: _Important: after installation / updating it is currently advised to open the application once to ensure the background-service and permissions are correctly initialized_ :exclamation:
 
 #### Sideloading:
 
@@ -39,13 +41,31 @@ On Android TV (8.0+), when sideloading, you may need to grant the `SYSTEM_ALERT_
 
 To grant the application the required permission to draw overlays, run:
 
-```
+```bash
 adb shell appops set nl.rogro82.pipup SYSTEM_ALERT_WINDOW allow
+```
+
+To enable the "Power Control" sleep functionality:
+
+```bash
+# Device Admin (preferred)
+adb shell dpm set-active-admin --user current nl.rogro82.pipup/.service.AdminReceiver
+
+# Accessibility Service (for devices without the device-admin feature)
+adb shell settings put secure --user current enabled_accessibility_services \
+    nl.rogro82.pipup/.service.PiPupAccessibilityService
+adb shell settings put secure accessibility_enabled 1
+```
+
+To enable the optional app update feature:
+
+```bash
+adb shell appops set nl.rogro82.pipup REQUEST_INSTALL_PACKAGES allow
 ```
 
 Disabling battery optimisation is optional, but is recommended:
 
-```
+```bash
 adb shell dumpsys deviceidle whitelist +nl.rogro82.pipup
 ```
 
@@ -55,11 +75,12 @@ PiPup uses an embedded webserver (NanoHTTPD) which runs on port 7979.
 
 ### Sending notifications
 
-You can send notifications either as an **application/json** payload (for external media URLs) or as **multipart/form-data** (to upload a local image file).
+You can send notifications either as an **application/json** payload (for external media URLs) or as **multipart/form-data** (to upload a local image file).  
+For a detailed list of all endpoints and response formats, please refer to the [Full API Reference](API.md).
 
 | _Property_        | _Value_                                     |
 | ----------------- | ------------------------------------------- |
-| **Path:**         | `/notify`, `/`, or `/api/notify`            |
+| **Path:**         | `/notify`                                   |
 | **Method:**       | `POST`                                      |
 | **Content-Type:** | `application/json` OR `multipart/form-data` |
 
@@ -71,7 +92,7 @@ You can send notifications either as an **application/json** payload (for extern
     "position": 0,
     "title": "Your awesome title",
     "titleColor": "#FFFFFF",
-    "titleSize": 24,
+    "titleSize": 22,
     "titleAlignment": 0,
     "message": "What ever you want to say... do it here...",
     "messageColor": "#FFFFFF",
@@ -79,15 +100,14 @@ You can send notifications either as an **application/json** payload (for extern
     "messageAlignment": 0,
     "mediaPosition": 0,
     "backgroundColor": "#CC000000",
-    "borderRadius": 0,
+    "borderRadius": 16,
     "borderWidth": 0,
     "borderColor": "#00000000",
-    "contentPadding": 16,
+    "contentPadding": 20,
     "animationType": 0,
     "animationDuration": 500,
     "animationExit": false,
     "overwrite": false,
-    "mediaTimeout": 10,
     "media": {
         "image": {
             "uri": "https://mir-s3-cdn-cf.behance.net/project_modules/max_1200/cfcc3137009463.5731d08bd66a1.png",
@@ -112,21 +132,21 @@ For JSON payloads, the `media` object supports 4 types:
 
 ### Configuration Properties
 
-All fields below are optional for both JSON properties (top-level keys) and Multipart form-fields.
+All fields below are optional.
 
 #### General & Text Settings
 
 | _Field_               | _Type_  | _Default_ | _Description_                                                          |
 | --------------------- | ------- | --------- | ---------------------------------------------------------------------- |
-| **duration**          | Integer | 30        | Duration in seconds                                                    |
+| **duration**          | Integer | 10        | Duration in seconds                                                    |
 | **position**          | Integer | 0         | Position index on the screen (0..4)                                    |
-| **contentPadding**    | Integer | 16        | Inner padding in pixels between the border and content                 |
+| **contentPadding**    | Integer | 20        | Inner padding in pixels between the border and content                 |
 | **title**             | String  |           | Title text                                                             |
-| **titleSize**         | Float   | 14        | Title font size                                                        |
+| **titleSize**         | Float   | 22        | Title font size                                                        |
 | **titleColor**        | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format                         |
 | **titleAlignment**    | Integer | 0         | Title alignment (0..2)                                                 |
 | **message**           | String  |           | Message text                                                           |
-| **messageSize**       | Float   | 14        | Message font size                                                      |
+| **messageSize**       | Float   | 16        | Message font size                                                      |
 | **messageColor**      | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format                       |
 | **messageAlignment**  | Integer | 0         | Message alignment (0..2)                                               |
 | **animationType**     | Integer | 0         | Animation type index for popup entrance (0..10)                        |
@@ -216,9 +236,22 @@ To clear the notification queue and remove the currently displayed notification:
 
 ---
 
+### Power Control
+
+You can remotely control the power state of your TV screen.
+
+| _Property_  | _Value_                      |
+| ----------- | ---------------------------- |
+| **Path:**   | /power?state={on,off,toggle} |
+| **Method:** | POST                         |
+
+_Note: Turning the screen off requires the Device Admin or Accessibility permission to be granted._
+
+---
+
 ### Backup & Sync Settings
 
-PiPup allows you to remotely view or update the global application settings via the webserver. This is useful for backing up your setup or cloning it to another TV.
+PiPup allows you to remotely view or update the global application settings via the webserver.
 
 #### Get Current Settings
 
@@ -234,22 +267,31 @@ Retrieves a JSON object containing all current styling and layout configurations
 ```json
 {
     "positionIndex": 0,
-    "backgroundColor": "#CC000000",
-    "backgroundAlpha": 204,
-    "titleColor": "#FFFFFF",
-    "titleSize": 14.0,
-    "messageColor": "#FFFFFF",
-    "messageSize": 14.0,
-    "borderRadius": 0,
+    "backgroundColor": "#1C1B1F",
+    "backgroundAlpha": 225,
+    "titleColor": "#E6E1E5",
+    "titleSize": 22.0,
+    "messageColor": "#E6E1E5",
+    "messageSize": 16.0,
+    "borderRadius": 16,
     "borderWidth": 0,
     "borderColor": "#00000000",
-    "contentPadding": 16,
+    "contentPadding": 20,
     "titleAlignment": 0,
     "messageAlignment": 0,
     "mediaPosition": 0,
     "animationType": 0,
     "animationDuration": 500,
-    "animationExit": false
+    "animationExit": false,
+    "mediaTimeout": 10,
+    "mediaRetries": 3,
+    "appTheme": 0,
+    "advancedMode": false,
+    "powerModuleEnabled": true,
+    "discoveryModuleEnabled": true,
+    "mediaModuleEnabled": true,
+    "updateChannel": 0,
+    "language": "default"
 }
 ```
 
