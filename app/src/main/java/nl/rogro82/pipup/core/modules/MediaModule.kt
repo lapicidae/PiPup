@@ -1,6 +1,7 @@
 package nl.rogro82.pipup.core.modules
 
 import android.util.Log
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
@@ -20,11 +21,22 @@ class MediaModule : PiPupModule {
 
     override val id: String = "media"
     override val name: String = "Rich Media Support"
+    override val descriptionRes: Int = R.string.settings_module_media_desc
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ECO, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.ECO
     override val supportedRoutes: List<String> = emptyList()
 
     private var moduleContext: ModuleContext? = null
+
+    override fun onNotificationDisplayStateChanged(isDisplaying: Boolean) {
+        if (!isDisplaying) {
+            // Engine warming: Re-activate module when idle to ensure it stays in memory (if in ON mode)
+            val settings = PiPupApp.settings
+            if (settings.getModuleMode(id) == ModuleMode.ON) {
+                moduleContext?.let { (it.androidContext.applicationContext as? PiPupApp)?.moduleManager?.activateModule(id) }
+            }
+        }
+    }
 
     override fun onEnable(context: ModuleContext) {
         Log.d(TAG, "Media module enabled")

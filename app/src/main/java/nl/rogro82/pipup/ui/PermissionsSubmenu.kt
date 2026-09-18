@@ -2,6 +2,8 @@ package nl.rogro82.pipup.ui
 
 import android.content.Context
 import android.graphics.Typeface
+import android.os.PowerManager
+import android.view.KeyEvent
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -9,13 +11,18 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.Permissions
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.core.PowerController
+import nl.rogro82.pipup.core.SettingCategory
 
 /**
  * Submenu for central permission management.
+ * Adheres to modular architecture: asks ModuleManager for permissions instead of hardcoding.
  */
 @UnstableApi
 class PermissionsSubmenu(
@@ -28,8 +35,6 @@ class PermissionsSubmenu(
     private val refreshTask = object : Runnable {
         override fun run() {
             val root = rootView
-            // Only continue if we are still the active submenu.
-            // We wait for attachment if it hasn't happened yet.
             if (root != null && (settingsActivity?.getCurrentSubmenuLayout() == R.layout.submenu_permissions)) {
                 if (root.isAttachedToWindow) {
                     refreshPermissionList(root)
@@ -45,11 +50,7 @@ class PermissionsSubmenu(
 
     override fun onBind(root: View) {
         rootView = root
-
-        // Stop any previous task instances to avoid parallel loops
         handler.removeCallbacks(refreshTask)
-
-        // Initial render logic
         refreshPermissionList(root)
         handler.postDelayed(refreshTask, 2000)
     }
@@ -60,23 +61,25 @@ class PermissionsSubmenu(
     }
 
     private fun refreshPermissionList(root: View) {
-        // Robustness: Handle both the direct root (from ViewStub) or its container
         val submenuRoot: LinearLayout? = root.findViewById(R.id.permissions_root) ?: (root as? LinearLayout)
         if (submenuRoot == null || (submenuRoot.id != R.id.permissions_root && root.id != R.id.permissions_root)) return
 
-        // Use a signature to avoid unnecessary UI rebuilds
         val sleepMethod = PowerController.getSleepMethod(context)
-        val powerModuleEnabled = settings.powerModuleEnabled
+        val powerModuleEnabled = settings.getModuleMode("power") != ModuleMode.OFF
         val overlayGranted = Permissions.overlay(context)
         val installGranted = Permissions.installPackages(context)
-        val energyGranted = (context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager).isIgnoringBatteryOptimizations(context.packageName)
+        val energyGranted = (context.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(context.packageName)
 
-        val currentSignature = "pow:$powerModuleEnabled:$sleepMethod|ov:$overlayGranted|in:$installGranted|en:$energyGranted"
+        // Modular integration: Get permissions required by currently enabled modules
+        val mm = (context.applicationContext as PiPupApp).moduleManager
+        val modulePermissions = mm.getEnabledModules().flatMap { it.getRequiredPermissions() }.toSet()
+
+        val currentSignature = "pow:$powerModuleEnabled:$sleepMethod|ov:$overlayGranted|in:$installGranted|en:$energyGranted|mods:${modulePermissions.joinToString(",")}"
 
         if (submenuRoot.tag == currentSignature) return
         submenuRoot.tag = currentSignature
 
-        // 1. Clear everything except the first child (the title)
+        // 1. Clear dynamic content
         val childCount = submenuRoot.childCount
         if (childCount > 1) {
             submenuRoot.removeViews(1, childCount - 1)
@@ -86,16 +89,8 @@ class PermissionsSubmenu(
         addSectionHeader(submenuRoot, context.getString(R.string.permission_header_required))
         addPermissionRow(submenuRoot, Permissions.KEY_OVERLAY, isOptional = false)
 
-        // Dynamically add module-required permissions
-        val mm = (context.applicationContext as nl.rogro82.pipup.PiPupApp).moduleManager
-        val modulePermissions = mm.getEnabledModules().flatMap { it.getRequiredPermissions() }.toSet()
-
         modulePermissions.forEach { key ->
-            addPermissionRow(
-                submenuRoot,
-                key,
-                isOptional = false
-            )
+            addPermissionRow(submenuRoot, key, isOptional = false)
         }
 
         // 3. OPTIONAL SECTION
@@ -103,9 +98,8 @@ class PermissionsSubmenu(
         addPermissionRow(submenuRoot, Permissions.KEY_INSTALL, isOptional = true)
         addPermissionRow(submenuRoot, Permissions.KEY_ENERGY, isOptional = true)
 
-        renderModuleSettings(submenuRoot, nl.rogro82.pipup.core.SettingCategory.PERMISSIONS)
+        renderModuleSettings(submenuRoot, SettingCategory.PERMISSIONS)
 
-        // 4. Trigger focus recalculation
         settingsActivity?.setupSubmenuFocus()
     }
 
@@ -122,27 +116,17 @@ class PermissionsSubmenu(
     }
 
     private fun addPermissionRow(container: LinearLayout, key: String, isOptional: Boolean = false) {
-        val granted = Permissions.granted(context, key) ?: false
-        val label = when(key) {
-            Permissions.KEY_OVERLAY -> context.getString(R.string.permission_overlay)
-            Permissions.KEY_ENERGY -> context.getString(R.string.energy_optimization_title)
-            Permissions.KEY_INSTALL -> context.getString(R.string.permission_install)
-            Permissions.KEY_ADMIN -> context.getString(R.string.permission_admin)
-            Permissions.KEY_ACCESSIBILITY -> context.getString(R.string.permission_accessibility)
-            Permissions.KEY_POWER -> {
-                val sleepMethod = PowerController.getSleepMethod(context)
-                if (sleepMethod != null) {
-                    val methodLabel = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) context.getString(R.string.permission_admin) else context.getString(R.string.permission_accessibility)
-                    context.getString(R.string.settings_module_power) + " ($methodLabel)"
-                } else {
-                    context.getString(R.string.settings_module_power)
-                }
-            }
-            else -> key
-        }
+        val granted = Permissions.granted(context, key)
+        val isGranted = granted == true
+        val isNotSupported = granted == null
+
+        // UX Refinement: Hide N/A permissions in Release builds.
+        // Developers can still see them (grayed out) in Debug builds for integration testing.
+        if (isNotSupported && !BuildConfig.DEBUG) return
+
+        val label = Permissions.getLabel(context, key)
 
         val row = LinearLayout(context).apply {
-            // Stable ID is crucial: Android uses it to restore focus after a list refresh.
             id = key.hashCode() and 0x7FFFFFFF
             orientation = LinearLayout.VERTICAL
             setPadding(context.dpToPx(16), context.dpToPx(12), context.dpToPx(16), context.dpToPx(16))
@@ -155,48 +139,44 @@ class PermissionsSubmenu(
             isFocusableInTouchMode = true
 
             setOnClickListener {
-                if (!granted) {
+                if (!isGranted) {
                     Permissions.showFixDialog(context, key)
                 }
             }
 
             onFocusChangeListener = View.OnFocusChangeListener { v, f ->
-                if (f) {
-                    updatePreviewPosition(v)
-                }
+                if (f) updatePreviewPosition(v)
             }
 
-            // Trap focus on the right side to prevent it from disappearing
             setOnKeyListener { _, keyCode, event ->
-                event.action == android.view.KeyEvent.ACTION_DOWN && keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
             }
         }
 
         val title = TextView(context).apply {
-            text = if (granted) context.getString(R.string.permission_granted, label) else context.getString(R.string.permission_missing, label)
+            text = when {
+                isNotSupported -> context.getString(R.string.permission_granted, label) + " (N/A)"
+                isGranted -> context.getString(R.string.permission_granted, label)
+                else -> context.getString(R.string.permission_missing, label)
+            }
             textSize = 18f
 
             val statusColor = when {
-                granted -> R.color.status_green
+                isNotSupported -> R.color.colorOnSurfaceVariant
+                isGranted -> R.color.status_green
                 isOptional -> R.color.status_orange
                 else -> R.color.status_red
             }
             setTextColor(ContextCompat.getColor(context, statusColor))
-            if (!granted) setTypeface(null, Typeface.BOLD)
+            if (!isGranted && !isNotSupported) setTypeface(null, Typeface.BOLD)
         }
         row.addView(title)
 
-        val whyRes = when(key) {
-            Permissions.KEY_OVERLAY -> R.string.permission_overlay_why
-            Permissions.KEY_ENERGY -> R.string.permission_energy_why
-            Permissions.KEY_INSTALL -> R.string.permission_install_why
-            Permissions.KEY_ADMIN, Permissions.KEY_ACCESSIBILITY, Permissions.KEY_POWER -> R.string.permission_power_why
-            else -> null
-        }
+        val why = Permissions.getWhyText(context, key)
 
-        if (whyRes != null && (!granted || key in setOf(Permissions.KEY_OVERLAY, Permissions.KEY_ENERGY, Permissions.KEY_INSTALL, Permissions.KEY_ADMIN, Permissions.KEY_ACCESSIBILITY, Permissions.KEY_POWER))) {
+        if (why != null && (isNotSupported || !isGranted || key in setOf(Permissions.KEY_OVERLAY, Permissions.KEY_ENERGY, Permissions.KEY_INSTALL, Permissions.KEY_ADMIN, Permissions.KEY_ACCESSIBILITY, Permissions.KEY_POWER))) {
             row.addView(TextView(context).apply {
-                text = context.getString(whyRes)
+                text = if (isNotSupported) "This permission is not applicable to your hardware." else why
                 textSize = 14f
                 alpha = 0.8f
                 setTextColor(ContextCompat.getColor(this@PermissionsSubmenu.context, R.color.colorOnSurfaceVariant))
@@ -204,7 +184,7 @@ class PermissionsSubmenu(
             })
         }
 
-        if (!granted) {
+        if (!isGranted && !isNotSupported) {
             val adb = Permissions.adbCommand(key, context)
             if (adb.isNotEmpty()) {
                 row.addView(TextView(context).apply {

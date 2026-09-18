@@ -16,4 +16,7 @@
     <item name="switch_discovery_module" type="id" />
     <item name="container_media_module" type="id" />
     <item name="switch_media_module" type="id" />
+    <item name="container_vendor_module" type="id" />
+    <item name="switch_vendor_module" type="id" />
+    <item name="vendor_status_row" type="id" />
 </resources>

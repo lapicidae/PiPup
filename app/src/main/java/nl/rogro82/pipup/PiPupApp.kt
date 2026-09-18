@@ -9,6 +9,7 @@ import nl.rogro82.pipup.core.modules.DiscoveryModule
 import nl.rogro82.pipup.core.modules.MediaModule
 import nl.rogro82.pipup.core.modules.PowerModule
 import nl.rogro82.pipup.core.modules.SystemModule
+import nl.rogro82.pipup.core.modules.VendorModule
 import nl.rogro82.pipup.core.modules.DebugModule
 
 class PiPupApp : Application() {
@@ -35,6 +36,7 @@ class PiPupApp : Application() {
         moduleManager.registerModule(PowerModule())
         moduleManager.registerModule(DiscoveryModule())
         moduleManager.registerModule(MediaModule())
+        moduleManager.registerModule(VendorModule())
 
         if (BuildConfig.DEBUG) {
             moduleManager.registerModule(DebugModule())

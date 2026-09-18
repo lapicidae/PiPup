@@ -1,12 +1,17 @@
 package nl.rogro82.pipup
 
+import android.app.Activity
 import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.os.Process
+import android.os.SystemClock
 import android.provider.Settings
 import android.text.Spannable
 import android.text.SpannableStringBuilder
@@ -22,16 +27,17 @@ import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
+import java.util.concurrent.atomic.AtomicInteger
 import nl.rogro82.pipup.core.PowerController
 import nl.rogro82.pipup.service.AdminReceiver
 import nl.rogro82.pipup.service.PiPupAccessibilityService
+import nl.rogro82.pipup.ui.SettingsActivity
 
 /**
  * Centralized and robust permission management for PiPup.
  *
- * Implements DRY by being the single source of truth for all permission checks,
- * intents, and adb commands. Handles restricted environments (Fire OS, TCL)
- * by detecting do-nothing placeholder screens.
+ * All permission metadata and implementations are centralized here.
+ * Modules simply request these permissions by key.
  */
 @OptIn(UnstableApi::class)
 object Permissions {
@@ -47,9 +53,9 @@ object Permissions {
     const val KEY_POWER = "power" // Virtual key for grouped power permissions
 
     /** List of permissions that can potentially be "fixed" via a system settings screen. */
-    val FIXABLE_KEYS = listOf(KEY_OVERLAY, KEY_INSTALL, KEY_ADMIN, KEY_ACCESSIBILITY, KEY_ENERGY)
+    val FIXABLE_KEYS = listOf(KEY_OVERLAY, KEY_INSTALL, KEY_ADMIN, KEY_ACCESSIBILITY, KEY_ENERGY, KEY_AUTO_START)
 
-    private const val OP_AUTO_START = "android:auto_start"
+    private const val OP_TCL_AUTO_START = "android:auto_start"
     private val PLACEHOLDER_MARKERS = listOf("CTSDummy", "frameworkpackagestubs")
 
     const val BLOCKED_ERROR =
@@ -63,7 +69,7 @@ object Permissions {
     @Volatile
     private var mLastFix: Map<String, Any?>? = null
 
-    private val mVisibleActivities = java.util.concurrent.atomic.AtomicInteger(0)
+    private val mVisibleActivities = AtomicInteger(0)
 
     val activityVisible: Boolean
         get() = mVisibleActivities.get() > 0
@@ -78,10 +84,7 @@ object Permissions {
     }
 
     /**
-     * SYSTEM_ALERT_WINDOW - without it popups are accepted but never appear.
-     *
-     * @param context The context to check.
-     * @return True if permission is granted.
+     * Checks if the overlay permission is granted.
      */
     fun overlay(context: Context): Boolean = try {
         Settings.canDrawOverlays(context)
@@ -91,10 +94,7 @@ object Permissions {
     }
 
     /**
-     * REQUEST_INSTALL_PACKAGES - needed for the self-update to install its download.
-     *
-     * @param context The context to check.
-     * @return True if permission is granted.
+     * Checks if the package install permission is granted.
      */
     fun installPackages(context: Context): Boolean = try {
         context.packageManager.canRequestPackageInstalls().also {
@@ -107,17 +107,32 @@ object Permissions {
     }
 
     /**
-     * TCL's vendor app-op that decides whether Android may restart a killed service.
-     *
-     * @param context The context to check.
-     * @return True if allowed, false if denied, null if op is unavailable.
+     * Checks if a vendor-specific auto-start permission is granted.
+     * Implements a dispatcher to handle different manufacturer guards (TCL, Xiaomi, etc.).
      */
-    fun autoStart(context: Context): Boolean? = try {
+    fun autoStart(context: Context): Boolean? {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        val mode = checkAppOp(ops, OP_AUTO_START, context)
-        mode == AppOpsManager.MODE_ALLOWED
-    } catch (_: Throwable) {
-        null
+
+        // 1. TCL Optimization (AppOp-based)
+        try {
+            // We use checkOpNoThrow to see if the op is even known to the system
+            @Suppress("DEPRECATION")
+            ops.checkOpNoThrow(OP_TCL_AUTO_START, Process.myUid(), context.packageName)
+            val mode = checkAppOp(ops, OP_TCL_AUTO_START, context)
+            return mode == AppOpsManager.MODE_ALLOWED
+        } catch (_: Throwable) {}
+
+        // 2. Xiaomi / MIUI (Intent-based)
+        // On Xiaomi devices, background activity is strictly controlled.
+        // We show the row (return false) so users can reach the MIUI management screen.
+        if (Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true) ||
+            Build.BRAND.contains("Xiaomi", ignoreCase = true)) {
+            return false
+        }
+
+        // Return null for hardware without known specific auto-start restrictions
+        // to gracefully hide the row in modular UIs.
+        return null
     }
 
     fun opMode(context: Context, op: String): String = try {
@@ -136,19 +151,15 @@ object Permissions {
     private fun checkAppOp(ops: AppOpsManager, op: String, context: Context): Int {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             @Suppress("DEPRECATION")
-            ops.unsafeCheckOpNoThrow(op, android.os.Process.myUid(), context.packageName)
+            ops.unsafeCheckOpNoThrow(op, Process.myUid(), context.packageName)
         } else {
             @Suppress("DEPRECATION")
-            ops.checkOpNoThrow(op, android.os.Process.myUid(), context.packageName)
+            ops.checkOpNoThrow(op, Process.myUid(), context.packageName)
         }
     }
 
     /**
      * Returns whether a specific permission is granted.
-     *
-     * @param context The context to check.
-     * @param key The permission key (e.g. [KEY_OVERLAY]).
-     * @return True if granted, false if missing, null if not applicable.
      */
     fun granted(context: Context, key: String): Boolean? = when (key) {
         KEY_OVERLAY -> overlay(context)
@@ -161,7 +172,7 @@ object Permissions {
         KEY_ACCESSIBILITY -> PiPupAccessibilityService.isEnabledInSettings(context)
         KEY_AUTO_START -> autoStart(context)
         KEY_ENERGY -> {
-            val pm = context.getSystemService(Context.POWER_SERVICE) as android.os.PowerManager
+            val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
             pm.isIgnoringBatteryOptimizations(context.packageName)
         }
         KEY_POWER -> PowerController.getSleepMethod(context) != null
@@ -180,10 +191,6 @@ object Permissions {
 
     /**
      * Returns an ADB command string to grant the given permission.
-     *
-     * @param key The permission key.
-     * @param context The application context.
-     * @return The full adb shell command.
      */
     fun adbCommand(key: String, context: Context): String {
         val pkg = context.packageName
@@ -192,7 +199,11 @@ object Permissions {
             KEY_INSTALL -> "adb shell appops set --user current $pkg REQUEST_INSTALL_PACKAGES allow"
             KEY_ADMIN -> "adb shell dpm set-active-admin --user current $pkg/.service.AdminReceiver"
             KEY_ACCESSIBILITY -> "adb shell settings put secure --user current enabled_accessibility_services <current_services>:$pkg/.service.PiPupAccessibilityService && adb shell settings put secure --user current accessibility_enabled 1"
-            KEY_AUTO_START -> "adb shell cmd appops set --user current $pkg android:auto_start allow"
+            KEY_AUTO_START -> {
+                if (autoStart(context) != null && !Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true)) {
+                    "adb shell cmd appops set --user current $pkg $OP_TCL_AUTO_START allow"
+                } else ""
+            }
             KEY_ENERGY -> "adb shell dumpsys deviceidle whitelist +$pkg"
             else -> ""
         }
@@ -200,10 +211,6 @@ object Permissions {
 
     /**
      * Returns the raw system intent to open the settings screen for a permission.
-     *
-     * @param context The context.
-     * @param key The permission key.
-     * @return The Intent, or null if not supported.
      */
     fun rawIntent(context: Context, key: String): Intent? = when (key) {
         KEY_OVERLAY -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}".toUri())
@@ -213,6 +220,13 @@ object Permissions {
             putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, context.getString(R.string.permission_admin_explanation))
         }
         KEY_ACCESSIBILITY -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+        KEY_AUTO_START -> {
+            if (Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true)) {
+                Intent().apply {
+                    component = ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")
+                }
+            } else null
+        }
         KEY_ENERGY -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
         else -> null
     }
@@ -239,7 +253,6 @@ object Permissions {
 
     /** Returns an intent to fix the permission, or null if the device explicitly blocks it or has no screen. */
     fun fixIntent(context: Context, key: String): Intent? {
-        // Overlay is special: even if op says blocked, the settings screen is the standard way.
         if (key != KEY_OVERLAY && opBlocked(context, key)) return null
 
         val intent = rawIntent(context, key) ?: return null
@@ -259,8 +272,7 @@ object Permissions {
     fun launchFix(context: Context, key: String): Boolean {
         Log.d(LOG_TAG, "launchFix($key) called")
 
-        // Anchor focus to main menu item before leaving to ensure stable return
-        if (context is nl.rogro82.pipup.ui.SettingsActivity) {
+        if (context is SettingsActivity) {
             context.focusRail()
         }
 
@@ -269,7 +281,7 @@ object Permissions {
             KEY_ACCESSIBILITY -> openTvAccessibilitySettings(context)
             KEY_ADMIN -> {
                 val intent = rawIntent(context, KEY_ADMIN) ?: return false
-                if (context is nl.rogro82.pipup.ui.SettingsActivity) {
+                if (context is SettingsActivity) {
                     context.requestAdminRights(intent)
                     true
                 } else {
@@ -322,8 +334,8 @@ object Permissions {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
 
-        if (context is nl.rogro82.pipup.ui.SettingsActivity) {
-            context.requestAdminRights(intent) // Re-use the same launcher for any activity result
+        if (context is SettingsActivity) {
+            context.requestAdminRights(intent)
             return true
         }
 
@@ -349,7 +361,7 @@ object Permissions {
 
     private fun launchEnergyFix(context: Context): Boolean {
         val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
-            if (context is android.app.Activity) {
+            if (context is Activity) {
                 addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             } else {
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -359,8 +371,6 @@ object Permissions {
         try {
             context.startActivity(intent)
 
-            // Special Check for Energy Settings: If we are still in the app after 1.5s,
-            // the menu likely failed to open (common on TV). Fallback to App Info.
             Handler(Looper.getMainLooper()).postDelayed({
                 val isStillResumed = (context as? AppCompatActivity)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) ?: false
                 if (isStillResumed) {
@@ -379,8 +389,46 @@ object Permissions {
     }
 
     /**
-     * Centralized method to show a guided instruction dialog for any permission.
-     * Implements DRY by handling Why-text, ADB-hints and Restricted-hints in one place.
+     * Returns a human-readable label for the given permission key.
+     */
+    fun getLabel(context: Context, key: String): String {
+        return when (key) {
+            KEY_OVERLAY -> context.getString(R.string.permission_overlay)
+            KEY_INSTALL -> context.getString(R.string.permission_install)
+            KEY_ENERGY -> context.getString(R.string.energy_optimization_title)
+            KEY_ADMIN -> context.getString(R.string.permission_admin)
+            KEY_ACCESSIBILITY -> context.getString(R.string.permission_accessibility)
+            KEY_AUTO_START -> context.getString(R.string.permission_autostart)
+            KEY_POWER -> {
+                val sleepMethod = PowerController.getSleepMethod(context)
+                if (sleepMethod != null) {
+                    val methodLabel = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) context.getString(R.string.permission_admin) else context.getString(R.string.permission_accessibility)
+                    context.getString(R.string.settings_module_power) + " ($methodLabel)"
+                } else {
+                    context.getString(R.string.settings_module_power)
+                }
+            }
+            else -> key
+        }
+    }
+
+    /**
+     * Returns a human-readable reason/why-text for the given permission key.
+     */
+    fun getWhyText(context: Context, key: String): String? {
+        val resId = when (key) {
+            KEY_OVERLAY -> R.string.permission_overlay_why
+            KEY_INSTALL -> R.string.permission_install_why
+            KEY_AUTO_START -> R.string.permission_autostart_why
+            KEY_ENERGY -> R.string.permission_energy_why
+            KEY_ADMIN, KEY_ACCESSIBILITY, KEY_POWER -> R.string.permission_power_why
+            else -> 0
+        }
+        return if (resId != 0) context.getString(resId) else null
+    }
+
+    /**
+     * Shows a guided instruction dialog for any permission.
      */
     fun showFixDialog(context: Context, key: String) {
         if (key == KEY_POWER) {
@@ -388,36 +436,21 @@ object Permissions {
             return
         }
 
-        val label = when (key) {
-            KEY_OVERLAY -> context.getString(R.string.permission_overlay)
-            KEY_INSTALL -> context.getString(R.string.permission_install)
-            KEY_ADMIN -> context.getString(R.string.permission_admin)
-            KEY_ACCESSIBILITY -> context.getString(R.string.permission_accessibility)
-            KEY_ENERGY -> context.getString(R.string.energy_optimization_title)
-            else -> key
-        }
-
+        val label = getLabel(context, key)
         val appName = context.getString(R.string.app_name)
-        val whyRes = when (key) {
-            KEY_OVERLAY -> R.string.permission_overlay_why
-            KEY_INSTALL -> R.string.permission_install_why
-            KEY_ADMIN, KEY_ACCESSIBILITY -> R.string.permission_power_why
-            KEY_ENERGY -> R.string.permission_energy_why
-            else -> 0
-        }
+        val why = getWhyText(context, key)
 
         val fixIntentAvailable = fixIntent(context, key) != null
 
         val message = SpannableStringBuilder()
-        if (whyRes != 0) {
-            message.append(context.getString(whyRes))
+        if (why != null) {
+            message.append(why)
         }
 
         if (key == KEY_ENERGY) {
             message.append("\n\n").append(context.getString(R.string.energy_optimization_manual, appName))
         }
 
-        // Add Restricted Settings hint for Sideloaded apps on Android 13+
         if (key == KEY_ADMIN || key == KEY_ACCESSIBILITY) {
             message.append("\n\n").append(context.getString(R.string.permission_restricted_hint))
         }
@@ -508,7 +541,6 @@ object Permissions {
         }
 
         dialog.show()
-        // Focus first option for D-pad
         handler.post { container.getChildAt(1)?.requestFocus() }
     }
 
@@ -568,7 +600,7 @@ object Permissions {
             "ok" to ok,
             "activity" to activity,
             "error" to error,
-            "at" to android.os.SystemClock.elapsedRealtime()
+            "at" to SystemClock.elapsedRealtime()
         )
     }
 
@@ -601,7 +633,7 @@ object Permissions {
             )
         },
         "lastFix" to mLastFix?.let { fix ->
-            fix + mapOf("secondsAgo" to (android.os.SystemClock.elapsedRealtime() - (fix["at"] as Long)) / 1000) - "at"
+            fix + mapOf("secondsAgo" to (SystemClock.elapsedRealtime() - (fix["at"] as Long)) / 1000) - "at"
         }
     )
 }

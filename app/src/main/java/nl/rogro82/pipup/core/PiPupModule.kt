@@ -4,15 +4,14 @@ import fi.iki.elonen.NanoHTTPD
 
 /**
  * Interface for optional PiPup modules.
- *
- * Modules can be enabled/disabled by the user and can hook into the WebServer
- * request flow and the application state reporting.
  */
 interface PiPupModule {
     /** Unique identifier for the module (e.g., "power"). */
     val id: String
     /** User-friendly name of the module. */
     val name: String
+    /** Description of the module functionality (Resource ID). */
+    val descriptionRes: Int
 
     /**
      * List of modes supported by this module.
@@ -29,6 +28,11 @@ interface PiPupModule {
      * Used for on-demand activation in Eco mode.
      */
     val supportedRoutes: List<String> get() = emptyList()
+
+    /**
+     * Called when the notification display state changes.
+     */
+    fun onNotificationDisplayStateChanged(isDisplaying: Boolean) {}
 
     /**
      * Called when the module is enabled.

@@ -6,6 +6,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
 import nl.rogro82.pipup.BuildConfig
+import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.PiPupModule
@@ -23,6 +24,7 @@ class DiscoveryModule : PiPupModule {
 
     override val id: String = "discovery"
     override val name: String = "Network Discovery"
+    override val descriptionRes: Int = R.string.settings_module_discovery_desc
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.ON

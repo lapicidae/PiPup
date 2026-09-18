@@ -193,6 +193,7 @@ class NotificationManager(
         when (val s = state) {
             is NotificationState.Preparing -> {
                 if (s.view == view) {
+                    notifyStateChanged(true)
                     if (showPopup(view, s.props)) {
                         state = NotificationState.Displaying(s.props, view)
                         processNextLocked()
@@ -205,6 +206,7 @@ class NotificationManager(
             is NotificationState.DisplayingAndPreparing -> {
                 if (s.prepView == view) {
                     if (s.prepProps.overwrite) {
+                        notifyStateChanged(true)
                         replaceCurrentPopup(s.displayView, view, s.prepProps)
                         state = NotificationState.Displaying(s.prepProps, view)
                         processNextLocked()
@@ -286,6 +288,10 @@ class NotificationManager(
         }
     }
 
+    private fun notifyStateChanged(isDisplaying: Boolean) {
+        (context.applicationContext as? PiPupApp)?.moduleManager?.notifyNotificationDisplayStateChanged(isDisplaying)
+    }
+
     private fun performCancelAll() {
         synchronized(this) {
             queue.clear()
@@ -309,10 +315,8 @@ class NotificationManager(
                 else -> {}
             }
             state = NotificationState.Idle
+            notifyStateChanged(false)
             removeOverlay()
-
-            // Memory cleanup: Clear any cached context if applicable
-            (context.applicationContext as? PiPupApp)?.moduleManager?.getModule("media")
         }
     }
 
@@ -429,11 +433,7 @@ class NotificationManager(
         state = nextState
 
         if (state is NotificationState.Idle) {
-            (context.applicationContext as? PiPupApp)?.let { app ->
-                if (PiPupApp.settings.getModuleMode("media") == ModuleMode.ON) {
-                    app.moduleManager.activateModule("media")
-                }
-            }
+            notifyStateChanged(false)
             if (queue.isEmpty()) removeOverlay()
         }
 
