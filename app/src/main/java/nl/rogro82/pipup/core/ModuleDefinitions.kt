@@ -1,7 +1,9 @@
 package nl.rogro82.pipup.core
 
 import androidx.annotation.DrawableRes
+import androidx.annotation.LayoutRes
 import androidx.annotation.StringRes
+import nl.rogro82.pipup.R
 
 /**
  * Supported types for modular settings.
@@ -60,7 +62,8 @@ data class ModuleMenuDefinition(
     @DrawableRes val iconRes: Int,
     @StringRes val labelRes: Int,
     val priority: Int = 100,
-    val showInMainRail: Boolean = false
+    val showInMainRail: Boolean = false,
+    @LayoutRes val layoutRes: Int = R.layout.submenu_module_dynamic
 )
 
 /**

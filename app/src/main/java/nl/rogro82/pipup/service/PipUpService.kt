@@ -34,7 +34,6 @@ import nl.rogro82.pipup.UpdateManager
 import nl.rogro82.pipup.UpdateWorker
 import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
-import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.NotificationManager
 import nl.rogro82.pipup.core.WebServer
@@ -191,25 +190,22 @@ class PipUpService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Answer every startForegroundService() - mandatory even if already in foreground
+        // to prevent RemoteServiceException on some Android versions/vendors.
+        updateForegroundNotification(settings.language)
+        return START_STICKY
+    }
 
     private fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         val uri = session.uri.lowercase()
         val method = session.method
 
-        // 1. Check if module-specific routes are blocked by activation mode
-        if (uri == "/power" && settings.getModuleMode("power") == ModuleMode.OFF) {
-             val localizedContext = getLocalizedContext(settings.language)
-             val moduleName = localizedContext.getString(R.string.settings_module_power)
-             showToast(localizedContext.getString(R.string.error_module_disabled, moduleName))
-             return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Module disabled")
-        }
-
-        // 2. Dispatch to ModuleManager (Handles core API via SystemModule + other modules)
+        // 1. Dispatch to ModuleManager (Handles core API via SystemModule + other modules)
         val moduleResponse = moduleManager.handleRequest(session)
         if (moduleResponse != null) return moduleResponse
 
-        // 3. Fallback for unhandled routes
+        // 2. Fallback for unhandled routes
         return try {
             when (uri) {
                 "/" -> {

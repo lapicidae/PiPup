@@ -1,9 +1,12 @@
 package nl.rogro82.pipup.core
 
+import android.content.Context
 import android.util.Log
 import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import fi.iki.elonen.NanoHTTPD
+import nl.rogro82.pipup.Permissions
+import nl.rogro82.pipup.PiPupApp
 
 /**
  * Manages the lifecycle and request dispatching for optional PiPup modules.
@@ -128,8 +131,19 @@ class ModuleManager {
      * Returns all modules that are logically enabled (not OFF).
      */
     fun getEnabledModules(): List<PiPupModule> {
-        val context = moduleContext ?: return emptyList()
-        return modules.values.filter { context.settings.getModuleMode(it.id) != ModuleMode.OFF }
+        val s = PiPupApp.settings
+        return modules.values.filter { s.getModuleMode(it.id) != ModuleMode.OFF }
+    }
+
+    /**
+     * Returns all permissions required by enabled modules that are currently missing.
+     */
+    fun getEnabledModulesMissingPermissions(context: Context): List<String> {
+        return getEnabledModules().flatMap { module ->
+            module.getRequiredPermissions().filter { key ->
+                Permissions.granted(context, key) == false
+            }
+        }.distinct()
     }
 
     /**
@@ -161,6 +175,15 @@ class ModuleManager {
         }
 
         return null
+    }
+
+    /**
+     * Notifies modules about changes in the notification display state.
+     */
+    fun notifyNotificationDisplayStateChanged(isDisplaying: Boolean) {
+        activeModules.forEach { id ->
+            modules[id]?.onNotificationDisplayStateChanged(isDisplaying)
+        }
     }
 
     /**

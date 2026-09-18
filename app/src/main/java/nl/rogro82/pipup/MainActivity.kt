@@ -20,7 +20,6 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.util.UnstableApi
 import java.util.Calendar
-import nl.rogro82.pipup.core.PowerController
 import nl.rogro82.pipup.service.PipUpService
 import nl.rogro82.pipup.ui.SettingsActivity
 
@@ -147,11 +146,14 @@ class MainActivity : AppCompatActivity() {
             missing.add(getString(R.string.permission_overlay))
         }
 
-        if (appSettings.powerModuleEnabled && PowerController.getSleepMethod(this) == null) {
-            missing.add(getString(R.string.settings_module_power))
+        // Generic module permission check
+        val mm = (application as PiPupApp).moduleManager
+        val moduleMissing = mm.getEnabledModulesMissingPermissions(this).map { key ->
+            Permissions.getLabel(this, key)
         }
+        missing.addAll(moduleMissing)
 
-        return missing
+        return missing.distinct()
     }
 
     /**

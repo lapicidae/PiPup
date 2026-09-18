@@ -279,4 +279,16 @@
     <string name="server_landing_docs">Documentation and API usage can be found on GitHub.</string>
     <!-- %1$s: Device Name/Model, %2$s: Android Version -->
     <string name="server_landing_running_on">Running on %1$s (Android %2$s)</string>
+
+    <!-- Vendor-Specific Optimizations -->
+    <string name="settings_module_vendor">Vendor Settings</string>
+    <string name="settings_module_vendor_desc">Vendor-specific optimizations for better background stability (e.g. TCL Keep-Alive).</string>
+    <string name="settings_vendor_tcl_keepalive">TCL Keep-Alive</string>
+    <string name="settings_vendor_tcl_keepalive_desc">Increases process priority to prevent freezing by TCL Vendor Guard. Requires Accessibility Service.</string>
+    <string name="vendor_status_not_tcl">Not a TCL device (Keep-Alive not required)</string>
+    <string name="vendor_status_active">ACTIVE (Process protected)</string>
+    <string name="vendor_status_waiting">WAITING (Service enabled but not bound)</string>
+    <string name="vendor_status_inactive">INACTIVE (Accessibility Service required)</string>
+    <string name="permission_autostart">Auto-Start</string>
+    <string name="permission_autostart_why">Allows the system to automatically restore the service after a reboot or kill.</string>
 </resources>

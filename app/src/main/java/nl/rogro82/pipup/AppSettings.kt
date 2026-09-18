@@ -186,21 +186,6 @@ class AppSettings(context: Context) {
     /** The application theme (0: Dark, 1: Light). */
     var appTheme by IntPref("app_theme", 0)
 
-    /** Whether the power control module is enabled. */
-    var powerModuleEnabled: Boolean
-        get() = getModuleMode("power") != ModuleMode.OFF
-        set(value) = setModuleMode("power", if (value) getPreferredMode("power").takeIf { it != ModuleMode.OFF } ?: ModuleMode.ON else ModuleMode.OFF)
-
-    /** Whether the network discovery module is enabled. */
-    var discoveryModuleEnabled: Boolean
-        get() = getModuleMode("discovery") != ModuleMode.OFF
-        set(value) = setModuleMode("discovery", if (value) ModuleMode.ON else ModuleMode.OFF)
-
-    /** Whether the rich media (WebView/WHEP) module is enabled. */
-    var mediaModuleEnabled: Boolean
-        get() = getModuleMode("media") != ModuleMode.OFF
-        set(value) = setModuleMode("media", if (value) getPreferredMode("media").takeIf { it != ModuleMode.OFF } ?: ModuleMode.ECO else ModuleMode.OFF)
-
     /** The preferred language for the application UI. */
     var language by StringPref("language", "default")
     /** The timestamp of the last daily permission nag. */
@@ -278,9 +263,7 @@ class AppSettings(context: Context) {
         val mediaRetries: Int,
         val appTheme: Int,
         val advancedMode: Boolean,
-        val powerModuleEnabled: Boolean,
-        val discoveryModuleEnabled: Boolean,
-        val mediaModuleEnabled: Boolean,
+        val moduleModes: Map<String, Int>,
         val updateChannel: Int,
         val updateInterval: Int,
         val updateNotificationStyle: Int,
@@ -317,9 +300,7 @@ class AppSettings(context: Context) {
                 put("mediaRetries", mediaRetries)
                 put("appTheme", appTheme)
                 put("advancedMode", advancedMode)
-                put("powerModuleEnabled", powerModuleEnabled)
-                put("discoveryModuleEnabled", discoveryModuleEnabled)
-                put("mediaModuleEnabled", mediaModuleEnabled)
+                put("moduleModes", JSONObject(moduleModes))
                 put("updateChannel", updateChannel)
                 put("updateInterval", updateInterval)
                 put("updateNotificationStyle", updateNotificationStyle)
@@ -360,9 +341,11 @@ class AppSettings(context: Context) {
                     mediaRetries = j.optInt("mediaRetries", 3),
                     appTheme = j.optInt("appTheme", 0),
                     advancedMode = j.optBoolean("advancedMode", false),
-                    powerModuleEnabled = j.optBoolean("powerModuleEnabled", false),
-                    discoveryModuleEnabled = j.optBoolean("discoveryModuleEnabled", false),
-                    mediaModuleEnabled = j.optBoolean("mediaModuleEnabled", false),
+                    moduleModes = j.optJSONObject("moduleModes")?.let { modes ->
+                        val map = mutableMapOf<String, Int>()
+                        modes.keys().forEach { key -> map[key] = modes.getInt(key) }
+                        map
+                    } ?: emptyMap(),
                     updateChannel = j.optInt("updateChannel", 0),
                     updateInterval = j.optInt("updateInterval", 4),
                     updateNotificationStyle = j.optInt("updateNotificationStyle", 1),
@@ -384,6 +367,9 @@ class AppSettings(context: Context) {
      * Retrieves all current settings as a [SettingsData] object.
      */
     fun getAll(): SettingsData {
+        val mm = (appContext as? PiPupApp)?.moduleManager
+        val modes = mm?.getAllModules()?.associate { it.id to getModuleMode(it.id).value } ?: emptyMap()
+
         return SettingsData(
             positionIndex = positionIndex,
             backgroundColor = backgroundColor,
@@ -406,9 +392,7 @@ class AppSettings(context: Context) {
             mediaRetries = mediaRetries,
             appTheme = appTheme,
             advancedMode = advancedMode,
-            powerModuleEnabled = powerModuleEnabled,
-            discoveryModuleEnabled = discoveryModuleEnabled,
-            mediaModuleEnabled = mediaModuleEnabled,
+            moduleModes = modes,
             updateChannel = updateChannel,
             updateInterval = updateInterval,
             updateNotificationStyle = updateNotificationStyle,
@@ -419,8 +403,7 @@ class AppSettings(context: Context) {
             pendingUpdateId = pendingUpdateId,
             pendingUpdateDigest = pendingUpdateDigest,
             pendingUpdateTagName = pendingUpdateTagName,
-            language = language,
-            moduleModeMedia = getModuleMode("media").value
+            language = language
         )
     }
 
@@ -449,9 +432,15 @@ class AppSettings(context: Context) {
         mediaRetries = data.mediaRetries.coerceIn(0, 10)
         appTheme = data.appTheme.coerceIn(0, 1)
         advancedMode = data.advancedMode
-        powerModuleEnabled = data.powerModuleEnabled
-        discoveryModuleEnabled = data.discoveryModuleEnabled
-        mediaModuleEnabled = data.mediaModuleEnabled
+
+        val mm = (appContext as? PiPupApp)?.moduleManager
+        data.moduleModes.forEach { (id, modeValue) ->
+            ModuleMode.entries.find { it.value == modeValue }?.let { mode ->
+                setModuleMode(id, mode)
+                mm?.updateModuleState(id, mode)
+            }
+        }
+
         updateChannel = data.updateChannel.coerceIn(-1, 1)
         updateInterval = data.updateInterval.coerceIn(0, 4)
         updateNotificationStyle = data.updateNotificationStyle.coerceIn(0, 2)
@@ -463,10 +452,6 @@ class AppSettings(context: Context) {
         pendingUpdateDigest = data.pendingUpdateDigest
         pendingUpdateTagName = data.pendingUpdateTagName
         language = data.language
-
-        data.moduleModeMedia?.let {
-            ModuleMode.entries.find { m -> m.value == it }?.let { m -> setModuleMode("media", m) }
-        }
 
         cachedFullBgColor = null
     }

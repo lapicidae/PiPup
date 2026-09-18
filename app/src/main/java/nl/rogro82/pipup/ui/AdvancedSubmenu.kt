@@ -19,6 +19,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.*
+import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.service.PipUpService
 import nl.rogro82.pipup.core.modules.DiscoveryModule
 
@@ -109,7 +110,7 @@ class AdvancedSubmenu(
         val service = PipUpService.getInstance()
         val discovery = service?.moduleManager?.getModule("discovery") as? DiscoveryModule
 
-        if (discovery == null || !settings.discoveryModuleEnabled) {
+        if (discovery == null || settings.getModuleMode("discovery") == ModuleMode.OFF) {
             context.showToast(context.getString(R.string.error_module_disabled, context.getString(R.string.settings_module_discovery)))
             showImportIpDialog()
             return

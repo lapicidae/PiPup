@@ -1,17 +1,24 @@
 package nl.rogro82.pipup.ui
 
 import android.content.Context
+import android.view.LayoutInflater
 import android.view.View
 import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
 import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.Permissions
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.ModuleMode
+import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.PowerController
 
 /**
  * Submenu for managing optional PiPup modules.
+ * Dynamically renders toggles for all registered modules.
  */
 @UnstableApi
 class ModulesSubmenu(
@@ -21,63 +28,64 @@ class ModulesSubmenu(
     previewArea: FrameLayout
 ) : SubmenuBase(context, settings, onSettingsChanged, previewArea) {
 
+    private lateinit var rootContainer: LinearLayout
+
     override fun onBind(root: View) {
-        // Power Control Module
-        bindModuleToggle(
-            root,
-            R.id.container_power_module,
-            R.id.switch_power_module,
-            { settings.powerModuleEnabled },
-            { settings.powerModuleEnabled = it },
-            { if (it && PowerController.getSleepMethod(context) == null) Permissions.showFixDialog(context, Permissions.KEY_POWER) }
-        )
-
-        // Network Discovery Module
-        bindModuleToggle(
-            root,
-            R.id.container_discovery_module,
-            R.id.switch_discovery_module,
-            { settings.discoveryModuleEnabled },
-            { settings.discoveryModuleEnabled = it }
-        )
-
-        // Rich Media Module
-        bindModuleToggle(
-            root,
-            R.id.container_media_module,
-            R.id.switch_media_module,
-            { settings.mediaModuleEnabled },
-            { settings.mediaModuleEnabled = it }
-        )
+        rootContainer = root as? LinearLayout ?: return
+        render()
     }
 
-    private fun bindModuleToggle(
-        root: View,
-        containerId: Int,
-        switchId: Int,
-        getter: () -> Boolean,
-        onToggle: (Boolean) -> Unit,
-        afterToggle: ((Boolean) -> Unit)? = null
-    ) {
-        root.findViewById<View>(containerId)?.apply {
-            val sw = findViewById<SwitchCompat>(switchId)
-            sw.isChecked = getter()
+    private fun render() {
+        // Clear all except the title
+        val titleView = rootContainer.getChildAt(0)
+        rootContainer.removeAllViews()
+        rootContainer.addView(titleView)
 
-            // Disable direct interaction with the switch to avoid double-toggles
-            sw.isClickable = false
-            sw.isFocusable = false
+        val mm = (context.applicationContext as PiPupApp).moduleManager
+        val modules = mm.getAllModules().filter { it.id != "system" && it.id != "debug" }
 
-            setOnClickListener {
-                val newState = !getter()
-                sw.isChecked = newState
-                onToggle(newState)
-
-                notifySettingsChanged()
-                afterToggle?.invoke(newState)
-                onSettingsChanged(false)
-            }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        modules.forEach { module ->
+            renderModuleToggle(module)
         }
+
+        settingsActivity?.setupSubmenuFocus()
     }
 
+    private fun renderModuleToggle(module: PiPupModule) {
+        val view = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle_with_desc, rootContainer, false)
+
+        view.findViewById<TextView>(R.id.setting_label)?.text = module.name
+        view.findViewById<TextView>(R.id.setting_desc)?.apply {
+            setText(module.descriptionRes)
+            visibility = View.VISIBLE
+        }
+
+        val sw = view.findViewById<SwitchCompat>(R.id.setting_switch)
+        val currentMode = settings.getModuleMode(module.id)
+        sw?.isChecked = currentMode != ModuleMode.OFF
+
+        view.setOnClickListener {
+            val next = if (settings.getModuleMode(module.id) == ModuleMode.OFF) {
+                // When enabling, try to restore preferred mode (ON or ECO)
+                settings.getPreferredMode(module.id).takeIf { it != ModuleMode.OFF } ?: ModuleMode.ON
+            } else {
+                ModuleMode.OFF
+            }
+
+            settings.setModuleMode(module.id, next)
+            (context.applicationContext as PiPupApp).moduleManager.updateModuleState(module.id, next)
+            sw?.isChecked = next != ModuleMode.OFF
+
+            notifySettingsChanged()
+
+            // Special handling for Power Module permission nag
+            if (module.id == "power" && next != ModuleMode.OFF && PowerController.getSleepMethod(context) == null) {
+                Permissions.showFixDialog(context, Permissions.KEY_POWER)
+            }
+
+            onSettingsChanged(false)
+        }
+
+        rootContainer.addView(view)
+    }
 }

@@ -1,22 +1,28 @@
 package nl.rogro82.pipup.ui
 
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.ColorStateList
+import android.graphics.Bitmap
 import android.graphics.Paint
+import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewStub
 import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.ScrollView
+import android.widget.SeekBar
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
@@ -27,12 +33,15 @@ import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
+import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.MainActivity
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
+import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.databinding.ActivitySettingsBinding
 import nl.rogro82.pipup.registerProtectedReceiver
 import nl.rogro82.pipup.showToast
@@ -66,6 +75,15 @@ class SettingsActivity : AppCompatActivity() {
     private val moduleControllers = mutableMapOf<String, SubmenuController>()
     private val inflatedSubmenus = mutableMapOf<Int, View>()
 
+    /**
+     * Registry for module-specific submenu controllers.
+     * New modules can "dock" by providing their layoutRes in ModuleMenuDefinition.
+     */
+    private val moduleSubmenuFactories = mapOf<Int, (SettingsActivity, AppSettings, PiPupModule, (Boolean) -> Unit, ViewGroup) -> SubmenuController>(
+        R.layout.submenu_vendor to ::VendorSubmenu,
+        R.layout.submenu_module_dynamic to ::ModuleSubmenu
+    )
+
     private val coreRailItems = listOf(
         NavItem(R.id.nav_item_general, R.string.settings_nav_general, R.drawable.ic_general_style, 10, R.layout.submenu_general),
         NavItem(R.id.nav_item_background, R.string.settings_nav_background, R.drawable.ic_bg, 20, R.layout.submenu_background),
@@ -90,11 +108,11 @@ class SettingsActivity : AppCompatActivity() {
         val moduleId: String? = null
     )
 
-    private val settingsReceiver = object : android.content.BroadcastReceiver() {
+    private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == PiPupApp.ACTION_SETTINGS_CHANGED) {
                 if (intent.getStringExtra("origin") == "remote") {
-                    android.util.Log.d("SettingsActivity", "Remote settings change detected, refreshing UI")
+                    Log.d("SettingsActivity", "Remote settings change detected, refreshing UI")
                     if (!isFinishing && !isDestroyed) {
                         recreate()
                     }
@@ -127,7 +145,7 @@ class SettingsActivity : AppCompatActivity() {
         )
     }
 
-    private var cachedPlaceholder: android.graphics.Bitmap? = null
+    private var cachedPlaceholder: Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply theme and locale before super.onCreate to ensure the UI reflects settings
@@ -192,10 +210,10 @@ class SettingsActivity : AppCompatActivity() {
 
         // 2. Module specific tabs
         val moduleItems = moduleManager.getEnabledModules()
-            .mapNotNull { it.getSettingsMenu()?.let { menu -> it.id to menu } }
-            .map { (moduleId, menu) ->
-                val existingId = dynamicRailItems.find { it.moduleId == moduleId }?.id ?: View.generateViewId()
-                NavItem(existingId, menu.labelRes, menu.iconRes, menu.priority, moduleId = moduleId)
+            .mapNotNull { it.getSettingsMenu()?.let { menu -> it to menu } }
+            .map { (module, menu) ->
+                val existingId = dynamicRailItems.find { it.moduleId == module.id }?.id ?: View.generateViewId()
+                NavItem(existingId, menu.labelRes, menu.iconRes, menu.priority, layoutRes = menu.layoutRes, moduleId = module.id)
             }
 
         newDynamicItems.addAll(moduleItems)
@@ -218,7 +236,9 @@ class SettingsActivity : AppCompatActivity() {
         return if (item.moduleId != null) {
             val module = (application as PiPupApp).moduleManager.getModule(item.moduleId)!!
             moduleControllers.getOrPut(item.moduleId) {
-                ModuleSubmenu(this, settings, module, { updatePreview(it) }, binding.previewArea)
+                // Modular creation: Use factory from registry based on the requested layoutRes
+                val factory = moduleSubmenuFactories[item.layoutRes] ?: moduleSubmenuFactories[R.layout.submenu_module_dynamic]!!
+                factory(this, settings, module, { updatePreview(it) }, binding.previewArea)
             }
         } else {
             getController(item.layoutRes)
@@ -264,7 +284,7 @@ class SettingsActivity : AppCompatActivity() {
         // On Android TV, focus requests on off-screen items are often silently ignored.
         val parentScroll = (target.parent?.parent as? ScrollView) ?: (target.parent as? ScrollView)
         parentScroll?.let { scroll ->
-            val rect = android.graphics.Rect()
+            val rect = Rect()
             target.getDrawingRect(rect)
             scroll.offsetDescendantRectToMyCoords(target, rect)
             val centerY = rect.top - (scroll.height / 2) + (target.height / 2)
@@ -314,7 +334,7 @@ class SettingsActivity : AppCompatActivity() {
         view.setOnFocusChangeListener { v, hasFocus ->
             if (hasFocus) {
                 (v.parent.parent as? ScrollView)?.let { scroll ->
-                    val rect = android.graphics.Rect()
+                    val rect = Rect()
                     v.getDrawingRect(rect)
                     scroll.offsetDescendantRectToMyCoords(v, rect)
                     val pivotY = scroll.height * 0.3f
@@ -358,9 +378,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun loadSubmenuForItem(item: NavItem?) {
         if (item == null) return
         currentNavId = item.id
-
-        val layoutRes = if (item.moduleId != null) R.layout.submenu_module_dynamic else item.layoutRes
-        currentLayoutRes = layoutRes
+        currentLayoutRes = item.layoutRes
 
         val stubId = getStubIdForNavItem(item)
 
@@ -369,7 +387,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // 2. Inflate or just show the target view
         val root = inflatedSubmenus.getOrPut(stubId) {
-            val stub = findViewById<android.view.ViewStub>(stubId)
+            val stub = findViewById<ViewStub>(stubId)
             if (stub != null) {
                 stub.inflate()
             } else {
@@ -412,12 +430,12 @@ class SettingsActivity : AppCompatActivity() {
      * Ensures MainActivity is at the root so the user can navigate back to it.
      */
     fun resetSettingsUI() {
-        android.util.Log.i("SettingsActivity", "Resetting Settings UI and restarting app task")
+        Log.i("SettingsActivity", "Resetting Settings UI and restarting app task")
         lastFocusedViewId = View.NO_ID
         currentNavId = R.id.nav_item_general
 
         // 1. Prepare intent for MainActivity (the root)
-        val mainIntent = Intent(this, nl.rogro82.pipup.MainActivity::class.java).apply {
+        val mainIntent = Intent(this, MainActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
         }
 
@@ -512,7 +530,7 @@ class SettingsActivity : AppCompatActivity() {
             child.nextFocusDownId = if (i < focusableChildren.size - 1) focusableChildren[i + 1].id else child.id
 
             // Trap focus on the right side to prevent it from disappearing.
-            if (child !is android.widget.SeekBar) {
+            if (child !is SeekBar) {
                 child.setOnKeyListener { _, keyCode, event ->
                     if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
                         return@setOnKeyListener true
@@ -528,7 +546,7 @@ class SettingsActivity : AppCompatActivity() {
                     val scroll = binding.settingsScroll
                     val c = binding.submenuContainer
 
-                    val rect = android.graphics.Rect()
+                    val rect = Rect()
                     v.getDrawingRect(rect)
                     scroll.offsetDescendantRectToMyCoords(v, rect)
 

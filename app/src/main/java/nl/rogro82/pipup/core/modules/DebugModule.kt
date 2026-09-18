@@ -14,6 +14,7 @@ import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import nl.rogro82.pipup.R
 
 /**
  * Module providing debug and diagnostic endpoints.
@@ -27,6 +28,7 @@ class DebugModule : PiPupModule {
 
     override val id: String = "debug"
     override val name: String = "Debug & Diagnostics"
+    override val descriptionRes: Int = R.string.settings_nav_advanced
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.OFF
