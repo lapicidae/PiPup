@@ -20,7 +20,7 @@ nanohttpd = "2.3.1"
 # @keep
 pipup = "10.0.0"
 testRunner = "1.7.0"
-versions-plugin = "0.62.0"
+versions-plugin = "0.63.0"
 work = "2.11.2"
 
 [libraries]
