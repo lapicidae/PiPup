@@ -76,7 +76,7 @@ PiPup uses an embedded webserver (NanoHTTPD) which runs on port 7979.
 ### Sending notifications
 
 You can send notifications either as an **application/json** payload (for external media URLs) or as **multipart/form-data** (to upload a local image file).  
-For a detailed list of all endpoints and response formats, please refer to the [Full API Reference](API.md).
+For a detailed list of all endpoints and response formats, please refer to the [Full API Reference](docs/api.md).
 
 | _Property_        | _Value_                                     |
 | ----------------- | ------------------------------------------- |
@@ -287,9 +287,12 @@ Retrieves a JSON object containing all current styling and layout configurations
     "mediaRetries": 3,
     "appTheme": 0,
     "advancedMode": false,
-    "powerModuleEnabled": true,
-    "discoveryModuleEnabled": true,
-    "mediaModuleEnabled": true,
+    "moduleModes": {
+        "power": 1,
+        "discovery": 1,
+        "media": 2,
+        "vendor": 0
+    },
     "updateChannel": 0,
     "language": "default"
 }

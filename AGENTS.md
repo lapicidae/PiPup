@@ -6,7 +6,7 @@ This file serves as the central "Source of Truth" for all AI agents (Gemini, Cur
 
 - **Name:** PiPup
 - **Purpose:** An Android application designed to display notifications and media in a Picture-in-Picture (PiP) window, primarily optimized for Android TV.
-- **Technology Stack:** Kotlin, Android SDK, Jackson (JSON), SharedPreferences.
+- **Technology Stack:** Kotlin, Android SDK, org.json, SharedPreferences, NanoHTTPD (WebServer), Media3 (Video), Glide (Images).
 
 ## Coding Standards & Preferences
 
@@ -16,6 +16,14 @@ This file serves as the central "Source of Truth" for all AI agents (Gemini, Cur
 - **Settings:** When adding or modifying app settings, follow the pattern established in `AppSettings.kt` using the custom property delegates (e.g., `IntPref`, `ColorPref`).
 - **UI/UX:** Ensure all UI changes are optimized for Android TV (high contrast, readable font sizes, D-pad navigation support). Use the project's preset color resources.
 - **Documentation:** Use KDoc for all public-facing methods and classes.
+
+## Core Knowledge Base
+
+Before proposing architectural changes, adding new features, or implementing modules, you MUST read the following documentation:
+
+- **[Architecture Overview](docs/architecture.md)**: Design principles and component interactions.
+- **[Module Development Guide](docs/module-development.md)**: Blueprint and recipe for adding new modular features.
+- **[HTTP API Reference](docs/api.md)**: Precision specification for remote requests.
 
 ## Interaction Guidelines
 
