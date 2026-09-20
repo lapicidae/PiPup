@@ -4,8 +4,8 @@ import android.app.admin.DeviceAdminReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
-import android.widget.Toast
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.showToast
 
 /**
  * Receiver for Device Administration events.
@@ -14,11 +14,11 @@ import nl.rogro82.pipup.R
 class AdminReceiver : DeviceAdminReceiver() {
 
     override fun onEnabled(context: Context, intent: Intent) {
-        Toast.makeText(context, context.getString(R.string.admin_enabled), Toast.LENGTH_SHORT).show()
+        context.showToast(context.getString(R.string.admin_enabled))
     }
 
     override fun onDisabled(context: Context, intent: Intent) {
-        Toast.makeText(context, context.getString(R.string.admin_disabled), Toast.LENGTH_SHORT).show()
+        context.showToast(context.getString(R.string.admin_disabled))
     }
 
     companion object {

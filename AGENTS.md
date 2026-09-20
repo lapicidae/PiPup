@@ -13,6 +13,7 @@ This file serves as the central "Source of Truth" for all AI agents (Gemini, Cur
 - **General:** Strictly adhere to the rules defined in [.editorconfig](.editorconfig) and [config/detekt/detekt.yml](config/detekt/detekt.yml).
 - **Principles:** Prioritize **KISS** (Keep It Simple, Stupid) and **DRY** (Don't Repeat Yourself). Ensure **efficient RAM usage** and minimal memory footprint, especially important for always-running background services on Android TV. Avoid over-engineering.
 - **Style:** Use idiomatic Kotlin. Follow Android Studio's default formatting and import layouts.
+- **Package Name:** Never hardcode the package name `nl.rogro82.pipup`. Always use `PiPupApp.APP_PACKAGE` (which refers to `BuildConfig.APPLICATION_ID`) for dynamic resolution in code, and relative class names (e.g., `.service.PipUpService`) in the `AndroidManifest.xml`.
 - **Settings:** When adding or modifying app settings, follow the pattern established in `AppSettings.kt` using the custom property delegates (e.g., `IntPref`, `ColorPref`).
 - **UI/UX:** Ensure all UI changes are optimized for Android TV (high contrast, readable font sizes, D-pad navigation support). Use the project's preset color resources.
 - **Documentation:** Use KDoc for all public-facing methods and classes.

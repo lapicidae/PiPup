@@ -14,6 +14,7 @@
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"
                      tools:ignore="ProtectedPermissions,AndroidLintRequestInstallPackagesPolicy" />
+    <uses-permission android:name="android.permission.UPDATE_PACKAGES_WITHOUT_USER_ACTION" />
 
 
     <queries>
@@ -47,6 +48,7 @@
             android:label="@string/app_name"
             android:supportsRtl="true"
             android:usesCleartextTraffic="true"
+            android:directBootAware="true"
             android:theme="@style/AppTheme">
 
         <profileable
@@ -55,9 +57,11 @@
         <receiver
                 android:name=".Receiver"
                 android:enabled="true"
-                android:exported="true">
+                android:exported="true"
+                android:directBootAware="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="com.htc.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -74,7 +78,7 @@
         </receiver>
 
         <receiver
-            android:name="nl.rogro82.pipup.service.AdminReceiver"
+            android:name=".service.AdminReceiver"
             android:label="@string/app_name"
             android:description="@string/permission_admin_explanation"
             android:permission="android.permission.BIND_DEVICE_ADMIN"
@@ -88,11 +92,12 @@
         </receiver>
 
         <service
-            android:name="nl.rogro82.pipup.service.PiPupAccessibilityService"
+            android:name=".service.PiPupAccessibilityService"
             android:label="@string/app_name"
             android:description="@string/settings_module_power_desc"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true"
+            android:directBootAware="true"
             tools:ignore="AccessibilityPolicy">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />
@@ -105,8 +110,10 @@
         <service
                 android:name=".service.PipUpService"
                 android:enabled="true"
-                android:exported="false"
-                android:foregroundServiceType="specialUse">
+                android:exported="true"
+                android:directBootAware="true"
+                android:foregroundServiceType="specialUse"
+                tools:ignore="ExportedService">
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                       android:value="A user-visible pop-up overlay that provides real-time home automation notifications for locally connected devices."/>
         </service>

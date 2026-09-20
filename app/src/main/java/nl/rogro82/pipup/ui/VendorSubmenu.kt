@@ -11,6 +11,7 @@ import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.PiPupModule
@@ -62,7 +63,7 @@ class VendorSubmenu(
         }
 
         // 2. Status Section
-        addSectionHeader(rootContainer, context.getString(R.string.server_landing_status))
+        addSectionHeader(rootContainer, context.getString(R.string.settings_vendor_status))
 
         val statusView = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle, rootContainer, false)
         statusView.id = R.id.vendor_status_row
@@ -80,12 +81,19 @@ class VendorSubmenu(
         val row = rootContainer.findViewById<View>(R.id.vendor_status_row) ?: return
         val label = row.findViewById<TextView>(R.id.setting_label) ?: return
 
-        val isTcl = Permissions.autoStart(context) != null
+        val isTcl = Permissions.autoStart(context) != null || BuildConfig.DEBUG
+        val isEnabled = settings.getModuleSetting(module.id, "tcl_optimization", false)
+
+        if (isTcl && isEnabled) {
+            PiPupAccessibilityService.triggerSystemScan(context)
+        }
+
         val accEnabled = PiPupAccessibilityService.isEnabledInSettings(context)
         val accRunning = PiPupAccessibilityService.isAvailable()
 
         val statusText = when {
             !isTcl -> context.getString(R.string.vendor_status_not_tcl)
+            !isEnabled -> context.getString(R.string.vendor_status_disabled)
             accRunning -> context.getString(R.string.vendor_status_active)
             accEnabled -> context.getString(R.string.vendor_status_waiting)
             else -> context.getString(R.string.vendor_status_inactive)
@@ -93,6 +101,7 @@ class VendorSubmenu(
 
         val color = when {
             !isTcl -> R.color.colorOnSurfaceVariant
+            !isEnabled -> R.color.status_red
             accRunning -> R.color.status_green
             accEnabled -> R.color.status_orange
             else -> R.color.status_red

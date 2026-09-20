@@ -20,7 +20,7 @@ class PowerModule : PiPupModule {
     }
 
     override val id: String = "power"
-    override val name: String = "Power Control"
+    override val nameRes: Int = R.string.settings_module_power
     override val descriptionRes: Int = R.string.settings_module_power_desc
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)

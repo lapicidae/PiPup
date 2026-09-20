@@ -27,7 +27,7 @@ class DebugModule : PiPupModule {
     }
 
     override val id: String = "debug"
-    override val name: String = "Debug & Diagnostics"
+    override val nameRes: Int = R.string.settings_module_debug
     override val descriptionRes: Int = R.string.settings_nav_advanced
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)

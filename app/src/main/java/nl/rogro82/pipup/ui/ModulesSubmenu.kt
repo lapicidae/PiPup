@@ -54,7 +54,7 @@ class ModulesSubmenu(
     private fun renderModuleToggle(module: PiPupModule) {
         val view = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle_with_desc, rootContainer, false)
 
-        view.findViewById<TextView>(R.id.setting_label)?.text = module.name
+        view.findViewById<TextView>(R.id.setting_label)?.text = context.getString(module.nameRes)
         view.findViewById<TextView>(R.id.setting_desc)?.apply {
             setText(module.descriptionRes)
             visibility = View.VISIBLE

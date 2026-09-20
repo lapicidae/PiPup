@@ -31,7 +31,7 @@ class SystemModule : PiPupModule {
     }
 
     override val id: String = "system"
-    override val name: String = "System Diagnostics"
+    override val nameRes: Int = R.string.settings_module_system
     override val descriptionRes: Int = R.string.settings_nav_permissions // Use a relevant existing string
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.ON)

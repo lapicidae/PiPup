@@ -143,6 +143,8 @@
     <string name="update_verification_failed">Update-Verifizierung fehlgeschlagen</string>
     <!-- %1$s: Detail-Meldung -->
     <string name="update_installer_failed">Installer konnte nicht gestartet werden: %1$s</string>
+    <!-- %1$s: Versionsnummer -->
+    <string name="update_done_title">Update auf %1$s erfolgreich</string>
 
     <!-- Hintergrunddienst & Medienfehler -->
     <string name="service_listening">Warten auf Benachrichtigungen…</string>
@@ -163,6 +165,8 @@
     <string name="version_placeholder">v?.?.?</string>
 
     <!-- Module & Power-Steuerung -->
+    <string name="settings_module_system">System-Diagnose</string>
+    <string name="settings_module_debug">Debug &amp; Diagnose</string>
     <string name="settings_resource_mode">Ressourcen-Modus</string>
     <string name="resource_mode_eco">Eco (Lazy Loading)</string>
     <string name="resource_mode_performance">Performance (Immer an)</string>
@@ -184,7 +188,8 @@
     <string name="permission_admin">Geräteadministrator</string>
     <string name="permission_admin_desc">Ermöglicht sofortiges Ausschalten des Bildschirms über die Systemsteuerung. (Empfohlen)</string>
     <string name="permission_accessibility">Barrierefreiheit</string>
-    <string name="permission_accessibility_desc">Alternative Methode über globale Systemaktionen. Guter Ersatz, falls Admin blockiert wird.</string>
+    <string name="permission_accessibility_desc">Ermöglicht Systemaktionen und verbessert die Hintergrundstabilität. (Empfohlen)</string>
+    <string name="permission_accessibility_why">Fernsteuerung des Bildschirms ermöglichen und hohe Prozess-Priorität sicherstellen.</string>
 
     <!-- %1$s: Name der Berechtigung -->
     <string name="permission_missing">Fehlende Berechtigung: %1$s</string>
@@ -282,9 +287,11 @@
     <!-- Herstellerspezifische Optimierungen -->
     <string name="settings_module_vendor">Hersteller-Einstellungen</string>
     <string name="settings_module_vendor_desc">Herstellerspezifische Optimierungen für eine bessere Hintergrundstabilität (z.B. TCL Keep-Alive).</string>
+    <string name="settings_vendor_status">Optimierungs-Status</string>
     <string name="settings_vendor_tcl_keepalive">TCL Keep-Alive</string>
     <string name="settings_vendor_tcl_keepalive_desc">Hebt die Prozess-Priorität an, um ein Einfrieren durch den TCL Vendor Guard zu verhindern. Erfordert den Accessibility Service.</string>
     <string name="vendor_status_not_tcl">Kein TCL-Gerät (Keep-Alive nicht erforderlich)</string>
+    <string name="vendor_status_disabled">DEAKTIVIERT</string>
     <string name="vendor_status_active">AKTIV (Prozess geschützt)</string>
     <string name="vendor_status_waiting">WARTET (Service aktiviert, aber nicht gebunden)</string>
     <string name="vendor_status_inactive">INAKTIV (Accessibility Service erforderlich)</string>

@@ -22,7 +22,10 @@ class PiPupApp : Application() {
     val moduleManager = ModuleManager()
 
     companion object {
-        const val ACTION_SETTINGS_CHANGED = "nl.rogro82.pipup.SETTINGS_CHANGED"
+        /** The base package name of the application. */
+        const val APP_PACKAGE = BuildConfig.APPLICATION_ID
+
+        const val ACTION_SETTINGS_CHANGED = "$APP_PACKAGE.SETTINGS_CHANGED"
 
         lateinit var settings: AppSettings
             private set

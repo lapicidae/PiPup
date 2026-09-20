@@ -69,6 +69,24 @@ Disabling battery optimisation is optional, but is recommended:
 adb shell dumpsys deviceidle whitelist +nl.rogro82.pipup
 ```
 
+#### TCL Google TV Stability:
+
+TCL devices use aggressive "Vendor Guards" that freeze background processes. To ensure PiPup remains responsive:
+
+1. Enable the **Vendor Optimizations** module in the PiPup settings.
+2. Activate the **TCL Keep-Alive** feature within the module and follow the instructions to enable the Accessibility Service (this keeps the process priority high).
+3. Grant the vendor-specific permissions via ADB:
+
+```bash
+# Allow the system to restart the service automatically
+adb shell cmd appops set nl.rogro82.pipup android:auto_start allow
+
+# Primary Keep-Alive: Enable the accessibility service
+adb shell settings put secure --user current enabled_accessibility_services \
+    nl.rogro82.pipup/.service.PiPupAccessibilityService
+adb shell settings put secure accessibility_enabled 1
+```
+
 ## Integrating
 
 PiPup uses an embedded webserver (NanoHTTPD) which runs on port 7979.

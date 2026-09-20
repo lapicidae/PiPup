@@ -20,7 +20,7 @@ class MediaModule : PiPupModule {
     }
 
     override val id: String = "media"
-    override val name: String = "Rich Media Support"
+    override val nameRes: Int = R.string.settings_module_media
     override val descriptionRes: Int = R.string.settings_module_media_desc
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ECO, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.ECO

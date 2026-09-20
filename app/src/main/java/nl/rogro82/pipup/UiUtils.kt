@@ -30,7 +30,8 @@ import androidx.core.graphics.toColorInt
  * or if the app is in the background (where custom toast views are restricted by Android).
  */
 @android.annotation.SuppressLint("InflateParams")
-fun Context.showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
+fun Context.showToast(message: String, isLong: Boolean = false) {
+    val duration = if (isLong) Toast.LENGTH_LONG else Toast.LENGTH_SHORT
     val mainHandler = Handler(Looper.getMainLooper())
     mainHandler.post {
         // Fallback to standard system toast if:
@@ -47,7 +48,7 @@ fun Context.showToast(message: String, duration: Int = Toast.LENGTH_SHORT) {
             layout.findViewById<TextView>(R.id.toast_text).text = message
 
             val toast = Toast(applicationContext)
-            toast.duration = duration
+            toast.setDuration(duration)
             @Suppress("DEPRECATION")
             toast.view = layout
             toast.show()

@@ -198,7 +198,7 @@ object Permissions {
             KEY_OVERLAY -> "adb shell appops set --user current $pkg SYSTEM_ALERT_WINDOW allow"
             KEY_INSTALL -> "adb shell appops set --user current $pkg REQUEST_INSTALL_PACKAGES allow"
             KEY_ADMIN -> "adb shell dpm set-active-admin --user current $pkg/.service.AdminReceiver"
-            KEY_ACCESSIBILITY -> "adb shell settings put secure --user current enabled_accessibility_services <current_services>:$pkg/.service.PiPupAccessibilityService && adb shell settings put secure --user current accessibility_enabled 1"
+            KEY_ACCESSIBILITY -> "adb shell settings put secure --user current enabled_accessibility_services $pkg/.service.PiPupAccessibilityService && adb shell settings put secure accessibility_enabled 1"
             KEY_AUTO_START -> {
                 if (autoStart(context) != null && !Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true)) {
                     "adb shell cmd appops set --user current $pkg $OP_TCL_AUTO_START allow"
@@ -421,7 +421,8 @@ object Permissions {
             KEY_INSTALL -> R.string.permission_install_why
             KEY_AUTO_START -> R.string.permission_autostart_why
             KEY_ENERGY -> R.string.permission_energy_why
-            KEY_ADMIN, KEY_ACCESSIBILITY, KEY_POWER -> R.string.permission_power_why
+            KEY_ACCESSIBILITY -> R.string.permission_accessibility_why
+            KEY_ADMIN, KEY_POWER -> R.string.permission_power_why
             else -> 0
         }
         return if (resId != 0) context.getString(resId) else null

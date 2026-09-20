@@ -125,7 +125,7 @@ class UpdatesSubmenu(
                 }
             }.onFailure {
                 progress.dismiss()
-                context.showToast(context.getString(R.string.settings_update_error, it.message), android.widget.Toast.LENGTH_LONG)
+                context.showToast(context.getString(R.string.settings_update_error, it.message), true)
             }
         }
     }
@@ -178,20 +178,20 @@ class UpdatesSubmenu(
                         if (release != null) {
                             if (release.tagName == targetRelease.tagName) {
                                 mgr.downloadAndInstall(release)
-                                context.showToast(context.getString(R.string.settings_update_downloading), android.widget.Toast.LENGTH_LONG)
+                                context.showToast(context.getString(R.string.settings_update_downloading), true)
                             } else {
                                 // A different (likely newer) update was found during the re-check
                                 showUpdateDialog(release)
                             }
                         } else {
-                            context.showToast(context.getString(R.string.settings_update_no_longer_available), android.widget.Toast.LENGTH_LONG)
+                            context.showToast(context.getString(R.string.settings_update_no_longer_available), true)
                             // Refresh UI state
                             availableRelease = null
                             settings.updateAvailableTag = ""
                             btn?.let { updateButtonText(it) }
                         }
                     }.onFailure {
-                        context.showToast("Verification failed: ${it.message}", android.widget.Toast.LENGTH_LONG)
+                        context.showToast("Verification failed: ${it.message}", true)
                     }
                 }
             }

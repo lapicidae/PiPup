@@ -14,7 +14,6 @@ import android.view.WindowManager
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
@@ -288,12 +287,12 @@ class AdvancedSubmenu(
                     }
                 } else {
                     settingsActivity?.runOnUiThread {
-                        context.showToast(context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), Toast.LENGTH_LONG)
+                        context.showToast(context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), true)
                     }
                 }
             } catch (e: Exception) {
                 settingsActivity?.runOnUiThread {
-                    context.showToast(context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), Toast.LENGTH_LONG)
+                    context.showToast(context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), true)
                 }
             }
         }.start()

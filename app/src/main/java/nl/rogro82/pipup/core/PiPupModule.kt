@@ -8,8 +8,8 @@ import fi.iki.elonen.NanoHTTPD
 interface PiPupModule {
     /** Unique identifier for the module (e.g., "power"). */
     val id: String
-    /** User-friendly name of the module. */
-    val name: String
+    /** User-friendly name of the module (Resource ID). */
+    val nameRes: Int
     /** Description of the module functionality (Resource ID). */
     val descriptionRes: Int
 

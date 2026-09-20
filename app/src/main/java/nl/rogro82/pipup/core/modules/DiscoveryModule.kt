@@ -23,7 +23,7 @@ class DiscoveryModule : PiPupModule {
     }
 
     override val id: String = "discovery"
-    override val name: String = "Network Discovery"
+    override val nameRes: Int = R.string.settings_module_discovery
     override val descriptionRes: Int = R.string.settings_module_discovery_desc
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)

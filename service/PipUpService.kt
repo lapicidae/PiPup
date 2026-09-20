@@ -71,7 +71,7 @@ class PipUpService : Service() {
 
     private val settingsReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == "nl.rogro82.pipup.SETTINGS_CHANGED") {
+            if (intent.action == PiPupApp.ACTION_SETTINGS_CHANGED) {
                 Log.d(TAG, "Settings change detected, clearing web cache")
                 cachedLandingPage = null
                 moduleManager.setModuleEnabled("power", settings.powerModuleEnabled)
@@ -152,10 +152,10 @@ class PipUpService : Service() {
 
         // Register settings receiver to react to UI changes
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(settingsReceiver, android.content.IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"), RECEIVER_NOT_EXPORTED)
+            registerReceiver(settingsReceiver, android.content.IntentFilter(PiPupApp.ACTION_SETTINGS_CHANGED), RECEIVER_NOT_EXPORTED)
         } else {
             @Suppress("UnspecifiedRegisterReceiverFlag")
-            registerReceiver(settingsReceiver, android.content.IntentFilter("nl.rogro82.pipup.SETTINGS_CHANGED"))
+            registerReceiver(settingsReceiver, android.content.IntentFilter(PiPupApp.ACTION_SETTINGS_CHANGED))
         }
 
         try {
@@ -416,8 +416,8 @@ class PipUpService : Service() {
                         settings.apply(data)
                         applyGlobalSettings(data)
                         // Notify UI about settings change
-                        val intent = Intent("nl.rogro82.pipup.SETTINGS_CHANGED").apply {
-                            setPackage(packageName)
+                        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
+                            setPackage(PiPupApp.APP_PACKAGE)
                             putExtra("origin", "remote")
                         }
                         sendBroadcast(intent)

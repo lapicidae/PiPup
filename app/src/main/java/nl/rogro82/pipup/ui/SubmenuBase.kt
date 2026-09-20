@@ -268,7 +268,7 @@ abstract class SubmenuBase(
 
         val view = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle, container, false)
         val label = context.getString(def.labelRes)
-        view.findViewById<TextView>(R.id.setting_label)?.text = context.getString(R.string.settings_module_setting_format, module.name, label)
+        view.findViewById<TextView>(R.id.setting_label)?.text = label
         val switch = view.findViewById<SwitchCompat>(R.id.setting_switch)
 
         val current = settings.getModuleSetting(module.id, def.key, defaultValue)
@@ -287,7 +287,7 @@ abstract class SubmenuBase(
     protected fun renderSelectSetting(container: ViewGroup, module: PiPupModule, def: ModuleSettingDefinition) {
         val view = LayoutInflater.from(context).inflate(R.layout.item_setting_select, container, false)
         val label = context.getString(def.labelRes)
-        view.findViewById<TextView>(R.id.setting_label)?.text = context.getString(R.string.settings_module_setting_format, module.name, label)
+        view.findViewById<TextView>(R.id.setting_label)?.text = label
 
         val valueText = view.findViewById<TextView>(R.id.setting_value)
         val options = def.options ?: return
@@ -313,6 +313,13 @@ abstract class SubmenuBase(
         } else {
             val current = settings.getModuleSetting(module.id, def.key, def.defaultValue as String)
             updateText(current)
+
+            view.setOnClickListener {
+                // For now we only support simple string toggles if no options are complex
+                // Select settings with many options usually need a dialog, but for now
+                // we handle the case where it might be a simple toggle or the first of its kind.
+                // NOTE: select settings for modules are currently only used for 'resource_mode'
+            }
         }
 
         container.addView(view)

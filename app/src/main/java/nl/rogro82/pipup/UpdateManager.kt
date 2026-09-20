@@ -1,12 +1,18 @@
 package nl.rogro82.pipup
 
 import android.app.DownloadManager
+import android.app.PendingIntent
+import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageInstaller
 import android.os.Build
 import android.os.Environment
+import android.os.SystemClock
 import android.util.Log
-import androidx.core.content.FileProvider
+import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -184,7 +190,7 @@ class UpdateManager(context: Context) {
     }
 
     private fun showToastNotification(release: GitHubRelease) {
-        appContext.showToast(appContext.getString(R.string.notification_update_msg, release.tagName), android.widget.Toast.LENGTH_LONG)
+        appContext.showToast(appContext.getString(R.string.notification_update_msg, release.tagName), true)
     }
 
     /**
@@ -294,7 +300,7 @@ class UpdateManager(context: Context) {
                     val reasonIdx = cursor.getColumnIndex(DownloadManager.COLUMN_REASON)
                     val reason = if (reasonIdx != -1) cursor.getInt(reasonIdx) else -1
                     Log.e("UpdateManager", "Download failed. Reason: $reason")
-                    appContext.showToast(appContext.getString(R.string.update_download_failed, reason), android.widget.Toast.LENGTH_LONG)
+                    appContext.showToast(appContext.getString(R.string.update_download_failed, reason), true)
                     // Clear pending state on failure
                     appSettings.pendingUpdateId = -1L
                     appSettings.pendingUpdateDigest = ""
@@ -322,7 +328,7 @@ class UpdateManager(context: Context) {
                     installApk(appContext)
                 } else {
                     Log.e("UpdateManager", "SHA-256 mismatch!")
-                    appContext.showToast(appContext.getString(R.string.update_verification_failed), android.widget.Toast.LENGTH_LONG)
+                    appContext.showToast(appContext.getString(R.string.update_verification_failed), true)
                 }
             }
         } catch (e: Exception) {
@@ -343,6 +349,7 @@ class UpdateManager(context: Context) {
         return digest.digest().joinToString("") { "%02x".format(it) }
     }
 
+    @SuppressLint("RequestInstallPackagesPolicy")
     private fun installApk(installContext: Context) {
         val file = File(installContext.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS), "pipup-update.apk")
         if (!file.exists()) {
@@ -351,37 +358,96 @@ class UpdateManager(context: Context) {
         }
 
         val size = file.length()
-        Log.i("UpdateManager", "Installing APK. Size: $size bytes, Path: ${file.absolutePath}")
+        Log.i("UpdateManager", "Installing APK via PackageInstaller. Size: $size bytes")
 
         if (size < 1024 * 100) {
             Log.e("UpdateManager", "Downloaded file is too small ($size bytes). Likely a failed download.")
             return
         }
 
+        val ctx = installContext.applicationContext
         try {
-            val ctx = installContext.applicationContext
             isInstalling = true
-            val uri = FileProvider.getUriForFile(ctx, "${ctx.packageName}.fileprovider", file)
-            Log.d("UpdateManager", "Generated FileProvider URI: $uri")
+            val installer = ctx.packageManager.packageInstaller
+            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
 
-            val intent = Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                addCategory(Intent.CATEGORY_DEFAULT)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
             }
 
-            ctx.startActivity(intent)
-            Log.i("UpdateManager", "Installer intent started successfully.")
+            val sessionId = installer.createSession(params)
+            installer.openSession(sessionId).use { session ->
+                session.openWrite("base.apk", 0, size).use { out ->
+                    FileInputStream(file).use { fis ->
+                        fis.copyTo(out)
+                    }
+                    session.fsync(out)
+                }
+                registerResultReceiver(ctx)
+                val intent = Intent(INSTALL_ACTION).setPackage(ctx.packageName)
+                val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+                } else {
+                    PendingIntent.FLAG_UPDATE_CURRENT
+                }
+                val pendingIntent = PendingIntent.getBroadcast(ctx, sessionId, intent, flags)
+                session.commit(pendingIntent.intentSender)
+            }
+            Log.i("UpdateManager", "Update session $sessionId committed.")
         } catch (e: Exception) {
-            Log.e("UpdateManager", "Error launching APK installer", e)
-            val ctx = installContext.applicationContext
-            ctx.showToast(ctx.getString(R.string.update_installer_failed, e.message), android.widget.Toast.LENGTH_LONG)
+            Log.e("UpdateManager", "Error during PackageInstaller session", e)
+            isInstalling = false
+            ctx.showToast(ctx.getString(R.string.update_installer_failed, e.message), true)
         }
+    }
+
+    private var receiverRegistered = false
+
+    @Synchronized
+    @SuppressLint("AndroidLintUnsafeIntentLaunch")
+    private fun registerResultReceiver(context: Context) {
+        if (receiverRegistered) return
+        ContextCompat.registerReceiver(
+            context,
+            object : BroadcastReceiver() {
+                override fun onReceive(ctx: Context, intent: Intent) {
+                    val status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE)
+                    val msg = intent.getStringExtra(PackageInstaller.EXTRA_STATUS_MESSAGE)
+                    Log.d("UpdateManager", "Installation result received: status=$status, message=$msg")
+
+                    when (status) {
+                        PackageInstaller.STATUS_PENDING_USER_ACTION -> {
+                            val confirmIntent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                intent.getParcelableExtra(Intent.EXTRA_INTENT, Intent::class.java)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                intent.getParcelableExtra(Intent.EXTRA_INTENT)
+                            }
+                            confirmIntent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            confirmIntent?.let { ctx.startActivity(it) }
+                        }
+                        PackageInstaller.STATUS_SUCCESS -> {
+                            Log.i("UpdateManager", "Update successful")
+                            isInstalling = false
+                            ctx.showToast(ctx.getString(R.string.update_done_title, latestVersion ?: ""), true)
+                        }
+                        else -> {
+                            Log.e("UpdateManager", "Update failed ($status): $msg")
+                            isInstalling = false
+                            ctx.showToast(ctx.getString(R.string.update_installer_failed, msg ?: "Unknown error"), true)
+                        }
+                    }
+                }
+            },
+            IntentFilter(INSTALL_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
+        receiverRegistered = true
     }
 
     companion object {
         private const val REPO_URL = "https://api.github.com/repos/lapicidae/PiPup/releases"
+        private const val INSTALL_ACTION = "${PiPupApp.APP_PACKAGE}.INSTALL_RESULT"
 
         @Volatile var latestVersion: String? = null
             private set
@@ -389,8 +455,13 @@ class UpdateManager(context: Context) {
             private set
         @Volatile var lastError: String? = null
             private set
-        @Volatile var isInstalling: Boolean = false
-            internal set
+        @Volatile private var installStartedAt: Long = 0L
+
+        var isInstalling: Boolean
+            get() = installStartedAt != 0L && (SystemClock.elapsedRealtime() - installStartedAt < 15 * 60 * 1000L) // 15 min timeout
+            internal set(value) {
+                installStartedAt = if (value) SystemClock.elapsedRealtime() else 0L
+            }
 
         /**
          * Whether a self-update can run without an on-screen confirmation (Android 12+).

@@ -689,7 +689,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     companion object {
-        const val EXTRA_NAV_ID = "nl.rogro82.pipup.extra.NAV_ID"
+        const val EXTRA_NAV_ID = "${PiPupApp.APP_PACKAGE}.extra.NAV_ID"
     }
 
     /**

@@ -1,6 +1,7 @@
 package nl.rogro82.pipup.core.modules
 
 import android.util.Log
+import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.ModuleContext
@@ -21,7 +22,7 @@ class VendorModule : PiPupModule {
     }
 
     override val id: String = "vendor"
-    override val name: String = "Vendor Optimizations"
+    override val nameRes: Int = R.string.settings_module_vendor
     override val descriptionRes: Int = R.string.settings_module_vendor_desc
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
@@ -40,9 +41,9 @@ class VendorModule : PiPupModule {
     }
 
     override fun getRequiredPermissions(): List<String> {
-        // Return KEY_AUTO_START purely based on module activation.
-        // PermissionsSubmenu or Permissions.granted will handle the hardware-specific visibility/state.
-        return listOf(Permissions.KEY_AUTO_START)
+        // Return KEY_AUTO_START and KEY_ACCESSIBILITY based on module activation.
+        // Accessibility is the primary "Keep-Alive" anchor for TCL devices.
+        return listOf(Permissions.KEY_AUTO_START, Permissions.KEY_ACCESSIBILITY)
     }
 
     override fun getSettingsMenu(): ModuleMenuDefinition {
@@ -69,7 +70,7 @@ class VendorModule : PiPupModule {
     override fun augmentState(state: MutableMap<String, Any?>) {
         val context = moduleContext?.androidContext ?: return
         val vendorState = mutableMapOf<String, Any?>(
-            "isTcl" to (Permissions.autoStart(context) != null)
+            "isTcl" to (Permissions.autoStart(context) != null || BuildConfig.DEBUG)
         )
         state["vendor"] = vendorState
     }

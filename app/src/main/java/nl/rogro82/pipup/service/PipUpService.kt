@@ -420,7 +420,7 @@ class PipUpService : Service() {
 
                             // Notify UI about settings change
                             val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
-                                setPackage(packageName)
+                                setPackage(PiPupApp.APP_PACKAGE)
                                 putExtra("origin", "remote")
                             }
                             sendBroadcast(intent)

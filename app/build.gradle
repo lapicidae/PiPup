@@ -62,8 +62,10 @@ tasks.withType(Detekt).configureEach {
 android {
     compileSdk 37
 
+    def appPackage = "nl.rogro82.pipup"
+
     // Define namespace for the generated R and BuildConfig classes
-    namespace = "nl.rogro82.pipup"
+    namespace = appPackage
 
     compileOptions {
         // Use Java 17 for compilation to support modern Kotlin features
@@ -72,12 +74,13 @@ android {
     }
 
     defaultConfig {
-        applicationId "nl.rogro82.pipup"
+        applicationId appPackage
+        resValue "string", "settings_activity_name", "${appPackage}.ui.SettingsActivity"
         minSdk 26
 
         targetSdk 37
 
-        testInstrumentationRunner "nl.rogro82.pipup.PiPupTestRunner"
+        testInstrumentationRunner "${appPackage}.PiPupTestRunner"
 
         // Automatic versioning logic
         versionCode getTimestampVersion()
@@ -142,6 +145,7 @@ android {
     buildFeatures {
         buildConfig = true
         viewBinding = true
+        resValues = true
     }
 
     bundle {

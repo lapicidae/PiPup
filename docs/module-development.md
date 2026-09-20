@@ -9,7 +9,7 @@ Create a new class that implements the `PiPupModule` interface.
 ```kotlin
 class MyAwesomeModule : PiPupModule {
     override val id: String = "awesome"
-    override val name: String = "Awesome Feature"
+    override val nameRes: Int = R.string.my_module_name
     override val descriptionRes: Int = R.string.my_module_desc
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)

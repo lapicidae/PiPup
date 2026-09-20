@@ -144,6 +144,8 @@
     <string name="update_verification_failed">Update verification failed</string>
     <!-- %1$s: Detail message -->
     <string name="update_installer_failed">Failed to launch installer: %1$s</string>
+    <!-- %1$s: Version Name -->
+    <string name="update_done_title">Update to %1$s successful</string>
 
     <!-- Background Service & Media Errors -->
     <string name="service_listening">Listening for notifications…</string>
@@ -164,6 +166,8 @@
     <string name="version_placeholder">v?.?.?</string>
 
     <!-- Modules & System Integration -->
+    <string name="settings_module_system">System Diagnostics</string>
+    <string name="settings_module_debug">Debug &amp; Diagnostics</string>
     <string name="settings_resource_mode">Resource Mode</string>
     <string name="resource_mode_eco">Eco (Lazy Loading)</string>
     <string name="resource_mode_performance">Performance (Always On)</string>
@@ -185,7 +189,8 @@
     <string name="permission_admin">Device Administrator</string>
     <string name="permission_admin_desc">Enables instant screen sleep via system-level control. (Recommended)</string>
     <string name="permission_accessibility">Accessibility Service</string>
-    <string name="permission_accessibility_desc">Alternative method using global actions. Good fallback if Admin is blocked.</string>
+    <string name="permission_accessibility_desc">Enables system actions and improves background stability. (Recommended)</string>
+    <string name="permission_accessibility_why">Enable remote screen control and maintain high process priority.</string>
 
     <!-- %1$s: Permission Name -->
     <string name="permission_missing">Missing Permission: %1$s</string>
@@ -283,9 +288,11 @@
     <!-- Vendor-Specific Optimizations -->
     <string name="settings_module_vendor">Vendor Settings</string>
     <string name="settings_module_vendor_desc">Vendor-specific optimizations for better background stability (e.g. TCL Keep-Alive).</string>
+    <string name="settings_vendor_status">Optimization Status</string>
     <string name="settings_vendor_tcl_keepalive">TCL Keep-Alive</string>
     <string name="settings_vendor_tcl_keepalive_desc">Increases process priority to prevent freezing by TCL Vendor Guard. Requires Accessibility Service.</string>
     <string name="vendor_status_not_tcl">Not a TCL device (Keep-Alive not required)</string>
+    <string name="vendor_status_disabled">DISABLED</string>
     <string name="vendor_status_active">ACTIVE (Process protected)</string>
     <string name="vendor_status_waiting">WAITING (Service enabled but not bound)</string>
     <string name="vendor_status_inactive">INACTIVE (Accessibility Service required)</string>

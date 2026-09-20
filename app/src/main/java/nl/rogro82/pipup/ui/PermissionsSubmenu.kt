@@ -69,12 +69,13 @@ class PermissionsSubmenu(
         val overlayGranted = Permissions.overlay(context)
         val installGranted = Permissions.installPackages(context)
         val energyGranted = (context.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(context.packageName)
+        val accGranted = Permissions.granted(context, Permissions.KEY_ACCESSIBILITY) == true
 
         // Modular integration: Get permissions required by currently enabled modules
         val mm = (context.applicationContext as PiPupApp).moduleManager
         val modulePermissions = mm.getEnabledModules().flatMap { it.getRequiredPermissions() }.toSet()
 
-        val currentSignature = "pow:$powerModuleEnabled:$sleepMethod|ov:$overlayGranted|in:$installGranted|en:$energyGranted|mods:${modulePermissions.joinToString(",")}"
+        val currentSignature = "pow:$powerModuleEnabled:$sleepMethod|acc:$accGranted|ov:$overlayGranted|in:$installGranted|en:$energyGranted|mods:${modulePermissions.joinToString(",")}"
 
         if (submenuRoot.tag == currentSignature) return
         submenuRoot.tag = currentSignature
