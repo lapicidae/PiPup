@@ -165,17 +165,27 @@
     <string name="version_placeholder">v?.?.?</string>
 
     <!-- Module & Power-Steuerung -->
+    <!-- Modul: System -->
     <string name="settings_module_system">System-Diagnose</string>
+
+    <!-- Modul: Debug -->
     <string name="settings_module_debug">Debug &amp; Diagnose</string>
-    <string name="settings_resource_mode">Ressourcen-Modus</string>
-    <string name="resource_mode_eco">Eco (Lazy Loading)</string>
-    <string name="resource_mode_performance">Performance (Immer an)</string>
+
+    <!-- Modul: Power -->
     <string name="settings_module_power">Power-Steuerung</string>
     <string name="settings_module_power_desc">Ermöglicht das ferngesteuerte Aufwecken und Ausschalten des Bildschirms via API.</string>
+
+    <!-- Modul: Discovery -->
     <string name="settings_module_discovery">Netzwerk-Entdeckung (NSD)</string>
     <string name="settings_module_discovery_desc">Macht den TV im lokalen Netzwerk sichtbar für automatische Integration und Synchronisation.</string>
+
+    <!-- Modul: Media -->
     <string name="settings_module_media">Rich Media (WebView)</string>
-    <string name="settings_module_media_desc">Ermöglicht die Unterstützung von Web–, WHEP– und RTSP-Inhalten. Das Deaktivieren spart signifikant RAM (~50–80 MB).</string>
+    <string name="settings_module_media_desc">Ermöglicht die Unterstützung von Web–, WHEP– und RTSP-Inhalten.</string>
+    <string name="settings_module_media_resource_mode">Engine-Modus</string>
+    <string name="settings_module_media_resource_mode_desc">Steuert den Engine-Lebenszyklus. \'Eco\' lädt WebView bei Bedarf; \'Leistung\' hält sie im Hintergrund aktiv.</string>
+    <string name="settings_module_media_resource_mode_eco">Eco</string>
+    <string name="settings_module_media_resource_mode_performance">Leistung</string>
     <string name="admin_enabled">Geräteadministrator aktiviert</string>
     <string name="admin_disabled">Geräteadministrator deaktiviert</string>
     <string name="permission_admin_explanation">Den TV-Bildschirm aus der Ferne in den Standby schicken.</string>

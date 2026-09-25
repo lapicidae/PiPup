@@ -48,7 +48,7 @@ fun Context.showToast(message: String, isLong: Boolean = false) {
             layout.findViewById<TextView>(R.id.toast_text).text = message
 
             val toast = Toast(applicationContext)
-            toast.setDuration(duration)
+            toast.duration = duration
             @Suppress("DEPRECATION")
             toast.view = layout
             toast.show()

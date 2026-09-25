@@ -8,20 +8,38 @@
     android:padding="16dp"
     android:layout_marginBottom="8dp"
     android:background="@drawable/focus_background"
-    android:gravity="center_vertical">
+    android:gravity="top">
 
-    <TextView
-        android:id="@+id/setting_label"
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textColor="@color/colorOnSurface"
-        android:textSize="18sp"/>
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/setting_label"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurface"
+            android:textSize="18sp"/>
+
+        <TextView
+            android:id="@+id/setting_desc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:textSize="14sp"
+            android:layout_marginTop="4dp"
+            android:visibility="gone"/>
+    </LinearLayout>
 
     <TextView
         android:id="@+id/setting_value"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
+        android:minWidth="120dp"
+        android:gravity="end"
+        android:layout_gravity="top"
         android:textColor="@color/colorOnSurfaceVariant"
         android:textSize="16sp"
         android:layout_marginEnd="8dp"/>

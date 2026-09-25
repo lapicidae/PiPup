@@ -45,6 +45,7 @@ override fun getSettingsMetadata() = listOf(
         key = "my_setting",
         type = SettingType.BOOLEAN,
         labelRes = R.string.label,
+        descriptionRes = R.string.desc,
         category = SettingCategory.GENERAL
     )
 )

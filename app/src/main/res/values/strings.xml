@@ -166,17 +166,27 @@
     <string name="version_placeholder">v?.?.?</string>
 
     <!-- Modules & System Integration -->
+    <!-- Module: System -->
     <string name="settings_module_system">System Diagnostics</string>
+
+    <!-- Module: Debug -->
     <string name="settings_module_debug">Debug &amp; Diagnostics</string>
-    <string name="settings_resource_mode">Resource Mode</string>
-    <string name="resource_mode_eco">Eco (Lazy Loading)</string>
-    <string name="resource_mode_performance">Performance (Always On)</string>
+
+    <!-- Module: Power -->
     <string name="settings_module_power">Power Control</string>
     <string name="settings_module_power_desc">Allows remote waking and sleeping of the TV screen via API.</string>
+
+    <!-- Module: Discovery -->
     <string name="settings_module_discovery">Network Discovery (NSD)</string>
     <string name="settings_module_discovery_desc">Makes the TV visible in the local network for automatic integration and synchronization.</string>
+
+    <!-- Module: Media -->
     <string name="settings_module_media">Rich Media (WebView)</string>
-    <string name="settings_module_media_desc">Enables support for Web, WHEP and RTSP content. Disabling this saves significant background RAM (~50–80MB).</string>
+    <string name="settings_module_media_desc">Enables support for Web, WHEP and RTSP content.</string>
+    <string name="settings_module_media_resource_mode">Engine Mode</string>
+    <string name="settings_module_media_resource_mode_desc">Controls engine lifecycle. \'Eco\' loads WebView on demand; \'Performance\' keeps it active in background.</string>
+    <string name="settings_module_media_resource_mode_eco">Eco</string>
+    <string name="settings_module_media_resource_mode_performance">Performance</string>
     <string name="admin_enabled">Device Administrator enabled</string>
     <string name="admin_disabled">Device Administrator disabled</string>
     <string name="permission_admin_explanation">Put the TV screen into standby remotely.</string>

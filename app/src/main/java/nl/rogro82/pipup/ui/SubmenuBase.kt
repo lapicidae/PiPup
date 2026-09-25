@@ -267,8 +267,20 @@ abstract class SubmenuBase(
         val defaultValue = def.defaultValue as? Boolean ?: return
 
         val view = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle, container, false)
-        val label = context.getString(def.labelRes)
+        val rawLabel = context.getString(def.labelRes)
+        val label = if (def.category != null) {
+            context.getString(R.string.settings_module_setting_format, context.getString(module.nameRes), rawLabel)
+        } else {
+            rawLabel
+        }
         view.findViewById<TextView>(R.id.setting_label)?.text = label
+
+        def.descriptionRes?.let { descRes ->
+            val descView = view.findViewById<TextView>(R.id.setting_desc)
+            descView?.text = context.getString(descRes)
+            descView?.visibility = View.VISIBLE
+        }
+
         val switch = view.findViewById<SwitchCompat>(R.id.setting_switch)
 
         val current = settings.getModuleSetting(module.id, def.key, defaultValue)
@@ -286,8 +298,19 @@ abstract class SubmenuBase(
 
     protected fun renderSelectSetting(container: ViewGroup, module: PiPupModule, def: ModuleSettingDefinition) {
         val view = LayoutInflater.from(context).inflate(R.layout.item_setting_select, container, false)
-        val label = context.getString(def.labelRes)
+        val rawLabel = context.getString(def.labelRes)
+        val label = if (def.category != null) {
+            context.getString(R.string.settings_module_setting_format, context.getString(module.nameRes), rawLabel)
+        } else {
+            rawLabel
+        }
         view.findViewById<TextView>(R.id.setting_label)?.text = label
+
+        def.descriptionRes?.let { descRes ->
+            val descView = view.findViewById<TextView>(R.id.setting_desc)
+            descView?.text = context.getString(descRes)
+            descView?.visibility = View.VISIBLE
+        }
 
         val valueText = view.findViewById<TextView>(R.id.setting_value)
         val options = def.options ?: return

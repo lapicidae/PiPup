@@ -8,6 +8,7 @@ import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.ModuleMenuDefinition
 import nl.rogro82.pipup.core.ModuleSettingDefinition
 import nl.rogro82.pipup.core.PiPupModule
+import nl.rogro82.pipup.core.SettingCategory
 
 /**
  * Module responsible for rich media support (WebView, WHEP).
@@ -52,14 +53,15 @@ class MediaModule : PiPupModule {
         ModuleSettingDefinition(
             key = "resource_mode",
             type = nl.rogro82.pipup.core.SettingType.STRING_SELECT,
-            labelRes = R.string.settings_resource_mode,
+            labelRes = R.string.settings_module_media_resource_mode,
+            descriptionRes = R.string.settings_module_media_resource_mode_desc,
             defaultValue = "eco",
             options = mapOf(
-                "eco" to R.string.resource_mode_eco,
-                "performance" to R.string.resource_mode_performance
+                "eco" to R.string.settings_module_media_resource_mode_eco,
+                "performance" to R.string.settings_module_media_resource_mode_performance,
             ),
-            category = nl.rogro82.pipup.core.SettingCategory.PERFORMANCE
-        )
+            category = SettingCategory.PERFORMANCE,
+        ),
     )
 
     override fun getSettingsMenu(): ModuleMenuDefinition? {
@@ -67,13 +69,13 @@ class MediaModule : PiPupModule {
         return ModuleMenuDefinition(
             iconRes = R.drawable.ic_module_rmedia,
             labelRes = R.string.settings_module_media,
-            priority = 75
+            priority = 75,
         )
     }
 
     override fun augmentState(state: MutableMap<String, Any?>) {
         state["media_engine"] = mapOf(
-            "active" to (moduleContext != null)
+            "active" to (moduleContext != null),
         )
     }
 }
