@@ -26,7 +26,7 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 **Media Object Types:**
 
 - **Image:** `{"image": {"uri": "url", "width": 480, "cache": true}}`
-- **Video:** `{"video": {"uri": "url", "width": 480, "muted": true}}`
+- **Video:** `{"video": {"uri": "url", "width": 480, "muted": true, "udp": false}}`
 - **Web:** `{"web": {"uri": "url", "width": 640, "height": 480}}`
 - **WHEP:** `{"whep": {"uri": "url", "width": 640, "videoFit": "cover"}}`
 

@@ -63,7 +63,8 @@ data class PopupProps(
                             uri = v.getString("uri"),
                             width = v.optInt("width", 480),
                             scale = v.optBoolean("scale", true),
-                            muted = v.optBoolean("muted", true)
+                            muted = v.optBoolean("muted", true),
+                            udp = v.optBoolean("udp", false)
                         )
                     }
                     m.has("image") -> {
@@ -168,7 +169,7 @@ data class PopupProps(
             when (m) {
                 is Media.Video -> {
                     mj.put("video", JSONObject().apply {
-                        put("uri", m.uri); put("width", m.width); put("scale", m.scale); put("muted", m.muted)
+                        put("uri", m.uri); put("width", m.width); put("scale", m.scale); put("muted", m.muted); put("udp", m.udp)
                     })
                 }
                 is Media.Image -> {
@@ -199,7 +200,8 @@ data class PopupProps(
             val uri: String,
             val width: Int = 480,
             val scale: Boolean = true,
-            val muted: Boolean = true
+            val muted: Boolean = true,
+            val udp: Boolean = false
         ) : Media()
         data class Image(
             val uri: String,

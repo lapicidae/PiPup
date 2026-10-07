@@ -172,6 +172,7 @@ All fields below are optional.
 | **animationExit**     | Boolean | false     | Toggles whether the entrance animation is inverted upon dismissal      |
 | **overwrite**         | Boolean | false     | Toggles whether to interrupt the current popup and prioritize this one |
 | **mediaTimeout**      | Integer | 10        | Global timeout in seconds for loading external media (1..30)           |
+| **mediaRetries**      | Integer | 3         | Number of retry attempts when loading media streams fails (0..10)      |
 
 #### Background & Border Styling
 
@@ -192,6 +193,7 @@ All fields below are optional.
 | **cache**         | Boolean | true      | Toggles disk/memory caching for images and web content                        |
 | **scale**         | Boolean | true      | Automatically scales dimensions relative to a 1080p reference                 |
 | **videoFit**      | String  | cover     | **(WHEP only)** CSS object-fit property for WHEP video (cover, contain, fill) |
+| **udp**           | Boolean | false     | **(Video/RTSP only)** Toggles UDP transport mode for RTSP streams             |
 
 ---
 
