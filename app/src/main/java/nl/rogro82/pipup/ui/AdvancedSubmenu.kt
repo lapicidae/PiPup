@@ -135,7 +135,8 @@ class AdvancedSubmenu(
                     // 2. Filter duplicates by service name to allow multiple mocks from one IP (stress test)
                     if (devices.none { it.serviceName == serviceInfo.serviceName }) {
                         devices.add(serviceInfo)
-                        deviceNames.add("${serviceInfo.serviceName} (${address ?: "???"})")
+                        val displayName = serviceInfo.serviceName.removePrefix("PiPup ").trim()
+                        deviceNames.add("$displayName (${address ?: "???"})")
                         if (deviceNames.getOrNull(0) == context.getString(R.string.settings_import_discover)) {
                             deviceNames.removeAt(0)
                         }
@@ -183,6 +184,7 @@ class AdvancedSubmenu(
                 deviceNames.add(context.getString(R.string.settings_import_discover))
                 adapter.notifyDataSetChanged()
             }
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
         }
 
         dialog.setOnDismissListener {

@@ -5,6 +5,7 @@ import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
+import java.text.Normalizer
 import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.ModuleContext
@@ -80,13 +81,14 @@ class DiscoveryModule : PiPupModule {
         val context = moduleContext ?: return
         val nsd = nsdManager ?: return
         try {
+            val sanitizedName = sanitizeDeviceName(getDeviceName())
             val serviceInfo = NsdServiceInfo().apply {
-                serviceName = "PiPup ${getDeviceName()}".take(63)
+                serviceName = "PiPup $sanitizedName".take(63)
                 serviceType = SERVICE_TYPE
                 port = 7979
                 // Attributes for easier identification
                 setAttribute("id", context.settings.deviceId)
-                setAttribute("name", getDeviceName())
+                setAttribute("name", sanitizedName)
                 setAttribute("version", BuildConfig.VERSION_NAME)
             }
 
@@ -277,6 +279,13 @@ class DiscoveryModule : PiPupModule {
         }
         discoveryListener = null
         deviceListener = null
+    }
+
+    private fun sanitizeDeviceName(name: String): String {
+        val sanitized = name.replace("ß", "ss").replace("ẞ", "Ss")
+        val normalized = Normalizer.normalize(sanitized, Normalizer.Form.NFD)
+        return Regex("\\p{InCombiningDiacriticalMarks}+").replace(normalized, "")
+            .replace(Regex("[^A-Za-z0-9 _-]"), "")
     }
 
     private fun getDeviceName(): String {

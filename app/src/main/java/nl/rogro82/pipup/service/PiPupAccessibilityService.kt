@@ -51,9 +51,8 @@ class PiPupAccessibilityService : AccessibilityService() {
 
         /** Attempts to lock the screen using a global accessibility action. */
         fun lockScreen(): Boolean {
-            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                instance?.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) ?: false
-            } else false
+            return Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+                (instance?.performGlobalAction(GLOBAL_ACTION_LOCK_SCREEN) ?: false)
         }
 
         /** Checks if the service is enabled in the system accessibility settings. */

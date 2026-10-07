@@ -149,20 +149,20 @@ fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
     }
 
     input.setOnKeyListener { _, keyCode, event ->
-        if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP) {
+        val handled = event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP
+        if (handled) {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).requestFocus()
-            true
-        } else false
+        }
+        handled
     }
 
     val buttonKeyListener = View.OnKeyListener { _, keyCode, event ->
-        if (event.action == KeyEvent.ACTION_DOWN) {
-            when (keyCode) {
-                KeyEvent.KEYCODE_DPAD_UP -> { input.requestFocus(); true }
-                KeyEvent.KEYCODE_DPAD_DOWN -> { input.requestFocus(); input.dispatchKeyEvent(event); true }
-                else -> false
-            }
-        } else false
+        if (event.action != KeyEvent.ACTION_DOWN) return@OnKeyListener false
+        when (keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP -> { input.requestFocus(); true }
+            KeyEvent.KEYCODE_DPAD_DOWN -> { input.requestFocus(); input.dispatchKeyEvent(event); true }
+            else -> false
+        }
     }
     dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnKeyListener(buttonKeyListener)
     dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setOnKeyListener(buttonKeyListener)

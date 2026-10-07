@@ -11,5 +11,4 @@ type: short description in present tense (max 72 chars)
 # Remember for this project:
 #   - Use present tense ("Add" instead of "Added", "Fix" instead of "Fixed")
 #   - Reference Leanback/UI components or API endpoints explicitly if applicable
-#   - Keep lines wrapped at 72 characters
 # ------------------------------------
