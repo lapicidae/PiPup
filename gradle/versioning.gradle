@@ -1,17 +1,20 @@
 import java.text.SimpleDateFormat
+import java.util.TimeZone
 
 /**
- * Generates a unique integer version code based on the current date and hour.
+ * Generates a unique integer version code based on the current date and hour (UTC).
  */
 ext.getTimestampVersion = {
-    def date = new Date()
-    return Integer.parseInt(new SimpleDateFormat("yyMMddHH").format(date))
+    def sdf = new SimpleDateFormat("yyMMddHH")
+    sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+    return Integer.parseInt(sdf.format(new Date()))
 }
 
 /**
- * Generates a human-readable version name suffix.
+ * Generates a human-readable version name suffix (UTC).
  */
 ext.getTimestampName = {
-    def date = new Date()
-    return new SimpleDateFormat("yyyyMMdd.HHmm").format(date)
+    def sdf = new SimpleDateFormat("yyyyMMdd.HHmm")
+    sdf.setTimeZone(TimeZone.getTimeZone("UTC"))
+    return sdf.format(new Date())
 }

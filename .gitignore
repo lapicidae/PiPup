@@ -48,6 +48,7 @@ obj/
 .gradle/
 gradle-app.setting
 .gradletasknamecache
+gradle/gradle-daemon-jvm.properties
 
 # Ensure the Gradle Wrapper is tracked for build consistency across environments
 !gradle-wrapper.jar
