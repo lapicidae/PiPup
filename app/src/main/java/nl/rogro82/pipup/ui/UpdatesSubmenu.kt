@@ -177,7 +177,7 @@ class UpdatesSubmenu(
                     mgr.checkForUpdates(settings.updateChannel == 1).onSuccess { release ->
                         if (release != null) {
                             if (release.tagName == targetRelease.tagName) {
-                                mgr.downloadAndInstall(release)
+                                mgr.downloadAndInstall(release, silent = false)
                                 context.showToast(context.getString(R.string.settings_update_downloading), true)
                             } else {
                                 // A different (likely newer) update was found during the re-check

@@ -13,15 +13,16 @@ This document provides a precise technical specification of the PiPup REST API. 
 Displays an overlay on the TV. Supports `application/json` and `multipart/form-data`.
 
 **JSON Payload Properties:**
-| Field | Type | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `duration` | Int | 10 | Seconds to display. |
-| `position` | Int | 0 | 0:TR, 1:TL, 2:BR, 3:BL, 4:Center. |
-| `title` | String | null | Heading text. |
-| `message` | String | null | Main body text. |
-| `media` | Object | null | Media configuration (see below). |
-| `animationType`| Int | 0 | 0..10 (Fade, Slide, Scale, etc.). |
-| `overwrite` | Bool | false | Interrupt current popup. |
+
+| Field           | Type   | Default | Description                       |
+| :-------------- | :----- | :------ | :-------------------------------- |
+| `duration`      | Int    | 10      | Seconds to display.               |
+| `position`      | Int    | 0       | 0:TR, 1:TL, 2:BR, 3:BL, 4:Center. |
+| `title`         | String | null    | Heading text.                     |
+| `message`       | String | null    | Main body text.                   |
+| `media`         | Object | null    | Media configuration (see below).  |
+| `animationType` | Int    | 0       | 0..10 (Fade, Slide, Scale, etc.). |
+| `overwrite`     | Bool   | false   | Interrupt current popup.          |
 
 **Media Object Types:**
 

@@ -214,6 +214,8 @@ class AppSettings(context: Context) {
     var pendingUpdateDigest by StringPref("pending_update_digest", "")
     /** The tag name associated with a pending update. */
     var pendingUpdateTagName by StringPref("pending_update_tag_name", "")
+    /** Whether the pending update is silent. */
+    var pendingUpdateSilent by BooleanPref("pending_update_silent", true)
 
     /**
      * Determines if the current application is a beta or pre-release build.

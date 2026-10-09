@@ -196,8 +196,9 @@ class UpdateManager(context: Context) {
     /**
      * Enqueues a download for the suitable APK from the release and prepares for installation.
      */
-    fun downloadAndInstall(release: GitHubRelease) {
+    fun downloadAndInstall(release: GitHubRelease, silent: Boolean = true) {
         val appSettings = PiPupApp.settings
+        appSettings.pendingUpdateSilent = silent
         val isBetaChannel = appSettings.updateChannel == 1
         val isCurrentDebug = BuildConfig.DEBUG
 
@@ -371,8 +372,13 @@ class UpdateManager(context: Context) {
             val installer = ctx.packageManager.packageInstaller
             val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
 
+            val silent = PiPupApp.settings.pendingUpdateSilent
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                if (silent) {
+                    params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                } else {
+                    params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
+                }
             }
 
             val sessionId = installer.createSession(params)
