@@ -167,7 +167,7 @@ abstract class SubmenuBase(
         }
         updateSeekBarAppearance(seekBar, false)
 
-        val isAlwaysVisible = seekBar.id == R.id.seekbar_media_timeout || seekBar.id == R.id.seekbar_media_retries
+        val isAlwaysVisible = seekBar.id == R.id.seekbar_media_timeout || seekBar.id == R.id.seekbar_media_retries || seekBar.id == R.id.seekbar_max_popups
         textView?.visibility = if (settings.advancedMode || isAlwaysVisible) View.VISIBLE else View.GONE
     }
 
@@ -176,10 +176,12 @@ abstract class SubmenuBase(
             R.id.seekbar_animation_duration -> "%d ms"
             R.id.seekbar_media_timeout -> context.resources.getQuantityString(R.plurals.settings_media_timeout_seconds, bar.progress, bar.progress)
             R.id.seekbar_media_retries -> context.resources.getQuantityString(R.plurals.settings_media_retries_count, bar.progress, bar.progress)
+            R.id.seekbar_max_popups -> "%d"
             else -> context.getString(R.string.settings_slider_value_format, bar.progress, bar.max)
         }
         textView?.text = when (bar.id) {
             R.id.seekbar_animation_duration -> String.format(format, bar.progress)
+            R.id.seekbar_max_popups -> String.format(format, bar.progress + 1)
             else -> format
         }
     }

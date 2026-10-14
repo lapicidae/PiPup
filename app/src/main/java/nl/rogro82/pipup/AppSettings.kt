@@ -179,6 +179,8 @@ class AppSettings(context: Context) {
     var mediaTimeout by IntPref("media_timeout", 10)
     /** The number of retries for failed media loads. */
     var mediaRetries by IntPref("media_retries", 3)
+    /** The maximum number of simultaneous popups displayed on screen. */
+    var maxPopups by IntPref("max_popups", 1)
 
     // System / App
     /** Enables additional technical settings and information. */
@@ -263,6 +265,7 @@ class AppSettings(context: Context) {
         val animationExit: Boolean,
         val mediaTimeout: Int,
         val mediaRetries: Int,
+        val maxPopups: Int,
         val appTheme: Int,
         val advancedMode: Boolean,
         val moduleModes: Map<String, Int>,
@@ -300,6 +303,7 @@ class AppSettings(context: Context) {
                 put("animationExit", animationExit)
                 put("mediaTimeout", mediaTimeout)
                 put("mediaRetries", mediaRetries)
+                put("maxPopups", maxPopups)
                 put("appTheme", appTheme)
                 put("advancedMode", advancedMode)
                 put("moduleModes", JSONObject(moduleModes))
@@ -341,6 +345,7 @@ class AppSettings(context: Context) {
                     animationExit = j.optBoolean("animationExit", false),
                     mediaTimeout = j.optInt("mediaTimeout", 10),
                     mediaRetries = j.optInt("mediaRetries", 3),
+                    maxPopups = j.optInt("maxPopups", 1),
                     appTheme = j.optInt("appTheme", 0),
                     advancedMode = j.optBoolean("advancedMode", false),
                     moduleModes = j.optJSONObject("moduleModes")?.let { modes ->
@@ -392,6 +397,7 @@ class AppSettings(context: Context) {
             animationExit = animationExit,
             mediaTimeout = mediaTimeout,
             mediaRetries = mediaRetries,
+            maxPopups = maxPopups,
             appTheme = appTheme,
             advancedMode = advancedMode,
             moduleModes = modes,
@@ -432,6 +438,7 @@ class AppSettings(context: Context) {
         animationExit = data.animationExit
         mediaTimeout = data.mediaTimeout.coerceIn(1, 60)
         mediaRetries = data.mediaRetries.coerceIn(0, 10)
+        maxPopups = data.maxPopups.coerceIn(1, 5)
         appTheme = data.appTheme.coerceIn(0, 1)
         advancedMode = data.advancedMode
 

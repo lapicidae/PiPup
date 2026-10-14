@@ -9,8 +9,10 @@ import android.util.Log
 import android.view.Gravity
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.PiPupApp
+import androidx.core.view.isEmpty
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.dpToPx
@@ -22,8 +24,8 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 
 /**
- * Manages the lifecycle and queueing of notifications using a state machine.
- * Optimized for minimal RAM usage by destroying views immediately after use.
+ * Manages the lifecycle and queueing of notifications using a unified FIFO queue
+ * and native LinearLayout position containers up to [nl.rogro82.pipup.AppSettings.maxPopups] concurrency.
  */
 @UnstableApi
 class NotificationManager(
@@ -32,34 +34,24 @@ class NotificationManager(
 ) {
     companion object {
         private const val TAG = "NotificationManager"
-        private val ENQUEUE_OVERWRITE_TOKEN = Any()
         private const val PREP_TIMEOUT_MS = 45000L
-        private const val DEBOUNCE_DELAY_MS = 250L
+        private const val STACK_GAP_DP = 12
     }
 
-    /**
-     * Sealed class representing the possible states of the notification system.
-     */
-    private sealed class NotificationState {
-        object Idle : NotificationState()
-        data class Preparing(val props: PopupProps, val view: PopupView) : NotificationState()
-        data class Displaying(val props: PopupProps, val view: PopupView) : NotificationState()
-        data class DisplayingAndPreparing(
-            val displayProps: PopupProps, val displayView: PopupView,
-            val prepProps: PopupProps, val prepView: PopupView
-        ) : NotificationState()
-        data class DisplayingAndReady(
-            val displayProps: PopupProps, val displayView: PopupView,
-            val readyProps: PopupProps, val readyView: PopupView
-        ) : NotificationState()
-    }
+    private class ShownSlot(
+        val key: String,
+        var container: LinearLayout,
+        var view: PopupView,
+        var props: PopupProps,
+        var expire: Runnable? = null
+    )
 
     private val handler = Handler(Looper.getMainLooper())
     private val queue = ArrayDeque<PopupProps>()
-    @Volatile private var state: NotificationState = NotificationState.Idle
+    private val mShown = LinkedHashMap<String, ShownSlot>()
+    private val positionContainers = EnumMap<PopupProps.Position, LinearLayout>(PopupProps.Position::class.java)
     private var overlay: FrameLayout? = null
 
-    private val durationToken = Any()
     val watchdogCleanups = java.util.concurrent.atomic.AtomicLong(0)
     val popupsShown = java.util.concurrent.atomic.AtomicLong(0)
     @Volatile var lastPopup: PopupProps? = null
@@ -68,34 +60,24 @@ class NotificationManager(
         private set
 
     /**
-     * Checks if a notification is currently being displayed on the screen.
+     * Checks if a notification is currently being displayed on the screen or preparing.
      */
     fun isDisplaying(): Boolean = synchronized(this) {
-        state !is NotificationState.Idle && state !is NotificationState.Preparing
+        mShown.isNotEmpty() || queue.isNotEmpty()
     }
 
     /**
      * Returns the properties of the currently displayed notification, or null if none.
      */
     fun getCurrentProps(): PopupProps? = synchronized(this) {
-        when (val s = state) {
-            is NotificationState.Displaying -> s.props
-            is NotificationState.DisplayingAndPreparing -> s.displayProps
-            is NotificationState.DisplayingAndReady -> s.displayProps
-            else -> null
-        }
+        mShown.values.lastOrNull()?.props
     }
 
     /**
-     * Asynchronously enqueues a notification for display.
+     * Asynchronously enqueues a notification for display into the unified queue.
      */
     fun enqueue(props: PopupProps) {
-        if (props.overwrite) {
-            handler.removeCallbacksAndMessages(ENQUEUE_OVERWRITE_TOKEN)
-            handler.postAtTime({ handleEnqueue(props) }, ENQUEUE_OVERWRITE_TOKEN, SystemClock.uptimeMillis() + DEBOUNCE_DELAY_MS)
-        } else {
-            handler.post { handleEnqueue(props) }
-        }
+        handler.post { handleEnqueue(props) }
     }
 
     private fun handleEnqueue(props: PopupProps) {
@@ -104,50 +86,180 @@ class NotificationManager(
             lastPopup = props
             lastPopupAt = SystemClock.elapsedRealtime()
 
-            if (props.overwrite) {
-                val currentProps = getCurrentPropsLocked()
-                val currentView = when (val s = state) {
-                    is NotificationState.Displaying -> s.view
-                    is NotificationState.DisplayingAndPreparing -> s.displayView
-                    is NotificationState.DisplayingAndReady -> s.displayView
-                    else -> null
-                }
+            val id = props.id
 
-                if (currentView != null && currentProps != null && canUpdateInPlace(currentProps, props)) {
-                    handler.removeCallbacksAndMessages(durationToken)
-                    currentView.updateFromProps(props)
-                    applyPositionToLayoutParams(currentView.layoutParams as FrameLayout.LayoutParams, props)
-                    currentView.animateIn()
-                    currentView.startMedia()
-                    scheduleRemoval(props.duration)
-                    cancelPendingPreparationLocked()
+            // 1. If active on-screen unique ID popup exists
+            if (!id.isNullOrEmpty() && mShown.containsKey(id)) {
+                val current = mShown[id]!!
+                if (canUpdateInPlace(current.props, props)) {
+                    handleInPlaceUpdate(id, props)
+                    return
                 } else {
-                    cancelPendingPreparationLocked()
-                    preparePopupLocked(props)
+                    // Position changed: remove old instance immediately and fall through to create new one
+                    removePopupByKey(id)
                 }
-            } else {
-                queue.addLast(props)
-                processNextLocked()
+            }
+
+            // 2. If unique ID popup is waiting in the queue, update its payload in the queue
+            if (!id.isNullOrEmpty()) {
+                var updatedInQueue = false
+                val updatedQueue = ArrayDeque<PopupProps>()
+                while (queue.isNotEmpty()) {
+                    val queued = queue.poll() ?: break
+                    if (queued.id == id) {
+                        updatedQueue.addLast(props)
+                        updatedInQueue = true
+                    } else {
+                        updatedQueue.addLast(queued)
+                    }
+                }
+                queue.addAll(updatedQueue)
+                if (updatedInQueue) return
+            }
+
+            // 3. Handle capacity and overwrite
+            val max = PiPupApp.settings.maxPopups
+            if (mShown.size >= max) {
+                if (props.overwrite) {
+                    // Priority eviction: Evict oldest ID-less popup first before evicting a unique ID popup
+                    val evictKey = mShown.entries.firstOrNull { it.value.props.id.isNullOrEmpty() }?.key
+                        ?: mShown.keys.firstOrNull()
+                    if (evictKey != null) {
+                        removePopupByKey(evictKey)
+                    }
+                } else {
+                    queue.addLast(props)
+                    return
+                }
+            }
+
+            createPopup(props)
+        }
+    }
+
+    private fun handleInPlaceUpdate(id: String, props: PopupProps) {
+        val current = mShown[id] ?: return
+        val oldPos = current.props.getPositionEnum()
+        val newPos = props.getPositionEnum()
+        val positionChanged = oldPos != newPos
+
+        current.expire?.let { handler.removeCallbacks(it) }
+        handler.removeCallbacksAndMessages(current)
+
+        if (positionChanged) {
+            val oldContainer = current.container
+            oldContainer.removeView(current.view)
+            val newContainer = ensurePositionContainer(newPos)
+
+            val gapPx = context.dpToPx(STACK_GAP_DP)
+            val lp = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                bottomMargin = gapPx
+                gravity = when (newPos) {
+                    PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> Gravity.END
+                    PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> Gravity.START
+                    PopupProps.Position.Center -> Gravity.CENTER_HORIZONTAL
+                }
+            }
+
+            newContainer.addView(current.view, lp)
+            current.container = newContainer
+
+            if (oldContainer.isEmpty()) {
+                overlay?.removeView(oldContainer)
+                positionContainers.remove(oldPos)
+            }
+        }
+
+        current.props = props
+        current.view.updateFromProps(props)
+
+        if (positionChanged) {
+            current.view.post {
+                current.view.forceAnimateIn()
+            }
+        }
+
+        current.view.startMedia()
+        scheduleRemoval(current)
+    }
+
+    private fun applyPositionToLayoutParams(params: FrameLayout.LayoutParams, position: PopupProps.Position) {
+        val margin = context.dpToPx(20)
+        params.gravity = when (position) {
+            PopupProps.Position.TopRight -> Gravity.TOP or Gravity.END
+            PopupProps.Position.TopLeft -> Gravity.TOP or Gravity.START
+            PopupProps.Position.BottomRight -> Gravity.BOTTOM or Gravity.END
+            PopupProps.Position.BottomLeft -> Gravity.BOTTOM or Gravity.START
+            PopupProps.Position.Center -> Gravity.CENTER
+        }
+        params.setMargins(
+            if (position in listOf(PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft)) margin else 0,
+            if (position in listOf(PopupProps.Position.TopRight, PopupProps.Position.TopLeft)) margin else 0,
+            if (position in listOf(PopupProps.Position.TopRight, PopupProps.Position.BottomRight)) margin else 0,
+            if (position in listOf(PopupProps.Position.BottomRight, PopupProps.Position.BottomLeft)) margin else 0
+        )
+    }
+
+    private class PositionContainer(context: Context) : LinearLayout(context) {
+        override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+            val safeMaxHeight = resources.displayMetrics.heightPixels * 2
+            val safeHeightSpec = MeasureSpec.makeMeasureSpec(safeMaxHeight, MeasureSpec.AT_MOST)
+            super.onMeasure(widthMeasureSpec, safeHeightSpec)
+        }
+    }
+
+    private fun ensurePositionContainer(position: PopupProps.Position): LinearLayout {
+        val overlayView = ensureOverlay()!!
+        return positionContainers.getOrPut(position) {
+            PositionContainer(context).apply {
+                orientation = LinearLayout.VERTICAL
+                clipChildren = false
+                clipToPadding = false
+                gravity = when (position) {
+                    PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> Gravity.END
+                    PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> Gravity.START
+                    PopupProps.Position.Center -> Gravity.CENTER_HORIZONTAL
+                }
+                val params = FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT
+                ).apply {
+                    applyPositionToLayoutParams(this, position)
+                }
+                overlayView.addView(this, params)
             }
         }
     }
 
-    private fun preparePopupLocked(props: PopupProps) {
+    private fun createPopup(props: PopupProps) {
+        val slotKey = props.id?.takeIf { it.isNotEmpty() } ?: UUID.randomUUID().toString()
         val localizedContext = context.getLocalizedContext(PiPupApp.settings.language)
         val view = PopupView(localizedContext, props)
-        val popupToken = Any()
+        val container = ensurePositionContainer(props.getPositionEnum())
 
-        state = when (val s = state) {
-            is NotificationState.Idle -> NotificationState.Preparing(props, view)
-            is NotificationState.Displaying -> NotificationState.DisplayingAndPreparing(s.props, s.view, props, view)
-            else -> s
+        if (!props.id.isNullOrEmpty()) {
+            mShown[props.id]?.let { old ->
+                old.expire?.let { handler.removeCallbacks(it) }
+                container.removeView(old.view)
+                old.view.cleanup()
+                mShown.remove(props.id)
+            }
         }
 
+        val shown = ShownSlot(key = slotKey, container = container, view = view, props = props)
+        mShown[slotKey] = shown
+
+        val popupToken = Any()
         handler.postAtTime({
             synchronized(this) {
-                Log.w(TAG, "Popup preparation timed out")
-                watchdogCleanups.incrementAndGet()
-                handlePrepTimeoutLocked(view)
+                if (mShown[slotKey] === shown) {
+                    Log.w(TAG, "Popup preparation timed out for key: $slotKey")
+                    watchdogCleanups.incrementAndGet()
+                    removePopupByKey(slotKey)
+                }
             }
         }, popupToken, SystemClock.uptimeMillis() + PREP_TIMEOUT_MS)
 
@@ -155,118 +267,84 @@ class NotificationManager(
             override fun onReady() {
                 handler.removeCallbacksAndMessages(popupToken)
                 synchronized(this@NotificationManager) {
-                    handlePopupReadyLocked(view)
+                    if (mShown[slotKey] === shown) {
+                        notifyStateChanged(true)
+
+                        val gapPx = context.dpToPx(STACK_GAP_DP)
+                        val lp = LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            LinearLayout.LayoutParams.WRAP_CONTENT
+                        ).apply {
+                            bottomMargin = gapPx
+                            gravity = when (props.getPositionEnum()) {
+                                PopupProps.Position.TopRight, PopupProps.Position.BottomRight -> Gravity.END
+                                PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft -> Gravity.START
+                                PopupProps.Position.Center -> Gravity.CENTER_HORIZONTAL
+                            }
+                        }
+                        container.addView(view, lp)
+
+                        view.animateIn()
+                        view.startMedia()
+                        scheduleRemoval(shown)
+                    }
                 }
             }
         }
         view.create()
     }
 
-    private fun handlePrepTimeoutLocked(view: PopupView) {
-        when (val s = state) {
-            is NotificationState.Preparing -> {
-                if (s.view == view) {
-                    view.cleanup()
-                    state = NotificationState.Idle
-                    processNextLocked()
+    private fun scheduleRemoval(shown: ShownSlot) {
+        handler.removeCallbacksAndMessages(shown)
+        val runnable = Runnable {
+            synchronized(this) {
+                if (mShown[shown.key] === shown) {
+                    removePopupByKey(shown.key)
                 }
             }
-            is NotificationState.DisplayingAndPreparing -> {
-                if (s.prepView == view) {
-                    view.cleanup()
-                    state = NotificationState.Displaying(s.displayProps, s.displayView)
-                    processNextLocked()
-                }
-            }
-            is NotificationState.DisplayingAndReady -> {
-                if (s.readyView == view) {
-                    view.cleanup()
-                    state = NotificationState.Displaying(s.displayProps, s.displayView)
-                    processNextLocked()
-                }
-            }
-            else -> {}
         }
+        shown.expire = runnable
+        handler.postAtTime(runnable, shown, SystemClock.uptimeMillis() + (shown.props.duration * 1000L))
     }
 
-    private fun handlePopupReadyLocked(view: PopupView) {
-        when (val s = state) {
-            is NotificationState.Preparing -> {
-                if (s.view == view) {
-                    notifyStateChanged(true)
-                    if (showPopup(view, s.props)) {
-                        state = NotificationState.Displaying(s.props, view)
-                        processNextLocked()
-                    } else {
-                        state = NotificationState.Idle
-                        processNextLocked()
-                    }
-                } else { view.cleanup() }
-            }
-            is NotificationState.DisplayingAndPreparing -> {
-                if (s.prepView == view) {
-                    if (s.prepProps.overwrite) {
-                        notifyStateChanged(true)
-                        replaceCurrentPopup(s.displayView, view, s.prepProps)
-                        state = NotificationState.Displaying(s.prepProps, view)
-                        processNextLocked()
-                    } else {
-                        state = NotificationState.DisplayingAndReady(s.displayProps, s.displayView, s.prepProps, view)
-                    }
-                } else { view.cleanup() }
-            }
-            else -> {
-                Log.d(TAG, "Ignoring ready signal from stale view")
-                view.cleanup()
+    private fun removePopupByKey(key: String) {
+        val shown = mShown.remove(key) ?: return
+        handler.removeCallbacksAndMessages(shown)
+
+        shown.view.animateOut {
+            synchronized(this) {
+                shown.container.removeView(shown.view)
+                shown.view.cleanup()
+                val pos = shown.props.getPositionEnum()
+
+                if (shown.container.isEmpty()) {
+                    overlay?.removeView(shown.container)
+                    positionContainers.remove(pos)
+                }
+
+                if (mShown.isEmpty()) {
+                    notifyStateChanged(false)
+                    removeOverlay()
+                    lastPopup = null
+                }
+
+                processNextLocked()
             }
         }
     }
 
-    private fun getCurrentPropsLocked(): PopupProps? = when (val s = state) {
-        is NotificationState.Displaying -> s.props
-        is NotificationState.DisplayingAndPreparing -> s.displayProps
-        is NotificationState.DisplayingAndReady -> s.displayProps
-        else -> null
-    }
-
-    private fun cancelPendingPreparationLocked() {
-        val nextState = when (val s = state) {
-            is NotificationState.Preparing -> {
-                s.view.cleanup()
-                NotificationState.Idle
+    private fun processNextLocked() {
+        synchronized(this) {
+            val max = PiPupApp.settings.maxPopups
+            while (mShown.size < max && queue.isNotEmpty()) {
+                val props = queue.poll() ?: break
+                createPopup(props)
             }
-            is NotificationState.DisplayingAndPreparing -> {
-                s.prepView.cleanup()
-                NotificationState.Displaying(s.displayProps, s.displayView)
-            }
-            is NotificationState.DisplayingAndReady -> {
-                s.readyView.cleanup()
-                NotificationState.Displaying(s.displayProps, s.displayView)
-            }
-            else -> s
         }
-        state = nextState
     }
 
     private fun canUpdateInPlace(oldProps: PopupProps, newProps: PopupProps): Boolean {
-        if (oldProps.animationType != newProps.animationType ||
-            oldProps.animationDuration != newProps.animationDuration) return false
-
-        val m1 = oldProps.media ?: oldProps.image?.let { PopupProps.Media.Image(it, oldProps.imageWidth ?: 480) }
-        val m2 = newProps.media ?: newProps.image?.let { PopupProps.Media.Image(it, newProps.imageWidth ?: 480) }
-
-        if (m1 == null && m2 == null) return true
-        if (m1 == null || m2 == null) return false
-        if (m1::class != m2::class) return false
-
-        return when (m1) {
-            is PopupProps.Media.Image -> (m2 as PopupProps.Media.Image).let { m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale }
-            is PopupProps.Media.Video -> (m2 as PopupProps.Media.Video).let { m1.uri == it.uri && m1.scale == it.scale }
-            is PopupProps.Media.Web -> (m2 as PopupProps.Media.Web).let { m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale }
-            is PopupProps.Media.Whep -> (m2 as PopupProps.Media.Whep).let { m1.uri == it.uri && m1.scale == it.scale }
-            is PopupProps.Media.LocalFile -> m1.path == (m2 as PopupProps.Media.LocalFile).path
-            else -> false
-        }
+        return oldProps.id == newProps.id && oldProps.getPositionEnum() == newProps.getPositionEnum()
     }
 
     /**
@@ -296,149 +374,20 @@ class NotificationManager(
         synchronized(this) {
             queue.clear()
             handler.removeCallbacksAndMessages(null)
-            when (val currentState = state) {
-                is NotificationState.Preparing -> currentState.view.cleanup()
-                is NotificationState.Displaying -> {
-                    overlay?.removeView(currentState.view)
-                    currentState.view.cleanup()
-                }
-                is NotificationState.DisplayingAndPreparing -> {
-                    overlay?.removeView(currentState.displayView)
-                    currentState.displayView.cleanup()
-                    currentState.prepView.cleanup()
-                }
-                is NotificationState.DisplayingAndReady -> {
-                    overlay?.removeView(currentState.displayView)
-                    currentState.displayView.cleanup()
-                    currentState.readyView.cleanup()
-                }
-                else -> {}
+            for ((_, s) in mShown) {
+                s.expire?.let { handler.removeCallbacks(it) }
+                s.container.removeView(s.view)
+                s.view.cleanup()
             }
-            state = NotificationState.Idle
+            mShown.clear()
+            for ((_, container) in positionContainers) {
+                overlay?.removeView(container)
+            }
+            positionContainers.clear()
+
             notifyStateChanged(false)
             removeOverlay()
-        }
-    }
-
-    private fun processNextLocked() {
-        if (state !is NotificationState.Idle && state !is NotificationState.Displaying) return
-        val props = queue.poll() ?: return
-        preparePopupLocked(props)
-    }
-
-    private fun replaceCurrentPopup(oldView: PopupView, newView: PopupView, props: PopupProps) {
-        val overlayView = ensureOverlay() ?: run {
-            newView.cleanup()
-            return
-        }
-        val params = getLayoutParams(props)
-        overlayView.addView(newView, params)
-        newView.animateIn()
-        newView.startMedia()
-
-        overlayView.removeView(oldView)
-        oldView.cleanup()
-
-        handler.removeCallbacksAndMessages(durationToken)
-        scheduleRemoval(props.duration)
-    }
-
-    private fun showPopup(view: PopupView, props: PopupProps): Boolean {
-        val overlayView = ensureOverlay() ?: run {
-            Log.e(TAG, "Aborting popup: could not create overlay")
-            context.showToast(context.getLocalizedContext(PiPupApp.settings.language).getString(R.string.error_permission_denied_overlay))
-            view.cleanup()
-            return false
-        }
-        val params = getLayoutParams(props)
-        overlayView.addView(view, params)
-        view.animateIn()
-        view.startMedia()
-        scheduleRemoval(props.duration)
-        return true
-    }
-
-    private fun scheduleRemoval(duration: Int) {
-        handler.postAtTime({
-            synchronized(this) { removeCurrentPopupLocked() }
-        }, durationToken, SystemClock.uptimeMillis() + (duration * 1000L))
-    }
-
-    private fun getLayoutParams(props: PopupProps): FrameLayout.LayoutParams {
-        return FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT).apply {
-            applyPositionToLayoutParams(this, props)
-        }
-    }
-
-    private fun applyPositionToLayoutParams(params: FrameLayout.LayoutParams, props: PopupProps) {
-        val margin = context.dpToPx(20)
-        params.gravity = when (props.getPositionEnum()) {
-            PopupProps.Position.TopRight -> Gravity.TOP or Gravity.END
-            PopupProps.Position.TopLeft -> Gravity.TOP or Gravity.START
-            PopupProps.Position.BottomRight -> Gravity.BOTTOM or Gravity.END
-            PopupProps.Position.BottomLeft -> Gravity.BOTTOM or Gravity.START
-            PopupProps.Position.Center -> Gravity.CENTER
-        }
-        params.setMargins(
-            if (props.getPositionEnum() in listOf(PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft)) margin else 0,
-            if (props.getPositionEnum() in listOf(PopupProps.Position.TopRight, PopupProps.Position.TopLeft)) margin else 0,
-            if (props.getPositionEnum() in listOf(PopupProps.Position.TopRight, PopupProps.Position.BottomRight)) margin else 0,
-            if (props.getPositionEnum() in listOf(PopupProps.Position.BottomRight, PopupProps.Position.BottomLeft)) margin else 0
-        )
-    }
-
-    private fun removeCurrentPopupLocked() {
-        val currentView = when (val currentState = state) {
-            is NotificationState.Displaying -> currentState.view
-            is NotificationState.DisplayingAndPreparing -> currentState.displayView
-            is NotificationState.DisplayingAndReady -> currentState.displayView
-            else -> null
-        } ?: return
-
-        handler.removeCallbacksAndMessages(durationToken)
-
-        currentView.animateOut {
-            synchronized(this) {
-                overlay?.removeView(currentView)
-                currentView.cleanup()
-
-                val nowDisplayView = when (val s = state) {
-                    is NotificationState.Displaying -> s.view
-                    is NotificationState.DisplayingAndPreparing -> s.displayView
-                    is NotificationState.DisplayingAndReady -> s.displayView
-                    else -> null
-                }
-
-                if (nowDisplayView === currentView) {
-                    checkNextAfterRemovalLocked()
-                }
-
-                if (state is NotificationState.Idle) {
-                    lastPopup = null
-                }
-            }
-        }
-    }
-
-    private fun checkNextAfterRemovalLocked() {
-        val nextState = when (val s = state) {
-            is NotificationState.Displaying -> NotificationState.Idle
-            is NotificationState.DisplayingAndPreparing -> NotificationState.Preparing(s.prepProps, s.prepView)
-            is NotificationState.DisplayingAndReady -> {
-                showPopup(s.readyView, s.readyProps)
-                NotificationState.Displaying(s.readyProps, s.readyView)
-            }
-            else -> s
-        }
-        state = nextState
-
-        if (state is NotificationState.Idle) {
-            notifyStateChanged(false)
-            if (queue.isEmpty()) removeOverlay()
-        }
-
-        if (state is NotificationState.Idle || state is NotificationState.Displaying) {
-            processNextLocked()
+            lastPopup = null
         }
     }
 
@@ -460,6 +409,7 @@ class NotificationManager(
             view
         } catch (e: Exception) {
             Log.e(TAG, "WindowManager error: ${e.message}")
+            context.showToast(context.getLocalizedContext(PiPupApp.settings.language).getString(R.string.error_permission_denied_overlay))
             null
         }
     }
@@ -467,5 +417,6 @@ class NotificationManager(
     private fun removeOverlay() {
         overlay?.let { if (it.parent != null) windowManager.removeView(it) }
         overlay = null
+        positionContainers.clear()
     }
 }

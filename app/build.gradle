@@ -67,6 +67,10 @@ android {
     // Define namespace for the generated R and BuildConfig classes
     namespace = appPackage
 
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+
     compileOptions {
         // Use Java 17 for compilation to support modern Kotlin features
         sourceCompatibility JavaVersion.VERSION_17

@@ -189,6 +189,8 @@
     <string name="admin_enabled">Geräteadministrator aktiviert</string>
     <string name="admin_disabled">Geräteadministrator deaktiviert</string>
     <string name="permission_admin_explanation">Den TV-Bildschirm aus der Ferne in den Standby schicken.</string>
+    <string name="settings_max_popups">Max. gleichzeitige Popups</string>
+    <string name="settings_max_popups_desc">Maximale Anzahl an gleichzeitig auf dem Bildschirm angezeigten Popups</string>
 
     <!-- Zentrales Berechtigungssystem -->
     <string name="permission_header_required">Erforderlich</string>

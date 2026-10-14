@@ -12,6 +12,16 @@ class PopupAnimator(private val view: View) {
 
     private var isAnimatedIn = false
 
+    init {
+        view.alpha = 0f
+    }
+
+    fun forceAnimateIn(props: PopupProps) {
+        isAnimatedIn = false
+        resetAnimationProps()
+        animateIn(props)
+    }
+
     /**
      * Plays the entrance animation for the popup.
      */

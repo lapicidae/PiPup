@@ -6,9 +6,7 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
-import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
-import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.SettingCategory
 
 /**
@@ -26,6 +24,12 @@ class PerformanceSubmenu(
 
     override fun onBind(root: View) {
         rootContainer = root.findViewById(R.id.performance_settings_container) ?: return
+
+        // Max Popups (SeekBar 0..4 maps to values 1..5)
+        setupSeekBar(root, R.id.seekbar_max_popups, R.id.text_max_popups_value, (settings.maxPopups - 1).coerceIn(0, 4)) {
+            settings.maxPopups = (it + 1).coerceIn(1, 5)
+        }
+
         render()
     }
 
@@ -40,13 +44,7 @@ class PerformanceSubmenu(
          * Determines if this submenu has any visible settings to show.
          */
         fun hasContent(context: Context, settings: AppSettings): Boolean {
-            val mm = (context.applicationContext as PiPupApp).moduleManager
-            val modules = mm.getAllModules()
-
-            return modules.any { module ->
-                (module.id == "system" || settings.getModuleMode(module.id) != ModuleMode.OFF) &&
-                module.getSettingsMetadata().any { it.category == SettingCategory.PERFORMANCE }
-            }
+            return context.applicationContext != null && settings.maxPopups > 0
         }
     }
 }

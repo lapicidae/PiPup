@@ -6,6 +6,8 @@ import android.graphics.drawable.GradientDrawable
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -181,8 +183,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         // Automatic cleanup when the view is detached from the window.
         addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
-            override fun onViewAttachedToWindow(v: android.view.View) {}
-            override fun onViewDetachedFromWindow(v: android.view.View) {
+            override fun onViewAttachedToWindow(v: View) {}
+            override fun onViewDetachedFromWindow(v: View) {
                 cleanup()
             }
         })
@@ -270,7 +272,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     private fun updateVisuals() {
         if (layoutParams == null) {
-            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
+            layoutParams = ViewGroup.LayoutParams(
+                LayoutParams.WRAP_CONTENT,
+                LayoutParams.WRAP_CONTENT
+            )
         }
         alpha = 1.0f
         if (background != null) background = null
@@ -351,10 +356,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         // Extremely careful reordering: only detach if absolutely necessary
         // to avoid WebView surface destruction.
         if (textContainer.parent != null && textContainer.parent != container) {
-            (textContainer.parent as android.view.ViewGroup).removeView(textContainer)
+            (textContainer.parent as ViewGroup).removeView(textContainer)
         }
         if (mediaFrame.parent != null && mediaFrame.parent != container) {
-            (mediaFrame.parent as android.view.ViewGroup).removeView(mediaFrame)
+            (mediaFrame.parent as ViewGroup).removeView(mediaFrame)
         }
 
         if (textContainer.parent == container) container.removeView(textContainer)
@@ -369,7 +374,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
-    private fun setupVertical(container: LinearLayout, first: android.view.View, second: android.view.View, mediaFirst: Boolean) {
+    private fun setupVertical(container: LinearLayout, first: View, second: View, mediaFirst: Boolean) {
         container.orientation = LinearLayout.VERTICAL
         val margin = context.dpToPx(8)
 
@@ -393,7 +398,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         container.addView(second, secondParams)
     }
 
-    private fun setupHorizontal(container: LinearLayout, first: android.view.View, second: android.view.View, mediaFirst: Boolean) {
+    private fun setupHorizontal(container: LinearLayout, first: View, second: View, mediaFirst: Boolean) {
         container.orientation = LinearLayout.HORIZONTAL
         val margin = context.dpToPx(12)
 
@@ -513,6 +518,14 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     fun animateIn() {
         if (isCleanedUp) return
         animator.animateIn(props)
+    }
+
+    /**
+     * Forces playing the entrance animation regardless of current view state.
+     */
+    fun forceAnimateIn() {
+        if (isCleanedUp) return
+        animator.forceAnimateIn(props)
     }
 
     /**

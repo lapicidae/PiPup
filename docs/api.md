@@ -14,15 +14,22 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 
 **JSON Payload Properties:**
 
-| Field           | Type   | Default | Description                       |
-| :-------------- | :----- | :------ | :-------------------------------- |
-| `duration`      | Int    | 10      | Seconds to display.               |
-| `position`      | Int    | 0       | 0:TR, 1:TL, 2:BR, 3:BL, 4:Center. |
-| `title`         | String | null    | Heading text.                     |
-| `message`       | String | null    | Main body text.                   |
-| `media`         | Object | null    | Media configuration (see below).  |
-| `animationType` | Int    | 0       | 0..10 (Fade, Slide, Scale, etc.). |
-| `overwrite`     | Bool   | false   | Interrupt current popup.          |
+| Field           | Type   | Default | Description                                                         |
+| :-------------- | :----- | :------ | :------------------------------------------------------------------ |
+| `id`            | String | null    | Unique identifier for popup stacking and in-place updates.          |
+| `duration`      | Int    | 10      | Seconds to display.                                                 |
+| `position`      | Int    | 0       | 0:TR, 1:TL, 2:BR, 3:BL, 4:Center.                                   |
+| `title`         | String | null    | Heading text.                                                       |
+| `message`       | String | null    | Main body text.                                                     |
+| `media`         | Object | null    | Media configuration (see below).                                    |
+| `animationType` | Int    | 0       | 0..10 (Fade, Slide, Scale, etc.).                                   |
+| `overwrite`     | Bool   | false   | If true and max concurrency is reached, evicts oldest ID-less popup |
+
+**Popup Stacking & ID Behavior:**
+
+- **Stacking:** Multiple notifications sent to the same screen position stack vertically up to the configured `maxPopups` limit (1..5, configured in performance settings).
+- **In-Place Updates:** If a notification with a matching `id` is already active or waiting in the queue when a new request arrives, it updates in-place without dismissing or re-animating.
+- **Cancellation:** Active popups can be cancelled individually by ID using `POST /cancel?id=<id>` or all at once via `POST /cancel?all=true`.
 
 **Media Object Types:**
 

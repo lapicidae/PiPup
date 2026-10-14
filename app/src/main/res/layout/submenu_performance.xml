@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical">
@@ -13,6 +14,54 @@
         android:textSize="28sp"
         android:textStyle="bold"
         android:layout_marginBottom="32dp"/>
+
+    <!-- Max Popups Setting -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/text_max_popups"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_max_popups"
+            android:textColor="@color/colorOnSurface"
+            android:textSize="16sp"
+            android:layout_marginStart="12dp" />
+
+        <TextView
+            android:id="@+id/text_max_popups_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            tools:text="1" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_max_popups_desc"
+        android:textColor="@color/colorOnSurfaceVariant"
+        android:textSize="12sp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="8dp" />
+
+    <SeekBar
+        android:id="@+id/seekbar_max_popups"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="4"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:thumbTint="@color/tv_thumb_selector"
+        android:progressTint="@color/tv_thumb_selector"
+        android:progressBackgroundTint="@color/tv_track_selector"
+        android:layout_marginBottom="24dp" />
 
     <LinearLayout
         android:id="@+id/performance_settings_container"

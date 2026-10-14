@@ -190,6 +190,8 @@
     <string name="admin_enabled">Device Administrator enabled</string>
     <string name="admin_disabled">Device Administrator disabled</string>
     <string name="permission_admin_explanation">Put the TV screen into standby remotely.</string>
+    <string name="settings_max_popups">Max simultaneous popups</string>
+    <string name="settings_max_popups_desc">Maximum number of popups displayed simultaneously on screen</string>
 
     <!-- Centralized Permission System -->
     <string name="permission_header_required">Required</string>

@@ -106,6 +106,7 @@ For a detailed list of all endpoints and response formats, please refer to the [
 
 ```json
 {
+    "id": "cam_front",
     "duration": 10,
     "position": 0,
     "title": "Your awesome title",
@@ -156,6 +157,7 @@ All fields below are optional.
 
 | _Field_               | _Type_  | _Default_ | _Description_                                                          |
 | --------------------- | ------- | --------- | ---------------------------------------------------------------------- |
+| **id**                | String  | null      | Unique identifier for popup stacking and in-place updates              |
 | **duration**          | Integer | 10        | Duration in seconds                                                    |
 | **position**          | Integer | 0         | Position index on the screen (0..4)                                    |
 | **contentPadding**    | Integer | 20        | Inner padding in pixels between the border and content                 |
@@ -247,12 +249,15 @@ All fields below are optional.
 
 ### Cancel notifications
 
-To clear the notification queue and remove the currently displayed notification:
+To clear the notification queue, remove the currently displayed notification, or cancel a specific notification by its unique ID:
 
-| _Property_  | _Value_ |
-| ----------- | ------- |
-| **Path:**   | /cancel |
-| **Method:** | POST    |
+| _Property_  | _Value_                        |
+| ----------- | ------------------------------ |
+| **Path:**   | `/cancel` or `/cancel?id=<id>` |
+| **Method:** | `POST`                         |
+
+- **`/cancel`**: Clears the queue and cancels all active notifications.
+- **`/cancel?id=<id>`**: Cancels the specific notification matching the given unique ID.
 
 ---
 
@@ -305,6 +310,7 @@ Retrieves a JSON object containing all current styling and layout configurations
     "animationExit": false,
     "mediaTimeout": 10,
     "mediaRetries": 3,
+    "maxPopups": 1,
     "appTheme": 0,
     "advancedMode": false,
     "moduleModes": {
