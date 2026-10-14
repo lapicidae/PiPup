@@ -237,6 +237,20 @@ abstract class SubmenuBase(
         }
     }
 
+    protected fun setupHexColorButton(
+        root: View,
+        buttonId: Int,
+        currentColor: String,
+        onColorSet: (String) -> Unit
+    ) {
+        root.findViewById<Button>(buttonId)?.apply {
+            text = currentColor
+            visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
+            setOnClickListener { handleHexInput(this, currentColor) { onColorSet(it) } }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+    }
+
     /**
      * Renders settings from all active modules that belong to the specified category.
      */

@@ -27,11 +27,8 @@ class BackgroundSubmenu(
         }
         setSelectedColorInSpinner(root, R.id.spinner_bg_color, adapter, settings.backgroundColor)
 
-        root.findViewById<Button>(R.id.btn_edit_bg_hex)?.apply {
-            text = settings.backgroundColor
-            visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
-            setOnClickListener { handleHexInput(this, settings.backgroundColor) { settings.backgroundColor = it } }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        setupHexColorButton(root, R.id.btn_edit_bg_hex, settings.backgroundColor) {
+            settings.backgroundColor = it
         }
 
         setupSeekBar(root, R.id.seekbar_bg_alpha, R.id.text_bg_alpha_value, settings.backgroundAlpha) {

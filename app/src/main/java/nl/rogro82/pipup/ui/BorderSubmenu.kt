@@ -30,11 +30,8 @@ class BorderSubmenu(
         }
         setSelectedColorInSpinner(root, R.id.spinner_border_color, adapter, settings.borderColor)
 
-        root.findViewById<Button>(R.id.btn_edit_border_hex)?.apply {
-            text = settings.borderColor
-            visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
-            setOnClickListener { handleHexInput(this, settings.borderColor) { settings.borderColor = it } }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        setupHexColorButton(root, R.id.btn_edit_border_hex, settings.borderColor) {
+            settings.borderColor = it
         }
 
         renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.BORDER)

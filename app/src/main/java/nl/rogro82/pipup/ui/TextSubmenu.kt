@@ -30,11 +30,8 @@ class TextSubmenu(
         }
         setSelectedColorInSpinner(root, R.id.spinner_title_color, titleAdapter, settings.titleColor)
 
-        root.findViewById<Button>(R.id.btn_edit_title_hex)?.apply {
-            text = settings.titleColor
-            visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
-            setOnClickListener { handleHexInput(this, settings.titleColor) { settings.titleColor = it } }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        setupHexColorButton(root, R.id.btn_edit_title_hex, settings.titleColor) {
+            settings.titleColor = it
         }
 
         // Message Color
@@ -46,11 +43,8 @@ class TextSubmenu(
         }
         setSelectedColorInSpinner(root, R.id.spinner_message_color, msgAdapter, settings.messageColor)
 
-        root.findViewById<Button>(R.id.btn_edit_message_hex)?.apply {
-            text = settings.messageColor
-            visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
-            setOnClickListener { handleHexInput(this, settings.messageColor) { settings.messageColor = it } }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        setupHexColorButton(root, R.id.btn_edit_message_hex, settings.messageColor) {
+            settings.messageColor = it
         }
 
         setupSeekBar(root, R.id.seekbar_title_size, R.id.text_title_size_value, settings.titleSize.toInt()) { settings.titleSize = it.toFloat() }
