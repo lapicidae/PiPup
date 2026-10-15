@@ -49,6 +49,7 @@ class NotificationManager(
     private val handler = Handler(Looper.getMainLooper())
     private val queue = ArrayDeque<PopupProps>()
     private val mShown = LinkedHashMap<String, ShownSlot>()
+    private val mExiting = LinkedHashMap<String, ShownSlot>()
     private val positionContainers = EnumMap<PopupProps.Position, LinearLayout>(PopupProps.Position::class.java)
     private var overlay: FrameLayout? = null
 
@@ -63,14 +64,14 @@ class NotificationManager(
      * Checks if a notification is currently being displayed on the screen or preparing.
      */
     fun isDisplaying(): Boolean = synchronized(this) {
-        mShown.isNotEmpty() || queue.isNotEmpty()
+        mShown.isNotEmpty() || mExiting.isNotEmpty() || queue.isNotEmpty()
     }
 
     /**
      * Returns the properties of the currently displayed notification, or null if none.
      */
     fun getCurrentProps(): PopupProps? = synchronized(this) {
-        mShown.values.lastOrNull()?.props
+        mShown.values.lastOrNull()?.props ?: mExiting.values.lastOrNull()?.props
     }
 
     /**
@@ -87,6 +88,12 @@ class NotificationManager(
             lastPopupAt = SystemClock.elapsedRealtime()
 
             val id = props.id
+
+            if (!id.isNullOrEmpty() && mExiting.containsKey(id)) {
+                val exiting = mExiting.remove(id)!!
+                exiting.container.removeView(exiting.view)
+                exiting.view.cleanup()
+            }
 
             // 1. If active on-screen unique ID popup exists
             if (!id.isNullOrEmpty() && mShown.containsKey(id)) {
@@ -119,11 +126,12 @@ class NotificationManager(
 
             // 3. Handle capacity and overwrite
             val max = PiPupApp.settings.maxPopups
-            if (mShown.size >= max) {
+            if ((mShown.size + mExiting.size) >= max) {
                 if (props.overwrite) {
                     // Priority eviction: Evict oldest ID-less popup first before evicting a unique ID popup
                     val evictKey = mShown.entries.firstOrNull { it.value.props.id.isNullOrEmpty() }?.key
                         ?: mShown.keys.firstOrNull()
+                        ?: mExiting.keys.firstOrNull()
                     if (evictKey != null) {
                         removePopupByKey(evictKey)
                     }
@@ -308,11 +316,15 @@ class NotificationManager(
     }
 
     private fun removePopupByKey(key: String) {
-        val shown = mShown.remove(key) ?: return
+        val shown = mShown.remove(key) ?: mExiting[key] ?: return
+        if (mExiting.containsKey(key)) return
+
+        mExiting[key] = shown
         handler.removeCallbacksAndMessages(shown)
 
         shown.view.animateOut {
             synchronized(this) {
+                mExiting.remove(key)
                 shown.container.removeView(shown.view)
                 shown.view.cleanup()
                 val pos = shown.props.getPositionEnum()
@@ -322,7 +334,7 @@ class NotificationManager(
                     positionContainers.remove(pos)
                 }
 
-                if (mShown.isEmpty()) {
+                if (mShown.isEmpty() && mExiting.isEmpty()) {
                     notifyStateChanged(false)
                     removeOverlay()
                     lastPopup = null
@@ -336,7 +348,7 @@ class NotificationManager(
     private fun processNextLocked() {
         synchronized(this) {
             val max = PiPupApp.settings.maxPopups
-            while (mShown.size < max && queue.isNotEmpty()) {
+            while ((mShown.size + mExiting.size) < max && queue.isNotEmpty()) {
                 val props = queue.poll() ?: break
                 createPopup(props)
             }
@@ -378,7 +390,7 @@ class NotificationManager(
 
     private fun performCancelById(id: String): CancelResult {
         synchronized(this) {
-            if (mShown.containsKey(id)) {
+            if (mShown.containsKey(id) || mExiting.containsKey(id)) {
                 removePopupByKey(id)
                 val iterator = queue.iterator()
                 while (iterator.hasNext()) {
@@ -439,6 +451,12 @@ class NotificationManager(
                 s.view.cleanup()
             }
             mShown.clear()
+            for ((_, s) in mExiting) {
+                s.expire?.let { handler.removeCallbacks(it) }
+                s.container.removeView(s.view)
+                s.view.cleanup()
+            }
+            mExiting.clear()
             for ((_, container) in positionContainers) {
                 overlay?.removeView(container)
             }
