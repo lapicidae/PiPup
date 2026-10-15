@@ -85,8 +85,18 @@ Returns a comprehensive JSON snapshot of the application, including:
 
 - **`visible`**: Boolean, current popup visibility.
 - **`screenOn`**: Boolean, hardware display state.
-- **`power`**: Detailed block with `canSleep` and `sleepMethod`.
-- **`permissions`**: Status of Overlay, Admin, and Accessibility.
+- **`dreaming`**: Boolean, screensaver/dream state.
+- **`popupsShown`**: Integer, total count of popups shown.
+- **`watchdogCleanups`**: Integer, count of watchdog timeout cleanups.
+- **`uptime`**: Integer, server uptime in seconds.
+- **`device`**: Object with `model`, `manufacturer`, and `android` version.
+- **`popup`**: Object with details of the active top popup (`id`, `title`, `duration`, `indefinite`, `elapsed`).
+- **`popups`**: Array of all active popups currently on screen or exiting in stack order.
+- **`power`**: Detailed block with `canWake`, `canSleep`, and `sleepMethod`.
+- **`permissions`**: Status of Overlay, Admin, Accessibility, and App Ops.
+- **`update`**: Detailed block with update status (`available`, `latest`, `installing`, `error`, etc.).
+- **`haPipup`**: Object with integration compatibility info (`recommended`, `minimum`, `connected`).
+- **`push`**: Object with webhook/push notification status.
 - **`discovery`**: Count of other PiPup peers found.
 
 ---

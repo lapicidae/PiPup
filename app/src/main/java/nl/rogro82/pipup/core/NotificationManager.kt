@@ -75,6 +75,20 @@ class NotificationManager(
     }
 
     /**
+     * Returns a list of active popup properties currently displayed on screen.
+     */
+    fun getActivePopups(): List<PopupProps> = synchronized(this) {
+        val list = mutableListOf<PopupProps>()
+        for ((_, slot) in mShown) {
+            list.add(slot.props)
+        }
+        for ((_, slot) in mExiting) {
+            list.add(slot.props)
+        }
+        list
+    }
+
+    /**
      * Asynchronously enqueues a notification for display into the unified queue.
      */
     fun enqueue(props: PopupProps) {

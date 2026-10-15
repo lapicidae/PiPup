@@ -36,6 +36,7 @@ import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.NotificationManager
+import nl.rogro82.pipup.core.PowerController
 import nl.rogro82.pipup.core.WebServer
 import nl.rogro82.pipup.getLocalizedContext
 import nl.rogro82.pipup.readExactBytes
@@ -243,8 +244,12 @@ class PipUpService : Service() {
 
     private fun stateResponse(): NanoHTTPD.Response {
         val current = notificationManager.getCurrentProps()
+        val activePopups = notificationManager.getActivePopups()
+        val top = activePopups.lastOrNull()
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val appName = getString(R.string.app_name)
+        val now = SystemClock.elapsedRealtime()
+
         val state = mutableMapOf<String, Any?>(
             "app" to appName,
             "version" to BuildConfig.VERSION_NAME,
@@ -254,45 +259,99 @@ class PipUpService : Service() {
             "screenOn" to powerManager.isInteractive,
             "dreaming" to dreaming,
             "popupsShown" to notificationManager.popupsShown.get(),
-            "uptime" to (SystemClock.elapsedRealtime() - startedAt) / 1000,
+            "watchdogCleanups" to notificationManager.watchdogCleanups.get(),
+            "uptime" to (now - startedAt) / 1000,
             "device" to mapOf(
                 "model" to Build.MODEL,
                 "manufacturer" to Build.MANUFACTURER,
                 "android" to Build.VERSION.RELEASE
             )
         )
-        if (current != null) {
+
+        if (top != null) {
             state["popup"] = mapOf(
-                "id" to current.id,
-                "title" to current.title,
-                "duration" to current.duration,
-                "indefinite" to (current.duration <= 0),
-                "elapsed" to ((SystemClock.elapsedRealtime() - notificationManager.lastPopupAt) / 1000)
+                "id" to top.id,
+                "title" to top.title,
+                "duration" to top.duration,
+                "indefinite" to (top.duration <= 0),
+                "elapsed" to ((now - notificationManager.lastPopupAt) / 1000)
             )
         }
+
+        state["popups"] = activePopups.map { props ->
+            mapOf(
+                "id" to props.id,
+                "position" to props.getPositionEnum().name,
+                "duration" to props.duration,
+                "indefinite" to (props.duration <= 0),
+                "elapsed" to ((now - notificationManager.lastPopupAt) / 1000),
+                "media" to mediaInfo(props)?.get("type")
+            )
+        }
+
+        state["power"] = mapOf(
+            "canWake" to true,
+            "canSleep" to (PowerController.getSleepMethod(this) != null),
+            "sleepMethod" to PowerController.getSleepMethod(this)
+        )
+
         state["permissions"] = Permissions.asMap(this)
+
         state["update"] = mapOf(
+            "checksEnabled" to true,
+            "source" to "github",
             "available" to UpdateManager.updateAvailable(this),
             "latest" to UpdateManager.latestVersion,
             "installing" to UpdateManager.isInstalling,
+            "phase" to null,
+            "progress" to null,
+            "downloadedBytes" to null,
+            "totalBytes" to null,
+            "pendingUserAction" to false,
             "silent" to UpdateManager.silentInstall,
             "checkedSecondsAgo" to UpdateManager.lastCheckedAt.takeIf { it > 0 }
                 ?.let { (System.currentTimeMillis() - it) / 1000 },
-            "error" to UpdateManager.lastError
+            "error" to UpdateManager.lastError,
+            "tlsFactory" to "default",
+            "confirmLaunch" to null
         )
-        moduleManager.augmentState(state)
+
+        state["haPipup"] = mapOf(
+            "recommended" to null,
+            "minimum" to "1.0.0",
+            "connected" to null
+        )
 
         val last = notificationManager.lastPopup
         if (last != null) {
             state["lastPopup"] = mapOf(
-                "title" to last.title,
-                "duration" to last.duration,
+                "id" to last.id,
                 "position" to last.getPositionEnum().name,
+                "duration" to last.duration,
+                "indefinite" to (last.duration <= 0),
                 "muted" to mediaMuted(last),
                 "media" to mediaInfo(last),
-                "secondsAgo" to ((SystemClock.elapsedRealtime() - notificationManager.lastPopupAt) / 1000)
+                "tts" to false,
+                "sound" to false,
+                "animation" to last.animationType,
+                "buttons" to 0,
+                "firstFrameMs" to null,
+                "mediaError" to null,
+                "secondsAgo" to ((now - notificationManager.lastPopupAt) / 1000)
             )
         }
+
+        state["push"] = mapOf(
+            "supported" to true,
+            "webhook" to false,
+            "lastEvent" to null,
+            "lastStatus" to null,
+            "lastError" to null,
+            "lastSecondsAgo" to null
+        )
+
+        moduleManager.augmentState(state)
+
         return NanoHTTPD.newFixedLengthResponse(
             NanoHTTPD.Response.Status.OK,
             "application/json",
