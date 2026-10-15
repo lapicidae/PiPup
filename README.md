@@ -251,13 +251,13 @@ All fields below are optional.
 
 To clear the notification queue, remove the currently displayed notification, or cancel a specific notification by its unique ID:
 
-| _Property_  | _Value_                        |
-| ----------- | ------------------------------ |
-| **Path:**   | `/cancel` or `/cancel?id=<id>` |
-| **Method:** | `POST`                         |
+| _Property_  | _Value_                                          |
+| ----------- | ------------------------------------------------ |
+| **Path:**   | `/cancel`, `/cancel?all=true`, `/cancel?id=<id>` |
+| **Method:** | `POST`                                           |
 
-- **`/cancel`**: Clears the queue and cancels all active notifications.
-- **`/cancel?id=<id>`**: Cancels the specific notification matching the given unique ID.
+- **`/cancel`** or **`/cancel?all=true`**: Clears the notification queue and cancels all active notifications.
+- **`/cancel?id=<id>`**: Cancels the specific notification matching the given unique ID (whether active on screen or waiting in the queue).
 
 ---
 

@@ -195,16 +195,22 @@ class SystemModule : PiPupModule {
 
     private fun cancelResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         val id = session.parameters["id"]?.firstOrNull()
+        val all = session.parameters["all"]?.firstOrNull()?.lowercase() in setOf("true", "1", "on")
         val nm = moduleContext?.notificationManager ?: return NanoHTTPD.newFixedLengthResponse("Service not ready")
 
-        val current = nm.getCurrentProps()
-        val isDisplaying = nm.isDisplaying()
-
-        // Match fork logic: Only report mismatch if a popup is visible AND an ID was provided AND it doesn't match
-        if (id != null && isDisplaying && current?.id != id) {
-            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "ID mismatch: visible is ${current?.id}")
+        if (!all && id != null) {
+            val res = nm.cancelById(id)
+            val msg = when (res) {
+                nl.rogro82.pipup.core.NotificationManager.CancelResult.CANCELLED_ACTIVE -> "OK: Cancelled"
+                nl.rogro82.pipup.core.NotificationManager.CancelResult.REMOVED_FROM_QUEUE -> "OK: Removed from queue"
+                nl.rogro82.pipup.core.NotificationManager.CancelResult.NOT_FOUND -> {
+                    if (!nm.isDisplaying()) "OK: Nothing to cancel" else "ID not found: $id"
+                }
+            }
+            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", msg)
         }
 
+        val isDisplaying = nm.isDisplaying()
         nm.cancelAll()
 
         val msg = if (isDisplaying) "OK: Cancelled" else "OK: Nothing to cancel"

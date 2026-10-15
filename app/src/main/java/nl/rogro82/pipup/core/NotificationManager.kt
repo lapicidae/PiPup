@@ -347,6 +347,65 @@ class NotificationManager(
         return oldProps.id == newProps.id && oldProps.getPositionEnum() == newProps.getPositionEnum()
     }
 
+    enum class CancelResult {
+        CANCELLED_ACTIVE,
+        REMOVED_FROM_QUEUE,
+        NOT_FOUND
+    }
+
+    /**
+     * Cancels a specific notification by ID.
+     * If active on screen, it is closed and removed.
+     * If waiting in queue, it is removed from the queue.
+     * Blocks until UI thread processing is done if called from a background thread.
+     */
+    fun cancelById(id: String): CancelResult {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            return performCancelById(id)
+        } else {
+            var result = CancelResult.NOT_FOUND
+            val latch = CountDownLatch(1)
+            handler.post {
+                result = performCancelById(id)
+                latch.countDown()
+            }
+            try {
+                latch.await(2, TimeUnit.SECONDS)
+            } catch (_: InterruptedException) {}
+            return result
+        }
+    }
+
+    private fun performCancelById(id: String): CancelResult {
+        synchronized(this) {
+            if (mShown.containsKey(id)) {
+                removePopupByKey(id)
+                val iterator = queue.iterator()
+                while (iterator.hasNext()) {
+                    if (iterator.next().id == id) {
+                        iterator.remove()
+                    }
+                }
+                return CancelResult.CANCELLED_ACTIVE
+            }
+
+            var removedFromQueue = false
+            val iterator = queue.iterator()
+            while (iterator.hasNext()) {
+                if (iterator.next().id == id) {
+                    iterator.remove()
+                    removedFromQueue = true
+                }
+            }
+
+            if (removedFromQueue) {
+                return CancelResult.REMOVED_FROM_QUEUE
+            }
+
+            return CancelResult.NOT_FOUND
+        }
+    }
+
     /**
      * Cancels all notifications and clears the queue.
      * Blocks until UI thread cleanup is done if called from a background thread.

@@ -212,7 +212,90 @@ class NotificationApiTest {
         }
     }
 
+    @Test
+    fun testCancelWithoutParamsAndAllTrue() {
+        // Clean state
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+
+        // 1. Cancel active popup with POST /cancel
+        val notify = """{"title": "Active Popup", "duration": 30}"""
+        sendPostWithResponse("$baseUrl/notify", notify.toByteArray())
+        Thread.sleep(500)
+
+        val resCancel = sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+        assertEquals(200, resCancel.code)
+        assertEquals("OK: Cancelled", resCancel.body)
+
+        // 2. Cancel when empty
+        val resEmpty = sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+        assertEquals(200, resEmpty.code)
+        assertEquals("OK: Nothing to cancel", resEmpty.body)
+
+        // 3. Cancel with POST /cancel?all=true
+        sendPostWithResponse("$baseUrl/notify", notify.toByteArray())
+        Thread.sleep(500)
+
+        val resAllTrue = sendPostWithResponse("$baseUrl/cancel?all=true", ByteArray(0))
+        assertEquals(200, resAllTrue.code)
+        assertEquals("OK: Cancelled", resAllTrue.body)
+    }
+
+    @Test
+    fun testCancelByIdContract() {
+        // Clean state
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+
+        // 1. Active popup cancel by ID
+        val activeNotify = """{"id": "active_id_1", "title": "Active ID Test", "duration": 30}"""
+        sendPostWithResponse("$baseUrl/notify", activeNotify.toByteArray())
+        Thread.sleep(500)
+
+        val resActiveCancel = sendPostWithResponse("$baseUrl/cancel?id=active_id_1", ByteArray(0))
+        assertEquals(200, resActiveCancel.code)
+        assertEquals("OK: Cancelled", resActiveCancel.body)
+
+        // 2. Queued popup cancel by ID
+        val first = """{"id": "first_active", "title": "First Active", "duration": 30}"""
+        val second = """{"id": "queued_id_1", "title": "Queued ID Test", "duration": 30}"""
+        sendPostWithResponse("$baseUrl/notify", first.toByteArray())
+        sendPostWithResponse("$baseUrl/notify", second.toByteArray())
+        Thread.sleep(500)
+
+        val resQueueCancel = sendPostWithResponse("$baseUrl/cancel?id=queued_id_1", ByteArray(0))
+        assertEquals(200, resQueueCancel.code)
+        assertEquals("OK: Removed from queue", resQueueCancel.body)
+
+        // Clean active
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+
+        // 3. Non-existent ID cancel
+        sendPostWithResponse("$baseUrl/notify", activeNotify.toByteArray())
+        Thread.sleep(500)
+
+        val resNotFound = sendPostWithResponse("$baseUrl/cancel?id=non_existent_id", ByteArray(0))
+        assertEquals(200, resNotFound.code)
+        assertEquals("ID not found: non_existent_id", resNotFound.body)
+
+        // Clean state
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+    }
+
+    @Test
+    fun testDefaultDurationContract() {
+        val jsonWithoutDuration = """{"title": "Default Duration Test", "message": "Duration omitted"}"""
+        val res = sendPostWithResponse("$baseUrl/notify", jsonWithoutDuration.toByteArray())
+        assertEquals(200, res.code)
+        assertEquals("OK: Enqueued", res.body)
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+    }
+
+    private data class ApiResponse(val code: Int, val body: String)
+
     private fun sendPost(urlStr: String, data: ByteArray): Int {
+        return sendPostWithResponse(urlStr, data).code
+    }
+
+    private fun sendPostWithResponse(urlStr: String, data: ByteArray): ApiResponse {
         val url = URL(urlStr)
         val conn = url.openConnection() as HttpURLConnection
         return try {
@@ -223,7 +306,10 @@ class NotificationApiTest {
                 conn.setRequestProperty("Content-Length", data.size.toString())
                 conn.outputStream.use { it.write(data) }
             }
-            conn.responseCode
+            val code = conn.responseCode
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            ApiResponse(code, body)
         } finally {
             conn.disconnect()
         }

@@ -81,17 +81,18 @@ send_api_request() {
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-d target_ip] [-p position] [-o] [-c]
+Usage: ${0##*/} [-d target_ip] [-p position] [-o] [-c] [-C id]
 Commands / Options:
   -d    Target IP (default: ${DEFAULT_IP})
   -p    Position index (0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center, default: 4)
   -o    Enable overwrite flag ("overwrite": true) in requests
   -c    Cancel all active popups (/cancel?all=true)
+  -C    Cancel a specific popup by ID (/cancel?id=<id>)
   -h    Show this help
 
 Description:
   Sends 3 simultaneous popups with distinct IDs to test popup vertical stacking,
-  followed by an in-place content update with a random counter on Popup #1.
+  followed by an in-place content update on Popup #1, and a selective cancel-by-ID on Popup #3.
 EOF
   exit 1
 }
@@ -114,6 +115,7 @@ main() {
   local target_ip="${DEFAULT_IP}"
   local position="4"
   local cancel_all="false"
+  local cancel_id=""
   local overwrite_flag="false"
   local endpoint_base
   local payload
@@ -121,12 +123,13 @@ main() {
   local rand_val
   local i
 
-  while getopts "d:p:och" opt; do
+  while getopts "d:p:ocC:h" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       p) position="${OPTARG}" ;;
       o) overwrite_flag="true" ;;
       c) cancel_all="true" ;;
+      C) cancel_id="${OPTARG}" ;;
       h|?) usage ;;
     esac
   done
@@ -139,6 +142,13 @@ main() {
     printf "%b[STACKING] Cancelling all active popups...%b\n" "${CLR_HEADER}" "${CLR_RESET}"
     curl -s -X POST "${endpoint_base}/cancel?all=true" || true
     printf "%b[SUCCESS] All popups cancelled.%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
+    exit 0
+  fi
+
+  if [[ -n "${cancel_id}" ]]; then
+    printf "%b[STACKING] Cancelling popup with ID '%s'...%b\n" "${CLR_HEADER}" "${cancel_id}" "${CLR_RESET}"
+    curl -s -X POST "${endpoint_base}/cancel?id=${cancel_id}" || true
+    printf "%b[SUCCESS] Cancel request sent for ID '%s'.%b\n" "${CLR_SUCCESS}" "${cancel_id}" "${CLR_RESET}"
     exit 0
   fi
 
@@ -180,7 +190,19 @@ EOF
 
   send_api_request "${endpoint_base}/notify" "${update_payload}" "In-place update for Popup #1 sent successfully."
 
-  printf "\n%b[SUCCESS] Stacking & In-Place test dispatched. Check your TV screen!%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
+  # Wait 3 seconds, then test cancel by ID for Popup #3
+  sleep 3
+  printf "\n%b[CANCEL] Testing cancel by ID for Popup #3 (ID: stack_test_3)...%b\n" "${CLR_HEADER}" "${CLR_RESET}"
+  local cancel_response cancel_code
+  cancel_response=$(curl -s -w "|%{http_code}" -X POST "${endpoint_base}/cancel?id=stack_test_3" || printf "Error|000")
+  cancel_code="${cancel_response##*|}"
+  if [[ "${cancel_code}" == "200" ]]; then
+    printf "%b  [OK] Popup #3 cancelled successfully via ID.%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
+  else
+    printf "%b  [ERROR] Cancel by ID failed (HTTP %s)%b\n" "${CLR_ERROR}" "${cancel_code}" "${CLR_RESET}"
+  fi
+
+  printf "\n%b[SUCCESS] Stacking, In-Place & Cancel-by-ID test completed. Check your TV screen!%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
 }
 
 main "$@"

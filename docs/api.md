@@ -29,7 +29,7 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 
 - **Stacking:** Multiple notifications sent to the same screen position stack vertically up to the configured `maxPopups` limit (1..5, configured in performance settings).
 - **In-Place Updates:** If a notification with a matching `id` is already active or waiting in the queue when a new request arrives, it updates in-place without dismissing or re-animating.
-- **Cancellation:** Active popups can be cancelled individually by ID using `POST /cancel?id=<id>` or all at once via `POST /cancel?all=true`.
+- **Cancellation:** Active popups can be cancelled individually by ID using `POST /cancel?id=<id>` or all at once via `POST /cancel` or `POST /cancel?all=true`.
 
 **Media Object Types:**
 
@@ -49,12 +49,19 @@ Supports all top-level JSON keys as form fields. Local image upload uses the `im
 
 ### Cancel Notification
 
-`POST /cancel` | `POST /cancel?id=<id>`
+`POST /cancel` | `POST /cancel?all=true` | `POST /cancel?id=<id>`
+
+- **`/cancel`** or **`/cancel?all=true`**: Clears the entire notification queue and cancels all active notifications.
+- **`/cancel?id=<id>`**: Cancels the specific notification matching `<id>`.
+    - If active on screen: closes and removes it (`OK: Cancelled`).
+    - If waiting in queue: removes it from queue (`OK: Removed from queue`).
 
 **Responses:**
 
-- `200 OK`: `OK: Cancelled` or `OK: Nothing to cancel`
-- `200 OK`: `ID mismatch: visible is <active-id>`
+- `200 OK`: `OK: Cancelled`
+- `200 OK`: `OK: Removed from queue`
+- `200 OK`: `OK: Nothing to cancel`
+- `200 OK`: `ID not found: <id>`
 
 ---
 
