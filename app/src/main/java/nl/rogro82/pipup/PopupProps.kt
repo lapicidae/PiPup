@@ -39,8 +39,10 @@ data class PopupProps(
     val image: String? = null,
     val imageWidth: Int? = null,
     val cache: Boolean = true,
-    val scale: Boolean = true
+    val scale: Boolean = true,
+    val callback: String? = null
 ) {
+    fun redacted(): PopupProps = copy(callback = callback?.let { "<set>" })
     companion object {
         private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
         private const val DEFAULT_BG_COLOR = "#CC000000"
@@ -128,7 +130,8 @@ data class PopupProps(
                 image = optNullableString("image"),
                 imageWidth = if (j.has("imageWidth") && !j.isNull("imageWidth")) j.getInt("imageWidth") else null,
                 cache = j.optBoolean("cache", true),
-                scale = j.optBoolean("scale", true)
+                scale = j.optBoolean("scale", true),
+                callback = optNullableString("callback")
             )
         }
     }
@@ -163,6 +166,7 @@ data class PopupProps(
         j.put("imageWidth", imageWidth ?: JSONObject.NULL)
         j.put("cache", cache)
         j.put("scale", scale)
+        j.put("callback", callback ?: JSONObject.NULL)
 
         media?.let { m ->
             val mj = JSONObject()

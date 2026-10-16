@@ -120,7 +120,7 @@ class NotificationManager(
                     return
                 } else {
                     // Position changed: remove old instance immediately and fall through to create new one
-                    removePopupByKey(id)
+                    removePopupInstantly(id)
                 }
             }
 
@@ -144,13 +144,13 @@ class NotificationManager(
             // 3. Handle capacity and overwrite
             val max = PiPupApp.settings.maxPopups
             if ((mShown.size + mExiting.size) >= max) {
-                if (props.overwrite) {
+                if (props.overwrite || max == 1) {
                     // Priority eviction: Evict oldest ID-less popup first before evicting a unique ID popup
                     val evictKey = mShown.entries.firstOrNull { it.value.props.id.isNullOrEmpty() }?.key
                         ?: mShown.keys.firstOrNull()
                         ?: mExiting.keys.firstOrNull()
                     if (evictKey != null) {
-                        removePopupByKey(evictKey)
+                        removePopupInstantly(evictKey)
                     }
                 } else {
                     queue.addLast(props)
@@ -333,6 +333,19 @@ class NotificationManager(
         handler.postAtTime(runnable, shown, SystemClock.uptimeMillis() + (shown.props.duration * 1000L))
     }
 
+    private fun removePopupInstantly(key: String) {
+        val shown = mShown.remove(key) ?: mExiting.remove(key) ?: return
+        handler.removeCallbacksAndMessages(shown)
+        onPopupRemoved?.invoke("cancelled", shown.props.id ?: shown.key)
+        shown.container.removeView(shown.view)
+        shown.view.cleanup()
+        if (mShown.isEmpty() && mExiting.isEmpty()) {
+            notifyStateChanged(false)
+            removeOverlay()
+            lastPopup = null
+        }
+    }
+
     private fun removePopupByKey(key: String) {
         val shown = mShown.remove(key) ?: mExiting[key] ?: return
         if (mExiting.containsKey(key)) return
@@ -346,12 +359,6 @@ class NotificationManager(
                 mExiting.remove(key)
                 shown.container.removeView(shown.view)
                 shown.view.cleanup()
-                val pos = shown.props.getPositionEnum()
-
-                if (shown.container.isEmpty()) {
-                    overlay?.removeView(shown.container)
-                    positionContainers.remove(pos)
-                }
 
                 if (mShown.isEmpty() && mExiting.isEmpty()) {
                     notifyStateChanged(false)

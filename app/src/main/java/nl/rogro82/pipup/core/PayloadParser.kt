@@ -20,7 +20,8 @@ class PayloadParser(private val context: Context) {
     companion object {
         private const val TAG = "PayloadParser"
         private const val CLEANUP_THRESHOLD_MS = 60 * 60 * 1000L // 1 hour
-        private const val MAX_PAYLOAD_SIZE = 1024 * 1024 // 1 MB safety limit
+        const val MAX_JSON_BODY_BYTES = 256 * 1024 // 256 KB limit
+        const val MAX_MULTIPART_BODY_BYTES = 10 * 1024 * 1024 // 10 MB limit
 
         /** Single thread executor for all cache-related file operations to avoid I/O contention. */
         private val fileExecutor = Executors.newSingleThreadExecutor()
@@ -66,23 +67,25 @@ class PayloadParser(private val context: Context) {
         }
     }
 
-    private fun parseJson(session: NanoHTTPD.IHTTPSession): PopupProps? = try {
+    private fun parseJson(session: NanoHTTPD.IHTTPSession): PopupProps? {
         val contentLength = session.headers["content-length"]?.toIntOrNull() ?: 0
-        if (contentLength in 1..MAX_PAYLOAD_SIZE) {
+        if (contentLength > MAX_JSON_BODY_BYTES) {
+            Log.w(TAG, "Rejecting JSON payload: body too large ($contentLength bytes, max $MAX_JSON_BODY_BYTES)")
+            throw IllegalArgumentException("body too large ($contentLength bytes, max $MAX_JSON_BODY_BYTES)")
+        } else if (contentLength > 0) {
             val content = session.inputStream.readExactBytes(contentLength)
-            PopupProps.fromJson(String(content, Charsets.UTF_8))
-        } else {
-            if (contentLength > MAX_PAYLOAD_SIZE) {
-                Log.w(TAG, "Rejecting JSON payload: too large ($contentLength bytes)")
-            }
-            null
+            return PopupProps.fromJson(String(content, Charsets.UTF_8))
         }
-    } catch (e: Exception) {
-        Log.e(TAG, "JSON parsing error", e)
-        null
+        return null
     }
 
     private fun parseMultipart(session: NanoHTTPD.IHTTPSession): PopupProps? = try {
+        val declaredLength = session.headers["content-length"]?.toLongOrNull() ?: 0L
+        if (declaredLength > MAX_MULTIPART_BODY_BYTES) {
+            Log.w(TAG, "Rejecting multipart payload: body too large ($declaredLength bytes, max $MAX_MULTIPART_BODY_BYTES)")
+            throw IllegalArgumentException("body too large ($declaredLength bytes, max $MAX_MULTIPART_BODY_BYTES)")
+        }
+
         val files = mutableMapOf<String, String>()
         session.parseBody(files)
 

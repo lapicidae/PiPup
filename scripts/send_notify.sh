@@ -1260,6 +1260,7 @@ usage() {
 Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]] [-a] [-l] [-o] [-C] [-c] [-s] [-k] [-h]
 Options:
   -d    Target IP (default: ${DEFAULT_IP})
+  -p    Screen position index (0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center)
   -w    Start WebRTC server only. Optional: minutes (0 = infinite/24h)
   -t    Test type: ${TEST_TYPES[*]}
   -u    Custom media URL (overrides default assets)
@@ -1307,6 +1308,7 @@ main() {
   local target_ip="${DEFAULT_IP}"
   local test_type=""
   local custom_url=""
+  local user_position=""
   local run_all="false"
   local use_long_text="false"
   local immediate_cancel="false"
@@ -1323,12 +1325,13 @@ main() {
   local repeat_count=1
   local repeat_explicit="false"
 
-  while getopts "d:t:u:alockswmghrCM?" opt; do
+  while getopts "d:t:u:p:alockswmghrCM?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       C) USE_CACHE="false" ;;
       t) test_type="${OPTARG}" ;;
       u) custom_url="${OPTARG}" ;;
+      p) user_position="${OPTARG}" ;;
       a) run_all="true" ;;
       l) use_long_text="true" ;;
       o) overwrite="true" ;;
@@ -1713,7 +1716,8 @@ main() {
          type="${TEST_TYPES[rand_idx]}"
       done
 
-      trigger_test "${type}" "Stress #${i}" "$(( RANDOM % 5 ))" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "true"
+      local stress_pos="${user_position:-$(( RANDOM % 5 ))}"
+      trigger_test "${type}" "Stress #${i}" "${stress_pos}" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "true"
       test_pids+=($!)
     done
 
@@ -1739,7 +1743,11 @@ main() {
       [[ "${repeat_count}" -gt 1 ]] && printf "%b[RUN %d/%d]%b\n" "${CLR_MONITOR}" "${r}" "${repeat_count}" "${CLR_RESET}"
 
       local pos_list
-      mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 0 1 2 3 4 | shuf)
+      if [[ -n "${user_position:-}" ]]; then
+        mapfile -t pos_list < <(for ((k=0; k<20; k++)); do echo "${user_position}"; done)
+      else
+        mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 0 1 2 3 4 | shuf)
+      fi
 
       local type
       local current_test_idx=0
@@ -1766,23 +1774,23 @@ main() {
   fi
 
   if [[ "${run_gallery}" == "true" ]]; then
-    printf "[SYSTEM] Starting Animation Gallery walkthrough (Randomized Positions)...\n"
+    printf "[SYSTEM] Starting Animation Gallery walkthrough (Positions: %s)...\n" "${user_position:-Randomized}"
     print_table_header
     local a e
     for e in "false" "true"; do
       for a in {0..10}; do
-        local rand_p=$(( RANDOM % 5 ))
+        local target_p="${user_position:-$(( RANDOM % 5 ))}"
         local rand_t_a=$(( RANDOM % 3 ))
         local rand_m_a=$(( RANDOM % 3 ))
         local rand_t_s=$(( 18 + RANDOM % 15 ))
         local rand_m_s=$(( 12 + RANDOM % 10 ))
 
         local title="Gallery Anim ${a}"
-        local info="Pos: ${POS_NAMES[$rand_p]} | Exit: ${e}\nAlign: T=${ALIGN_NAMES[$rand_t_a]}, M=${ALIGN_NAMES[$rand_m_a]}\nSize: T=${rand_t_s}, M=${rand_m_s}"
+        local info="Pos: ${POS_NAMES[$target_p]} | Exit: ${e}\nAlign: T=${ALIGN_NAMES[$rand_t_a]}, M=${ALIGN_NAMES[$rand_m_a]}\nSize: T=${rand_t_s}, M=${rand_m_s}"
 
         local style_info
         style_info=$(printf "Pos:%s Algn:%s/%s Size:%s/%s Anim:%s (%sms) Exit:%s" \
-            "${rand_p}" "${rand_t_a}" "${rand_m_a}" "${rand_t_s}" "${rand_m_s}" "${a}" "500" "${e}")
+            "${target_p}" "${rand_t_a}" "${rand_m_a}" "${rand_t_s}" "${rand_m_s}" "${a}" "500" "${e}")
 
         # Mix in some colors and borders from themes
         local theme_str
@@ -1792,7 +1800,7 @@ main() {
 
         local response
         response=$(send_json_notification "${target_ip}" "${title}" "${info}" "null" \
-          "${rand_p}" "${bg}" "2" "${border}" "${title_c}" "${msg_c}" \
+          "${target_p}" "${bg}" "2" "${border}" "${title_c}" "${msg_c}" \
           "12" "0" "20" "${a}" "500" "true" \
           "${rand_t_a}" "${rand_m_a}" "${rand_t_s}" "${rand_m_s}")
 
@@ -1811,14 +1819,15 @@ main() {
     for ((r = 1; r <= repeat_count; r++)); do
       [[ "${repeat_count}" -gt 1 ]] && printf "%b[RUN %d/%d]%b\n" "${CLR_MONITOR}" "${r}" "${repeat_count}" "${CLR_RESET}"
 
-      trigger_test "multipart" "Multipart Test" "$(( RANDOM % 5 ))" "${target_ip}" "" "${overwrite}" "${suffix}" "false"
+      local multi_pos="${user_position:-$(( RANDOM % 5 ))}"
+      trigger_test "multipart" "Multipart Test" "${multi_pos}" "${target_ip}" "" "${overwrite}" "${suffix}" "false"
       [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
     done
   elif [[ "${test_type}" == "cancel" ]]; then
     local media
     media=$(get_media_payload "png")
     print_table_header
-    dispatch_test "cancel" "Abort Test" 0 "${media}"
+    dispatch_test "cancel" "Abort Test" "${user_position:-0}" "${media}"
     sleep 2
     send_cancel_request "${target_ip}"
   else
@@ -1844,7 +1853,8 @@ main() {
     for ((r = 1; r <= repeat_count; r++)); do
       [[ "${repeat_count}" -gt 1 ]] && printf "%b[RUN %d/%d]%b\n" "${CLR_MONITOR}" "${r}" "${repeat_count}" "${CLR_RESET}"
 
-      trigger_test "${test_type}" "${test_type^^} Test" "$(( RANDOM % 5 ))" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "false"
+      local single_pos="${user_position:-$(( RANDOM % 5 ))}"
+      trigger_test "${test_type}" "${test_type^^} Test" "${single_pos}" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "false"
       [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
     done
   fi

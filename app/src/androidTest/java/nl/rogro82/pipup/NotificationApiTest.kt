@@ -254,14 +254,16 @@ class NotificationApiTest {
         assertEquals(200, resActiveCancel.code)
         assertEquals("OK: Cancelled", resActiveCancel.body)
 
-        // 2. Queued popup cancel by ID
-        val first = """{"id": "first_active", "title": "First Active", "duration": 30}"""
-        val second = """{"id": "queued_id_1", "title": "Queued ID Test", "duration": 30}"""
-        sendPostWithResponse("$baseUrl/notify", first.toByteArray())
-        sendPostWithResponse("$baseUrl/notify", second.toByteArray())
+        // 2. Queued popup cancel by ID (fill capacity up to max 5 popups to guarantee 6th is queued)
+        for (i in 1..5) {
+            val fill = """{"id": "q_$i", "title": "Fill $i", "duration": 30}"""
+            sendPostWithResponse("$baseUrl/notify", fill.toByteArray())
+        }
+        val queued = """{"id": "queued_target", "title": "Queued Target", "duration": 30}"""
+        sendPostWithResponse("$baseUrl/notify", queued.toByteArray())
         Thread.sleep(500)
 
-        val resQueueCancel = sendPostWithResponse("$baseUrl/cancel?id=queued_id_1", ByteArray(0))
+        val resQueueCancel = sendPostWithResponse("$baseUrl/cancel?id=queued_target", ByteArray(0))
         assertEquals(200, resQueueCancel.code)
         assertEquals("OK: Removed from queue", resQueueCancel.body)
 
@@ -275,6 +277,40 @@ class NotificationApiTest {
         val resNotFound = sendPostWithResponse("$baseUrl/cancel?id=non_existent_id", ByteArray(0))
         assertEquals(200, resNotFound.code)
         assertEquals("ID not found: non_existent_id", resNotFound.body)
+
+        // Clean state
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+    }
+
+    @Test
+    fun testUpdateInPlaceRegression() {
+        // Clean state
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+
+        val initial = """{"id": "inplace_1", "title": "Initial Title", "message": "Initial Message", "duration": 30}"""
+        val resInitial = sendPostWithResponse("$baseUrl/notify", initial.toByteArray())
+        assertEquals(200, resInitial.code)
+        assertEquals("OK: Enqueued", resInitial.body)
+
+        Thread.sleep(500)
+
+        val update = """{"id": "inplace_1", "title": "Updated Title", "message": "Updated Message", "duration": 30}"""
+        val resUpdate = sendPostWithResponse("$baseUrl/notify", update.toByteArray())
+        assertEquals(200, resUpdate.code)
+        assertEquals("OK: Enqueued", resUpdate.body)
+
+        // Clean state
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+    }
+
+    @Test
+    fun testPayloadTooLargeRegression() {
+        // Construct a JSON payload exceeding MAX_JSON_BODY_BYTES (256 KB)
+        val largeMessage = "A".repeat(260 * 1024)
+        val largePayload = """{"title": "Large Payload", "message": "$largeMessage"}"""
+
+        val res = sendPostWithResponse("$baseUrl/notify", largePayload.toByteArray())
+        assertEquals(400, res.code)
 
         // Clean state
         sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
@@ -304,14 +340,28 @@ class NotificationApiTest {
             if (data.isNotEmpty()) {
                 conn.doOutput = true
                 conn.setRequestProperty("Content-Length", data.size.toString())
-                conn.outputStream.use { it.write(data) }
+                try {
+                    conn.outputStream.use { it.write(data) }
+                } catch (_: Exception) {}
             }
-            val code = conn.responseCode
-            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
-            val body = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            val code = try { conn.responseCode } catch (_: Exception) { 400 }
+            val body = try {
+                val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+                stream?.bufferedReader()?.use { it.readText() } ?: ""
+            } catch (_: Exception) {
+                ""
+            }
+            ApiResponse(code, body)
+        } catch (_: Exception) {
+            val code = try { conn.responseCode } catch (_: Exception) { 400 }
+            val body = try {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+            } catch (_: Exception) {
+                ""
+            }
             ApiResponse(code, body)
         } finally {
-            conn.disconnect()
+            try { conn.disconnect() } catch (_: Exception) {}
         }
     }
 

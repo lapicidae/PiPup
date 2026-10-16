@@ -166,7 +166,11 @@ class SystemModule : PiPupModule {
         val settings = moduleContext?.settings ?: return NanoHTTPD.newFixedLengthResponse("Settings not ready")
 
         val parser = PayloadParser(context)
-        var props = parser.parse(session) ?: return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Failed to parse input")
+        var props = try {
+            parser.parse(session)
+        } catch (e: IllegalArgumentException) {
+            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: ${e.message}")
+        } ?: return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Failed to parse input")
 
         // Guard: Check if media module is required and enabled
         val isRichMedia = props.media is nl.rogro82.pipup.PopupProps.Media.Web || props.media is nl.rogro82.pipup.PopupProps.Media.Whep

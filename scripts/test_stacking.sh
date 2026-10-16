@@ -15,6 +15,7 @@ readonly APP_ACTIVITY="${APP_PACKAGE}/.MainActivity"
 readonly CLR_RESET='\033[0m'
 readonly CLR_HEADER='\033[1;35m'
 readonly CLR_SUCCESS='\033[1;32m'
+readonly CLR_WARNING='\033[1;33m'
 readonly CLR_ERROR='\033[1;31m'
 
 #######################################
@@ -150,6 +151,12 @@ main() {
     curl -s -X POST "${endpoint_base}/cancel?id=${cancel_id}" || true
     printf "%b[SUCCESS] Cancel request sent for ID '%s'.%b\n" "${CLR_SUCCESS}" "${cancel_id}" "${CLR_RESET}"
     exit 0
+  fi
+
+  local current_max
+  current_max=$(curl -s "${endpoint_base}/settings" | grep -o '"maxPopups":[0-9]*' | cut -d':' -f2 || printf "1")
+  if [[ "${current_max}" == "1" ]]; then
+    printf "%b[WARNING] maxPopups is currently set to 1 in app settings. Multiple popups will queue rather than stack visually.%b\n" "${CLR_WARNING}" "${CLR_RESET}"
   fi
 
   printf "%b[STACKING] Sending 3 stacked test popups to position %s (overwrite: %s)...%b\n" "${CLR_HEADER}" "${position}" "${overwrite_flag}" "${CLR_RESET}"

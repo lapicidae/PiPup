@@ -104,6 +104,7 @@ class UiStabilityTest {
 
     @Test
     fun testPopupStacking() = runTest { manager ->
+        PiPupApp.settings.maxPopups = 3
         // 1. Simultaneous popup stacking in same position (TopRight)
         val p1 = PopupProps(id = "cam_front", title = "Camera Front", message = "Front door stream", position = 0, duration = 6)
         val p2 = PopupProps(id = "cam_back", title = "Camera Back", message = "Backyard stream", position = 0, duration = 6)
@@ -151,6 +152,7 @@ class UiStabilityTest {
 
     @Test
     fun testAllPositionsStacking() = runTest { manager ->
+        PiPupApp.settings.maxPopups = 3
         for (pos in 0..4) {
             val s1 = PopupProps(id = "pos_${pos}_1", title = "Pos $pos #1", message = "First at pos $pos", position = pos, duration = 3)
             val s2 = PopupProps(id = "pos_${pos}_2", title = "Pos $pos #2", message = "Second at pos $pos", position = pos, duration = 3)
