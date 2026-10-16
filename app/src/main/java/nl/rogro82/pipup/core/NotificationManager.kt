@@ -60,6 +60,9 @@ class NotificationManager(
     @Volatile var lastPopupAt: Long = 0L
         private set
 
+    var onPopupShown: ((PopupProps) -> Unit)? = null
+    var onPopupRemoved: ((String, String) -> Unit)? = null
+
     /**
      * Checks if a notification is currently being displayed on the screen or preparing.
      */
@@ -309,6 +312,7 @@ class NotificationManager(
                         view.animateIn()
                         view.startMedia()
                         scheduleRemoval(shown)
+                        onPopupShown?.invoke(props)
                     }
                 }
             }
@@ -335,6 +339,7 @@ class NotificationManager(
 
         mExiting[key] = shown
         handler.removeCallbacksAndMessages(shown)
+        onPopupRemoved?.invoke("cancelled", shown.props.id ?: shown.key)
 
         shown.view.animateOut {
             synchronized(this) {

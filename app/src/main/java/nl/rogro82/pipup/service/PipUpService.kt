@@ -29,6 +29,7 @@ import nl.rogro82.pipup.MainActivity
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.Pusher
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.UpdateManager
 import nl.rogro82.pipup.UpdateWorker
@@ -70,7 +71,10 @@ class PipUpService : Service() {
     private lateinit var webServer: WebServer
     private val notificationManager by lazy {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        NotificationManager(this, wm)
+        NotificationManager(this, wm).apply {
+            onPopupShown = { emit("popup_shown") }
+            onPopupRemoved = { reason, removedId -> emit("popup_removed", mapOf("reason" to reason, "removedId" to removedId)) }
+        }
     }
     /** The module manager for this service. */
     val moduleManager by lazy { (application as PiPupApp).moduleManager }
@@ -82,6 +86,20 @@ class PipUpService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             dreaming = intent?.action == Intent.ACTION_DREAMING_STARTED
             Log.d(TAG, "Screensaver ${if (dreaming) "started" else "stopped"}")
+            emit(if (dreaming) "screen_off" else "screen_on")
+        }
+    }
+
+    private fun emit(event: String, extra: Map<String, Any?> = emptyMap()) {
+        if (Pusher.url.isNullOrBlank()) return
+        try {
+            val body = buildState().apply {
+                put("event", event)
+                putAll(extra)
+            }
+            Pusher.push(event, Json.writeValueAsString(body))
+        } catch (ex: Throwable) {
+            Log.e(TAG, "push $event: building state failed: ${ex.message}")
         }
     }
 
@@ -166,6 +184,8 @@ class PipUpService : Service() {
         // Register settings receiver to react to UI changes
         registerProtectedReceiver(settingsReceiver, IntentFilter(PiPupApp.ACTION_SETTINGS_CHANGED))
 
+        Pusher.url = settings.webhook
+
         try {
             webServer.start(30000)
             Log.i(TAG, "WebServer started on port $SERVER_PORT (timeout: 30s)")
@@ -242,8 +262,7 @@ class PipUpService : Service() {
         }
     }
 
-    private fun stateResponse(): NanoHTTPD.Response {
-        val current = notificationManager.getCurrentProps()
+    private fun buildState(): MutableMap<String, Any?> {
         val activePopups = notificationManager.getActivePopups()
         val top = activePopups.lastOrNull()
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
@@ -343,19 +362,22 @@ class PipUpService : Service() {
 
         state["push"] = mapOf(
             "supported" to true,
-            "webhook" to false,
-            "lastEvent" to null,
-            "lastStatus" to null,
-            "lastError" to null,
-            "lastSecondsAgo" to null
+            "webhook" to !Pusher.url.isNullOrBlank(),
+            "lastEvent" to Pusher.lastEvent,
+            "lastStatus" to Pusher.lastStatus,
+            "lastError" to Pusher.lastError,
+            "lastSecondsAgo" to Pusher.lastAt.takeIf { it > 0 }?.let { (System.currentTimeMillis() - it) / 1000 }
         )
 
         moduleManager.augmentState(state)
+        return state
+    }
 
+    private fun stateResponse(): NanoHTTPD.Response {
         return NanoHTTPD.newFixedLengthResponse(
             NanoHTTPD.Response.Status.OK,
             "application/json",
-            Json.writeValueAsString(state)
+            Json.writeValueAsString(buildState())
         )
     }
 
@@ -462,6 +484,17 @@ class PipUpService : Service() {
     }
 
     private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        session.parameters["webhook"]?.firstOrNull()?.let { v ->
+            if (v.isNotBlank() && !v.startsWith("http://") && !v.startsWith("https://")) {
+                return invalidRequest("webhook must be an http(s) URL or empty")
+            }
+            settings.webhook = v.ifEmpty { null }
+            Pusher.url = settings.webhook
+        }
+        if (session.parameters.containsKey("webhook")) {
+            emit("settings")
+        }
+
         return when (session.method) {
             NanoHTTPD.Method.GET -> {
                 val json = settings.getAll().toJSONObject().toString()
@@ -484,6 +517,7 @@ class PipUpService : Service() {
                             }
                             sendBroadcast(intent)
                         }
+                        emit("settings")
                         ok()
                     } catch (e: Exception) {
                         invalidRequest(e.message)

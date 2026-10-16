@@ -64,6 +64,12 @@ class AppSettings(context: Context) {
         }
     }
 
+    var webhook: String?
+        get() = prefs.getString("webhook", null)
+        set(value) {
+            prefs.edit { putString("webhook", value) }
+        }
+
     /**
      * Retrieves the mode for a specific module.
      */
