@@ -18,6 +18,15 @@ This file serves as the central "Source of Truth" for all AI agents (Gemini, Cur
 - **UI/UX:** Ensure all UI changes are optimized for Android TV (high contrast, readable font sizes, D-pad navigation support). Use the project's preset color resources.
 - **Documentation:** Use KDoc for all public-facing methods and classes.
 
+## API Contract & State Layering Rules
+
+- **API Contract First:** Always define endpoints, HTTP status codes, query parameters, and JSON payloads in `docs/api.md` and back them with automated contract tests before changing internal implementation.
+- **State Layering:** Clearly distinguish between 4 execution layers instead of returning generic success:
+    1. _Transport Layer (HTTP):_ Request reception and validation (`200 OK: Enqueued` vs `400 Bad Request`).
+    2. _Display Layer (TV Overlay):_ Active rendering on screen (`visible`, `popup`, `popups` array in `/state`, `popup_shown` event).
+    3. _Media Playback Layer:_ Stream and image loading status (`mediaError`, fallback placeholders).
+    4. _System & Update Layer:_ Self-update lifecycle (`update.phase`, `update.error`, `permissions`).
+
 ## Core Knowledge Base
 
 Before proposing architectural changes, adding new features, or implementing modules, you MUST read the following documentation:

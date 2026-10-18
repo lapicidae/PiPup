@@ -45,3 +45,20 @@ In the `SettingsActivity.kt`, a centralized `moduleSubmenuFactories` registry is
 - **The Core is Blind:** No `if (moduleId == "...")` checks are allowed in the core or UI classes.
 - **Resource Efficiency:** Modules in `ECO` mode are unloaded when idle to save RAM on Android TV devices.
 - **Centralized Permissions:** All strings and ADB commands for permissions live in `Permissions.kt`, but visibility is driven by module requirements.
+
+## State Model & API Contract Design
+
+PiPup follows two key principles for remote API interaction and state visibility:
+
+### 1. API Contract First
+
+All endpoints, parameters, HTTP status codes, and JSON response bodies are strictly specified in `docs/api.md` and enforced by automated contract tests (`NotificationApiTest`).
+
+### 2. 4-Layer State Model
+
+Instead of relying on a single generic success response, PiPup exposes execution states across 4 distinct layers:
+
+1. **Transport Layer (HTTP):** Validates payload syntax and size limits, returning HTTP status codes (`200 OK: Enqueued`, `400 Bad Request`).
+2. **Display Layer (TV Overlay):** Tracks active visual overlays on screen via `visible`, `popup`, and the `popups` stack array in `/state`, alongside real-time `popup_shown` and `popup_removed` push events.
+3. **Media Playback Layer:** Tracks stream and image loading status via `mediaError` on popup instances and renders fallback placeholders on loading failures.
+4. **System & Update Layer:** Exposes system permissions and self-update progress (`update.phase`, `update.error`, `permissions`).
