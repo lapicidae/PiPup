@@ -104,34 +104,40 @@ class UiStabilityTest {
 
     @Test
     fun testPopupStacking() = runTest { manager ->
-        PiPupApp.settings.maxPopups = 3
-        // 1. Simultaneous popup stacking in same position (TopRight)
-        val p1 = PopupProps(id = "cam_front", title = "Camera Front", message = "Front door stream", position = 0, duration = 6)
-        val p2 = PopupProps(id = "cam_back", title = "Camera Back", message = "Backyard stream", position = 0, duration = 6)
-        val p3 = PopupProps(id = "doorbell", title = "Doorbell", message = "Someone is at the door", position = 0, duration = 6)
+        val origMax = PiPupApp.settings.maxPopups
+        try {
+            PiPupApp.settings.maxPopups = 3
+            // 1. Simultaneous popup stacking in same position (TopRight)
+            val p1 = PopupProps(id = "cam_front", title = "Camera Front", message = "Front door stream", position = 0, duration = 6)
+            val p2 = PopupProps(id = "cam_back", title = "Camera Back", message = "Backyard stream", position = 0, duration = 6)
+            val p3 = PopupProps(id = "doorbell", title = "Doorbell", message = "Someone is at the door", position = 0, duration = 6)
 
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            manager.enqueue(p1)
-            manager.enqueue(p2)
-            manager.enqueue(p3)
-        }
-        Thread.sleep(3000)
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                manager.enqueue(p1)
+                manager.enqueue(p2)
+                manager.enqueue(p3)
+            }
+            Thread.sleep(3000)
 
-        // 2. In-place update of "cam_front"
-        val p1Updated = PopupProps(id = "cam_front", title = "Camera Front (Updated)", message = "Motion detected!", position = 0, duration = 4, overwrite = true)
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            manager.enqueue(p1Updated)
-        }
-        Thread.sleep(3000)
+            // 2. In-place update of "cam_front"
+            val p1Updated = PopupProps(id = "cam_front", title = "Camera Front (Updated)", message = "Motion detected!", position = 0, duration = 4, overwrite = true)
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                manager.enqueue(p1Updated)
+            }
+            Thread.sleep(3000)
 
-        // 3. Queueing ID-less popups alongside ID popups
-        val queue1 = PopupProps(title = "Queue Item 1", message = "Standard queued notification 1", position = 4, duration = 2)
-        val queue2 = PopupProps(title = "Queue Item 2", message = "Standard queued notification 2", position = 4, duration = 2)
-        InstrumentationRegistry.getInstrumentation().runOnMainSync {
-            manager.enqueue(queue1)
-            manager.enqueue(queue2)
+            // 3. Queueing ID-less popups alongside ID popups
+            val queue1 = PopupProps(title = "Queue Item 1", message = "Standard queued notification 1", position = 4, duration = 2)
+            val queue2 = PopupProps(title = "Queue Item 2", message = "Standard queued notification 2", position = 4, duration = 2)
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                manager.enqueue(queue1)
+                manager.enqueue(queue2)
+            }
+            Thread.sleep(5000)
+        } finally {
+            manager.cancelAll()
+            PiPupApp.settings.maxPopups = origMax
         }
-        Thread.sleep(5000)
     }
 
     @Test
@@ -152,19 +158,25 @@ class UiStabilityTest {
 
     @Test
     fun testAllPositionsStacking() = runTest { manager ->
-        PiPupApp.settings.maxPopups = 3
-        for (pos in 0..4) {
-            val s1 = PopupProps(id = "pos_${pos}_1", title = "Pos $pos #1", message = "First at pos $pos", position = pos, duration = 3)
-            val s2 = PopupProps(id = "pos_${pos}_2", title = "Pos $pos #2", message = "Second at pos $pos", position = pos, duration = 3)
-            val s3 = PopupProps(id = "pos_${pos}_3", title = "Pos $pos #3", message = "Third at pos $pos", position = pos, duration = 3)
+        val origMax = PiPupApp.settings.maxPopups
+        try {
+            PiPupApp.settings.maxPopups = 3
+            for (pos in 0..4) {
+                val s1 = PopupProps(id = "pos_${pos}_1", title = "Pos $pos #1", message = "First at pos $pos", position = pos, duration = 3)
+                val s2 = PopupProps(id = "pos_${pos}_2", title = "Pos $pos #2", message = "Second at pos $pos", position = pos, duration = 3)
+                val s3 = PopupProps(id = "pos_${pos}_3", title = "Pos $pos #3", message = "Third at pos $pos", position = pos, duration = 3)
 
-            InstrumentationRegistry.getInstrumentation().runOnMainSync {
-                manager.enqueue(s1)
-                manager.enqueue(s2)
-                manager.enqueue(s3)
+                InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                    manager.enqueue(s1)
+                    manager.enqueue(s2)
+                    manager.enqueue(s3)
+                }
+                Thread.sleep(4000)
+                manager.cancelAll()
             }
-            Thread.sleep(4000)
+        } finally {
             manager.cancelAll()
+            PiPupApp.settings.maxPopups = origMax
         }
     }
 }

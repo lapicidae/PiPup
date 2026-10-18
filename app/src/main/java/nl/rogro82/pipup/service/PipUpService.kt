@@ -86,7 +86,15 @@ class PipUpService : Service() {
         override fun onReceive(context: Context?, intent: Intent?) {
             dreaming = intent?.action == Intent.ACTION_DREAMING_STARTED
             Log.d(TAG, "Screensaver ${if (dreaming) "started" else "stopped"}")
-            emit(if (dreaming) "screen_off" else "screen_on")
+            emit(if (dreaming) "dreaming_started" else "dreaming_stopped")
+        }
+    }
+
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val isScreenOn = intent?.action == Intent.ACTION_SCREEN_ON
+            Log.d(TAG, "Screen state changed: ${intent?.action}")
+            emit(if (isScreenOn) "screen_on" else "screen_off")
         }
     }
 
@@ -167,6 +175,11 @@ class PipUpService : Service() {
             addAction(Intent.ACTION_DREAMING_STOPPED)
         })
 
+        registerReceiver(screenReceiver, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON)
+            addAction(Intent.ACTION_SCREEN_OFF)
+        })
+
         webServer = WebServer(
             SERVER_PORT,
             object : WebServer.Handler {
@@ -202,6 +215,9 @@ class PipUpService : Service() {
         } catch (_: Exception) {}
         try {
             unregisterReceiver(dreamReceiver)
+        } catch (_: Exception) {}
+        try {
+            unregisterReceiver(screenReceiver)
         } catch (_: Exception) {}
         moduleManager.shutdown()
         webServer.stop()
@@ -263,8 +279,8 @@ class PipUpService : Service() {
     }
 
     private fun buildState(): MutableMap<String, Any?> {
-        val activePopups = notificationManager.getActivePopups()
-        val top = activePopups.lastOrNull()
+        val activeSlots = notificationManager.getActiveSlotDetails()
+        val topSlot = activeSlots.lastOrNull()
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
         val appName = getString(R.string.app_name)
         val now = SystemClock.elapsedRealtime()
@@ -287,23 +303,24 @@ class PipUpService : Service() {
             )
         )
 
-        if (top != null) {
+        if (topSlot != null) {
+            val (topProps, topShownAt) = topSlot
             state["popup"] = mapOf(
-                "id" to top.id,
-                "title" to top.title,
-                "duration" to top.duration,
-                "indefinite" to (top.duration <= 0),
-                "elapsed" to ((now - notificationManager.lastPopupAt) / 1000)
+                "id" to topProps.id,
+                "title" to topProps.title,
+                "duration" to topProps.duration,
+                "indefinite" to (topProps.duration <= 0),
+                "elapsed" to ((now - topShownAt) / 1000)
             )
         }
 
-        state["popups"] = activePopups.map { props ->
+        state["popups"] = activeSlots.map { (props, slotShownAt) ->
             mapOf(
                 "id" to props.id,
                 "position" to props.getPositionEnum().name,
                 "duration" to props.duration,
                 "indefinite" to (props.duration <= 0),
-                "elapsed" to ((now - notificationManager.lastPopupAt) / 1000),
+                "elapsed" to ((now - slotShownAt) / 1000),
                 "media" to mediaInfo(props)?.get("type")
             )
         }
@@ -316,23 +333,18 @@ class PipUpService : Service() {
 
         state["permissions"] = Permissions.asMap(this)
 
+        val updatePhase = if (UpdateManager.isInstalling) "installing" else null
         state["update"] = mapOf(
             "checksEnabled" to true,
             "source" to "github",
             "available" to UpdateManager.updateAvailable(this),
             "latest" to UpdateManager.latestVersion,
             "installing" to UpdateManager.isInstalling,
-            "phase" to null,
-            "progress" to null,
-            "downloadedBytes" to null,
-            "totalBytes" to null,
-            "pendingUserAction" to false,
+            "phase" to updatePhase,
             "silent" to UpdateManager.silentInstall,
             "checkedSecondsAgo" to UpdateManager.lastCheckedAt.takeIf { it > 0 }
                 ?.let { (System.currentTimeMillis() - it) / 1000 },
-            "error" to UpdateManager.lastError,
-            "tlsFactory" to "default",
-            "confirmLaunch" to null
+            "error" to UpdateManager.lastError
         )
 
         state["haPipup"] = mapOf(
@@ -484,23 +496,34 @@ class PipUpService : Service() {
     }
 
     private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        session.parameters["webhook"]?.firstOrNull()?.let { v ->
-            if (v.isNotBlank() && !v.startsWith("http://") && !v.startsWith("https://")) {
-                return invalidRequest("webhook must be an http(s) URL or empty")
-            }
-            settings.webhook = v.ifEmpty { null }
-            Pusher.url = settings.webhook
-        }
-        if (session.parameters.containsKey("webhook")) {
-            emit("settings")
-        }
-
         return when (session.method) {
             NanoHTTPD.Method.GET -> {
                 val json = settings.getAll().toJSONObject().toString()
                 NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json).apply { setGzipEncoding(false) }
             }
             NanoHTTPD.Method.POST -> {
+                session.parameters["webhook"]?.firstOrNull()?.let { raw ->
+                    val v = raw.trim()
+                    if (v.isNotEmpty()) {
+                        try {
+                            val uri = java.net.URI(v)
+                            if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+                                return invalidRequest("webhook must be a valid http(s) URL")
+                            }
+                        } catch (_: Exception) {
+                            return invalidRequest("webhook must be a valid http(s) URL")
+                        }
+                        settings.webhook = v
+                        Pusher.url = v
+                    } else {
+                        settings.webhook = null
+                        Pusher.url = null
+                    }
+                }
+                if (session.parameters.containsKey("webhook")) {
+                    emit("settings")
+                }
+
                 val length = session.headers["content-length"]?.toIntOrNull() ?: 0
                 if (length > 0) {
                     val content = session.inputStream.readExactBytes(length)
@@ -522,7 +545,11 @@ class PipUpService : Service() {
                     } catch (e: Exception) {
                         invalidRequest(e.message)
                     }
-                } else invalidRequest("Empty")
+                } else if (session.parameters.containsKey("webhook")) {
+                    ok()
+                } else {
+                    invalidRequest("Empty")
+                }
             }
             else -> NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
         }

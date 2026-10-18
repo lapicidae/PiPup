@@ -43,7 +43,9 @@ class NotificationManager(
         var container: LinearLayout,
         var view: PopupView,
         var props: PopupProps,
-        var expire: Runnable? = null
+        var expire: Runnable? = null,
+        val shownAt: Long = SystemClock.elapsedRealtime(),
+        var removedEventFired: Boolean = false
     )
 
     private val handler = Handler(Looper.getMainLooper())
@@ -73,20 +75,30 @@ class NotificationManager(
     /**
      * Returns the properties of the currently displayed notification, or null if none.
      */
+    @Suppress("unused")
     fun getCurrentProps(): PopupProps? = synchronized(this) {
-        mShown.values.lastOrNull()?.props ?: mExiting.values.lastOrNull()?.props
+        mShown.values.lastOrNull()?.props
     }
 
     /**
      * Returns a list of active popup properties currently displayed on screen.
      */
+    @Suppress("unused")
     fun getActivePopups(): List<PopupProps> = synchronized(this) {
         val list = mutableListOf<PopupProps>()
         for ((_, slot) in mShown) {
             list.add(slot.props)
         }
-        for ((_, slot) in mExiting) {
-            list.add(slot.props)
+        list
+    }
+
+    /**
+     * Returns active popup details (properties and individual shownAt timestamp).
+     */
+    fun getActiveSlotDetails(): List<Pair<PopupProps, Long>> = synchronized(this) {
+        val list = mutableListOf<Pair<PopupProps, Long>>()
+        for ((_, slot) in mShown) {
+            list.add(Pair(slot.props, slot.shownAt))
         }
         list
     }
@@ -120,7 +132,7 @@ class NotificationManager(
                     return
                 } else {
                     // Position changed: remove old instance immediately and fall through to create new one
-                    removePopupInstantly(id)
+                    removePopupInstantly(id, "replaced")
                 }
             }
 
@@ -144,13 +156,13 @@ class NotificationManager(
             // 3. Handle capacity and overwrite
             val max = PiPupApp.settings.maxPopups
             if ((mShown.size + mExiting.size) >= max) {
-                if (props.overwrite || max == 1) {
+                if (props.overwrite) {
                     // Priority eviction: Evict oldest ID-less popup first before evicting a unique ID popup
                     val evictKey = mShown.entries.firstOrNull { it.value.props.id.isNullOrEmpty() }?.key
                         ?: mShown.keys.firstOrNull()
                         ?: mExiting.keys.firstOrNull()
                     if (evictKey != null) {
-                        removePopupInstantly(evictKey)
+                        removePopupInstantly(evictKey, "evicted")
                     }
                 } else {
                     queue.addLast(props)
@@ -325,7 +337,7 @@ class NotificationManager(
         val runnable = Runnable {
             synchronized(this) {
                 if (mShown[shown.key] === shown) {
-                    removePopupByKey(shown.key)
+                    removePopupByKey(shown.key, "expired")
                 }
             }
         }
@@ -333,10 +345,17 @@ class NotificationManager(
         handler.postAtTime(runnable, shown, SystemClock.uptimeMillis() + (shown.props.duration * 1000L))
     }
 
-    private fun removePopupInstantly(key: String) {
+    private fun triggerRemovalEvent(shown: ShownSlot, reason: String) {
+        if (!shown.removedEventFired) {
+            shown.removedEventFired = true
+            onPopupRemoved?.invoke(reason, shown.props.id ?: shown.key)
+        }
+    }
+
+    private fun removePopupInstantly(key: String, reason: String = "cancelled") {
         val shown = mShown.remove(key) ?: mExiting.remove(key) ?: return
         handler.removeCallbacksAndMessages(shown)
-        onPopupRemoved?.invoke("cancelled", shown.props.id ?: shown.key)
+        triggerRemovalEvent(shown, reason)
         shown.container.removeView(shown.view)
         shown.view.cleanup()
         if (mShown.isEmpty() && mExiting.isEmpty()) {
@@ -346,13 +365,13 @@ class NotificationManager(
         }
     }
 
-    private fun removePopupByKey(key: String) {
+    private fun removePopupByKey(key: String, reason: String = "cancelled") {
         val shown = mShown.remove(key) ?: mExiting[key] ?: return
         if (mExiting.containsKey(key)) return
 
         mExiting[key] = shown
         handler.removeCallbacksAndMessages(shown)
-        onPopupRemoved?.invoke("cancelled", shown.props.id ?: shown.key)
+        triggerRemovalEvent(shown, reason)
 
         shown.view.animateOut {
             synchronized(this) {
@@ -417,11 +436,13 @@ class NotificationManager(
     private fun performCancelById(id: String): CancelResult {
         synchronized(this) {
             if (mShown.containsKey(id) || mExiting.containsKey(id)) {
-                removePopupByKey(id)
+                removePopupByKey(id, "cancelled")
                 val iterator = queue.iterator()
                 while (iterator.hasNext()) {
-                    if (iterator.next().id == id) {
+                    val qItem = iterator.next()
+                    if (qItem.id == id) {
                         iterator.remove()
+                        onPopupRemoved?.invoke("queue_cancelled", id)
                     }
                 }
                 return CancelResult.CANCELLED_ACTIVE
@@ -430,8 +451,10 @@ class NotificationManager(
             var removedFromQueue = false
             val iterator = queue.iterator()
             while (iterator.hasNext()) {
-                if (iterator.next().id == id) {
+                val qItem = iterator.next()
+                if (qItem.id == id) {
                     iterator.remove()
+                    onPopupRemoved?.invoke("queue_cancelled", id)
                     removedFromQueue = true
                 }
             }
@@ -469,16 +492,23 @@ class NotificationManager(
 
     private fun performCancelAll() {
         synchronized(this) {
+            val qIter = queue.iterator()
+            while (qIter.hasNext()) {
+                val qItem = qIter.next()
+                onPopupRemoved?.invoke("queue_cancelled", qItem.id ?: "queued")
+            }
             queue.clear()
             handler.removeCallbacksAndMessages(null)
             for ((_, s) in mShown) {
                 s.expire?.let { handler.removeCallbacks(it) }
+                triggerRemovalEvent(s, "cancelled")
                 s.container.removeView(s.view)
                 s.view.cleanup()
             }
             mShown.clear()
             for ((_, s) in mExiting) {
                 s.expire?.let { handler.removeCallbacks(it) }
+                triggerRemovalEvent(s, "cancelled")
                 s.container.removeView(s.view)
                 s.view.cleanup()
             }

@@ -317,6 +317,67 @@ class NotificationApiTest {
     }
 
     @Test
+    fun testMaxPopupsOneBehavior() {
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+        val settingsRes = sendGetWithResponse("$baseUrl/settings")
+        val origMax = try {
+            org.json.JSONObject(settingsRes.body).optInt("maxPopups", 1)
+        } catch (_: Exception) {
+            1
+        }
+
+        try {
+            sendPostWithResponse("$baseUrl/settings", """{"maxPopups": 1}""".toByteArray())
+
+            // 1. Enqueue first notification
+            val first = """{"id": "pop_1", "title": "First", "duration": 30}"""
+            val res1 = sendPostWithResponse("$baseUrl/notify", first.toByteArray())
+            assertEquals(200, res1.code)
+
+            val state1 = sendGetWithResponse("$baseUrl/state")
+            assertEquals(200, state1.code)
+            val json1 = org.json.JSONObject(state1.body)
+            assertEquals("pop_1", json1.getJSONObject("popup").getString("id"))
+
+            // 2. Enqueue second with overwrite = false -> should queue, pop_1 remains active
+            val secondQueue = """{"id": "pop_2", "title": "Second Queued", "overwrite": false, "duration": 30}"""
+            val res2 = sendPostWithResponse("$baseUrl/notify", secondQueue.toByteArray())
+            assertEquals(200, res2.code)
+
+            val state2 = sendGetWithResponse("$baseUrl/state")
+            assertEquals(200, state2.code)
+            val json2 = org.json.JSONObject(state2.body)
+            assertEquals("pop_1", json2.getJSONObject("popup").getString("id"))
+
+            // Cancel pop_2 from queue
+            val resCancelQueue = sendPostWithResponse("$baseUrl/cancel?id=pop_2", ByteArray(0))
+            assertEquals(200, resCancelQueue.code)
+            assertEquals("OK: Removed from queue", resCancelQueue.body)
+
+            // 3. Enqueue third with overwrite = true -> should evict pop_1 immediately
+            val thirdOverwrite = """{"id": "pop_3", "title": "Third Overwrite", "overwrite": true, "duration": 30}"""
+            val res3 = sendPostWithResponse("$baseUrl/notify", thirdOverwrite.toByteArray())
+            assertEquals(200, res3.code)
+
+            val state3 = sendGetWithResponse("$baseUrl/state")
+            assertEquals(200, state3.code)
+            val json3 = org.json.JSONObject(state3.body)
+            assertEquals("pop_3", json3.getJSONObject("popup").getString("id"))
+
+            val resCancelActive = sendPostWithResponse("$baseUrl/cancel?id=pop_3", ByteArray(0))
+            assertEquals(200, resCancelActive.code)
+            assertEquals("OK: Cancelled", resCancelActive.body)
+        } finally {
+            try {
+                sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            } catch (_: Exception) {}
+            try {
+                sendPostWithResponse("$baseUrl/settings", """{"maxPopups": $origMax}""".toByteArray())
+            } catch (_: Exception) {}
+        }
+    }
+
+    @Test
     fun testDefaultDurationContract() {
         val jsonWithoutDuration = """{"title": "Default Duration Test", "message": "Duration omitted"}"""
         val res = sendPostWithResponse("$baseUrl/notify", jsonWithoutDuration.toByteArray())
@@ -326,6 +387,28 @@ class NotificationApiTest {
     }
 
     private data class ApiResponse(val code: Int, val body: String)
+
+    private fun sendGetWithResponse(urlStr: String): ApiResponse {
+        val url = URL(urlStr)
+        val conn = url.openConnection() as HttpURLConnection
+        return try {
+            conn.requestMethod = "GET"
+            val code = try { conn.responseCode } catch (_: Exception) { 500 }
+            val stream = if (code in 200..299) conn.inputStream else conn.errorStream
+            val body = stream?.bufferedReader()?.use { it.readText() } ?: ""
+            ApiResponse(code, body)
+        } catch (_: Exception) {
+            val code = try { conn.responseCode } catch (_: Exception) { 500 }
+            val body = try {
+                conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+            } catch (_: Exception) {
+                ""
+            }
+            ApiResponse(code, body)
+        } finally {
+            try { conn.disconnect() } catch (_: Exception) {}
+        }
+    }
 
     private fun sendPost(urlStr: String, data: ByteArray): Int {
         return sendPostWithResponse(urlStr, data).code
