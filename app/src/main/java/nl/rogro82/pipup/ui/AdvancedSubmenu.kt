@@ -64,6 +64,15 @@ class AdvancedSubmenu(
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
 
+        // Clear Active Popups
+        root.findViewById<Button>(R.id.btn_clear_active_popups)?.apply {
+            setOnClickListener {
+                PipUpService.getInstance()?.cancelAllPopups()
+                context.showToast(context.getString(R.string.settings_active_popups_cleared))
+            }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+
         // Reset Settings
         root.findViewById<Button>(R.id.btn_reset)?.apply {
             setOnClickListener { showResetConfirmation() }

@@ -69,4 +69,43 @@ class PayloadParserTest {
         val propsOverwrite = PopupProps(title = "Explicit Overwrite", overwrite = true)
         assertTrue(propsOverwrite.overwrite)
     }
+
+    @Test
+    fun testButtonsParsingAndLimits() {
+        val jsonStr = """
+        {
+          "title": "Button Test",
+          "buttons": [
+            { "id": "btn1", "label": "  Accept  " },
+            { "id": "btn2", "label": "Very Long Label That Exceeds Thirty Characters Max" },
+            { "id": "", "label": "No ID" },
+            { "id": "no_label", "label": "   " },
+            { "id": "btn3", "label": "Label 3" },
+            { "id": "btn4", "label": "Label 4" },
+            { "id": "btn5", "label": "Label 5" },
+            { "id": "btn6", "label": "Label 6 Overflow" }
+          ]
+        }
+        """.trimIndent()
+
+        val props = PopupProps.fromJson(jsonStr)
+        assertEquals(5, props.buttons.size) // Capped at max 5
+        assertEquals("btn1", props.buttons[0].id)
+        assertEquals("Accept", props.buttons[0].label)
+        assertEquals("Very Long Label That Exceeds T", props.buttons[1].label) // Capped at 30 chars
+    }
+
+    @Test
+    fun testIsInternalUpdateActionSecurity() {
+        // Verify external JSON input cannot forge isInternalUpdateAction
+        val jsonStr = """
+        {
+          "title": "Forged Update",
+          "isInternalUpdateAction": true
+        }
+        """.trimIndent()
+
+        val props = PopupProps.fromJson(jsonStr)
+        assertFalse(props.isInternalUpdateAction)
+    }
 }

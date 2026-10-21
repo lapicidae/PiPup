@@ -17,13 +17,13 @@
     <string name="settings_nav_background">Background</string>
     <string name="settings_nav_text">Text Style</string>
     <string name="settings_nav_border">Border</string>
+    <string name="settings_nav_button">Buttons</string>
     <string name="settings_nav_animation">Animation</string>
     <string name="settings_nav_updates">Updates</string>
     <string name="settings_nav_modules">Modules</string>
     <string name="settings_nav_permissions">Permissions</string>
     <string name="settings_nav_advanced">Advanced</string>
     <string name="settings_nav_performance">Performance</string>
-    <string name="settings_module_setting_format">%1$s: %2$s</string>
 
     <!-- App UI & Themes -->
     <string name="settings_language">Language</string>
@@ -82,8 +82,17 @@
     <string name="settings_border_width">Border Width</string>
     <string name="settings_border_color">Border Color</string>
 
-    <!-- Advanced Tools & Migration -->
-    <!-- %1$s: App Name -->
+    <!-- Button Appearance & Styling -->
+    <string name="settings_button_style">Button Style</string>
+    <string name="settings_button_text_size">Button Text Size (sp)</string>
+    <string name="settings_button_radius">Corner Radius (px)</string>
+    <string name="settings_button_fill_color">Button Fill Color</string>
+    <string name="settings_button_focus_color">Button Focus Color</string>
+    <string name="settings_button_text_color">Button Text Color</string>
+    <string name="settings_button_focus_text_color">Button Focus Text Color</string>
+    <string name="settings_button_border_color">Button Border Color</string>
+
+    <!-- Advanced Tools, Migration & Actions -->
     <string name="settings_migration">Migration &amp; Sync</string>
     <string name="settings_tools">Expert Tools</string>
     <string name="settings_danger_zone">Danger Zone</string>
@@ -95,6 +104,8 @@
     <string name="settings_import_no_devices">No other devices found.</string>
     <string name="settings_import_manual">Manual IP entry</string>
     <string name="settings_reset_settings">Reset Settings</string>
+    <string name="settings_active_popups_cleared">Active popups cleared</string>
+    <string name="settings_clear_active_popups">Clear Active Popups</string>
 
     <!-- Self-Update Engine -->
     <string name="settings_update_channel">Update Channel</string>
@@ -166,6 +177,7 @@
     <string name="version_placeholder">v?.?.?</string>
 
     <!-- Modules & System Integration -->
+    <string name="settings_module_setting_format">%1$s: %2$s</string>
     <!-- Module: System -->
     <string name="settings_module_system">System Diagnostics</string>
 

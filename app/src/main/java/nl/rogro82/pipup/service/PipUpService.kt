@@ -33,6 +33,12 @@ import nl.rogro82.pipup.Pusher
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.UpdateManager
 import nl.rogro82.pipup.UpdateWorker
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.net.HttpURLConnection
+import java.net.URI
+import java.util.Locale
 import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.core.ModuleContext
@@ -69,11 +75,18 @@ class PipUpService : Service() {
     private val settings = PiPupApp.settings
 
     private lateinit var webServer: WebServer
-    private val notificationManager by lazy {
+    /** The notification manager responsible for displaying and queueing popups. */
+    val notificationManager by lazy {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         NotificationManager(this, wm).apply {
-            onPopupShown = { emit("popup_shown") }
-            onPopupRemoved = { reason, removedId -> emit("popup_removed", mapOf("reason" to reason, "removedId" to removedId)) }
+            onPopupShown = { _ ->
+                emit("popup_shown")
+                notifyLocalStateChange()
+            }
+            onPopupRemoved = { reason, removedId ->
+                emit("popup_removed", mapOf("reason" to reason, "removedId" to removedId))
+                notifyLocalStateChange()
+            }
         }
     }
     /** The module manager for this service. */
@@ -225,12 +238,38 @@ class PipUpService : Service() {
         super.onDestroy()
     }
 
+    val isDisplaying: Boolean get() = notificationManager.isDisplaying()
+
+    fun notifyLocalStateChange() {
+        val intent = Intent(PiPupApp.ACTION_POPUP_STATE_CHANGED).apply {
+            setPackage(PiPupApp.APP_PACKAGE)
+        }
+        sendBroadcast(intent)
+    }
+
+    fun cancelAllPopups() {
+        notificationManager.cancelAll()
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         // Answer every startForegroundService() - mandatory even if already in foreground
         // to prevent RemoteServiceException on some Android versions/vendors.
         updateForegroundNotification(settings.language)
+
+        if (intent?.action == "DISPLAY_NOTIFICATION") {
+            intent.getStringExtra("props")?.let { propsJson ->
+                try {
+                    val props = PopupProps.fromJson(propsJson)
+                    val isInternal = intent.getBooleanExtra("is_internal", false)
+                    notificationManager.enqueueInternalPopup(props, isInternal)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to parse DISPLAY_NOTIFICATION intent payload: ${e.message}")
+                }
+            }
+        }
+
         return START_STICKY
     }
 
@@ -506,7 +545,7 @@ class PipUpService : Service() {
                     val v = raw.trim()
                     if (v.isNotEmpty()) {
                         try {
-                            val uri = java.net.URI(v)
+                            val uri = URI(v)
                             if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
                                 return invalidRequest("webhook must be a valid http(s) URL")
                             }
@@ -590,6 +629,63 @@ class PipUpService : Service() {
     private fun ok(): NanoHTTPD.Response {
         Log.d(TAG, "Response OK")
         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "OK")
+    }
+
+    fun handleButtonClick(props: PopupProps, btn: PopupProps.Button, slotKey: String? = null) {
+        val targetId = props.id ?: slotKey
+        Log.i(TAG, "Popup button pressed: ${btn.id} (${btn.label}) for popup $targetId")
+        if (btn.id == "install" || btn.id == "confirm_install") {
+            if (props.isInternalUpdateAction || notificationManager.isInternalUpdate(targetId ?: "")) {
+                UpdateManager(this).resumePendingUpdate()
+            } else {
+                Log.w(TAG, "Rejecting unauthorized external install button action for popup id: $targetId")
+            }
+        }
+        val payload = mapOf(
+            "popup" to props.id,
+            "button" to btn.id,
+            "label" to btn.label,
+            "device" to settings.deviceId
+        )
+        Pusher.push("button", Json.writeValueAsString(payload))
+
+        props.callback?.takeIf { it.isNotBlank() }?.let { url ->
+            dispatchButtonCallback(url, payload)
+        }
+        notificationManager.handleButtonRemoval(slotKey ?: props.id ?: "")
+    }
+
+    private fun dispatchButtonCallback(urlStr: String, payload: Map<String, Any?>) {
+        (applicationContext as? PiPupApp)?.applicationScope?.launch(Dispatchers.IO) {
+            var conn: HttpURLConnection? = null
+            try {
+                val uri = URI(urlStr)
+                val scheme = uri.scheme?.lowercase(Locale.ROOT)
+                if (scheme != "http" && scheme != "https") {
+                    Log.w(TAG, "Rejecting invalid callback URL scheme: $scheme")
+                    return@launch
+                }
+                val url = uri.toURL()
+                conn = (url.openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"
+                    doOutput = true
+                    connectTimeout = 5000
+                    readTimeout = 5000
+                    setRequestProperty("Content-Type", "application/json")
+                }
+                conn.outputStream.use { it.write(Json.writeValueAsString(payload).toByteArray(Charsets.UTF_8)) }
+                val code = conn.responseCode
+                Log.d(TAG, "Button callback dispatched to $urlStr (HTTP $code)")
+            } catch (ex: CancellationException) {
+                throw ex
+            } catch (ex: Exception) {
+                Log.w(TAG, "Button callback failed for $urlStr: ${ex.message}")
+            } finally {
+                try {
+                    conn?.disconnect()
+                } catch (_: Exception) {}
+            }
+        }
     }
 
     private fun invalidRequest(message: String?): NanoHTTPD.Response {

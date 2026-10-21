@@ -15,6 +15,8 @@ import nl.rogro82.pipup.PiPupApp
 import androidx.core.view.isEmpty
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.UpdateManager
+import nl.rogro82.pipup.service.PipUpService
 import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.getLocalizedContext
 import nl.rogro82.pipup.showToast
@@ -52,6 +54,7 @@ class NotificationManager(
     private val queue = ArrayDeque<PopupProps>()
     private val mShown = LinkedHashMap<String, ShownSlot>()
     private val mExiting = LinkedHashMap<String, ShownSlot>()
+    private val internalUpdateKeys = mutableSetOf<String>()
     private val positionContainers = EnumMap<PopupProps.Position, LinearLayout>(PopupProps.Position::class.java)
     private var overlay: FrameLayout? = null
 
@@ -81,15 +84,10 @@ class NotificationManager(
     }
 
     /**
-     * Returns a list of active popup properties currently displayed on screen.
+     * Checks if a given ID or key belongs to an internal update popup.
      */
-    @Suppress("unused")
-    fun getActivePopups(): List<PopupProps> = synchronized(this) {
-        val list = mutableListOf<PopupProps>()
-        for ((_, slot) in mShown) {
-            list.add(slot.props)
-        }
-        list
+    fun isInternalUpdate(idOrKey: String): Boolean = synchronized(this) {
+        internalUpdateKeys.contains(idOrKey) || mShown[idOrKey]?.props?.isInternalUpdateAction == true || mShown.values.any { it.props.id == idOrKey && it.props.isInternalUpdateAction }
     }
 
     /**
@@ -103,15 +101,33 @@ class NotificationManager(
         list
     }
 
+    fun enqueueInternalPopup(props: PopupProps, isInternal: Boolean = true) {
+        val internalProps = if (isInternal) props.copy(isInternalUpdateAction = true) else props
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            handleEnqueue(internalProps, isInternal = isInternal)
+        } else {
+            handler.post { handleEnqueue(internalProps, isInternal = isInternal) }
+        }
+    }
+
     /**
      * Asynchronously enqueues a notification for display into the unified queue.
      */
     fun enqueue(props: PopupProps) {
-        handler.post { handleEnqueue(props) }
+        enqueueInternalPopup(props, isInternal = props.isInternalUpdateAction)
     }
 
-    private fun handleEnqueue(props: PopupProps) {
+    private fun handleEnqueue(props: PopupProps, isInternal: Boolean = false) {
         synchronized(this) {
+            if (props.id == UpdateManager.CONFIRM_POPUP_ID && !isInternal && !props.isInternalUpdateAction) {
+                Log.w(TAG, "Rejecting external attempt to use reserved update popup ID: ${props.id}")
+                return
+            }
+
+            if (isInternal || props.isInternalUpdateAction) {
+                props.id?.let { internalUpdateKeys.add(it) }
+            }
+
             popupsShown.incrementAndGet()
             lastPopup = props
             lastPopupAt = SystemClock.elapsedRealtime()
@@ -212,6 +228,7 @@ class NotificationManager(
 
         current.props = props
         current.view.updateFromProps(props)
+        updateOverlayFocusability()
 
         if (positionChanged) {
             current.view.post {
@@ -273,8 +290,17 @@ class NotificationManager(
 
     private fun createPopup(props: PopupProps) {
         val slotKey = props.id?.takeIf { it.isNotEmpty() } ?: UUID.randomUUID().toString()
+        if (props.isInternalUpdateAction) {
+            internalUpdateKeys.add(slotKey)
+            props.id?.let { internalUpdateKeys.add(it) }
+        }
+
         val localizedContext = context.getLocalizedContext(PiPupApp.settings.language)
-        val view = PopupView(localizedContext, props)
+        val view = PopupView(localizedContext, props).apply {
+            onButton = { btn ->
+                PipUpService.getInstance()?.handleButtonClick(this.props, btn, slotKey)
+            }
+        }
         val container = ensurePositionContainer(props.getPositionEnum())
 
         if (!props.id.isNullOrEmpty()) {
@@ -320,6 +346,7 @@ class NotificationManager(
                             }
                         }
                         container.addView(view, lp)
+                        updateOverlayFocusability()
 
                         view.animateIn()
                         view.startMedia()
@@ -334,6 +361,8 @@ class NotificationManager(
 
     private fun scheduleRemoval(shown: ShownSlot) {
         handler.removeCallbacksAndMessages(shown)
+        if (shown.props.duration <= 0) return
+
         val runnable = Runnable {
             synchronized(this) {
                 if (mShown[shown.key] === shown) {
@@ -358,6 +387,7 @@ class NotificationManager(
         triggerRemovalEvent(shown, reason)
         shown.container.removeView(shown.view)
         shown.view.cleanup()
+        updateOverlayFocusability()
         if (mShown.isEmpty() && mExiting.isEmpty()) {
             notifyStateChanged(false)
             removeOverlay()
@@ -372,12 +402,14 @@ class NotificationManager(
         mExiting[key] = shown
         handler.removeCallbacksAndMessages(shown)
         triggerRemovalEvent(shown, reason)
+        updateOverlayFocusability()
 
         shown.view.animateOut {
             synchronized(this) {
                 mExiting.remove(key)
                 shown.container.removeView(shown.view)
                 shown.view.cleanup()
+                updateOverlayFocusability()
 
                 if (mShown.isEmpty() && mExiting.isEmpty()) {
                     notifyStateChanged(false)
@@ -468,6 +500,57 @@ class NotificationManager(
     }
 
     /**
+     * Handles button-triggered removal securely with reason "button" and single event dispatch.
+     */
+    fun handleButtonRemoval(idOrKey: String) {
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            performButtonRemoval(idOrKey)
+        } else {
+            val latch = CountDownLatch(1)
+            handler.post {
+                performButtonRemoval(idOrKey)
+                latch.countDown()
+            }
+            try {
+                latch.await(2, TimeUnit.SECONDS)
+            } catch (_: InterruptedException) {}
+        }
+    }
+
+    private fun performButtonRemoval(idOrKey: String) {
+        synchronized(this) {
+            val key = when {
+                idOrKey.isNotEmpty() && mShown.containsKey(idOrKey) -> idOrKey
+                idOrKey.isNotEmpty() && mExiting.containsKey(idOrKey) -> idOrKey
+                idOrKey.isNotEmpty() -> mShown.entries.firstOrNull { it.value.props.id == idOrKey }?.key
+                    ?: mExiting.entries.firstOrNull { it.value.props.id == idOrKey }?.key
+                mShown.size == 1 -> mShown.keys.first()
+                mExiting.size == 1 -> mExiting.keys.first()
+                else -> mShown.keys.lastOrNull()
+            }
+            if (key != null) {
+                val shown = mShown.remove(key) ?: mExiting.remove(key)
+                if (shown != null) {
+                    handler.removeCallbacksAndMessages(shown)
+                    if (!shown.removedEventFired) {
+                        shown.removedEventFired = true
+                        onPopupRemoved?.invoke("button", shown.props.id ?: shown.key)
+                    }
+                    shown.container.removeView(shown.view)
+                    shown.view.cleanup()
+                    updateOverlayFocusability()
+                    if (mShown.isEmpty() && mExiting.isEmpty()) {
+                        notifyStateChanged(false)
+                        removeOverlay()
+                        lastPopup = null
+                    }
+                    processNextLocked()
+                }
+            }
+        }
+    }
+
+    /**
      * Cancels all notifications and clears the queue.
      * Blocks until UI thread cleanup is done if called from a background thread.
      */
@@ -524,16 +607,43 @@ class NotificationManager(
         }
     }
 
+    private fun updateOverlayFocusability() {
+        val overlayView = overlay ?: return
+        val hasButtons = mShown.values.any { it.props.buttons.isNotEmpty() } || mExiting.values.any { it.props.buttons.isNotEmpty() }
+        val params = overlayView.layoutParams as? WindowManager.LayoutParams ?: return
+
+        val targetFlags = if (hasButtons) {
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        } else {
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
+
+        if (params.flags != targetFlags) {
+            params.flags = targetFlags
+            try {
+                windowManager.updateViewLayout(overlayView, params)
+            } catch (e: Exception) {
+                Log.e(TAG, "WindowManager update flags error: ${e.message}")
+            }
+        }
+    }
+
     private fun ensureOverlay(): FrameLayout? {
         overlay?.let { return it }
         val view = FrameLayout(context).apply {
             clipChildren = false
             clipToPadding = false
         }
+        val hasButtons = mShown.values.any { it.props.buttons.isNotEmpty() } || mExiting.values.any { it.props.buttons.isNotEmpty() }
+        val initialFlags = if (hasButtons) {
+            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+        } else {
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+        }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+            initialFlags,
             PixelFormat.TRANSLUCENT
         )
         return try {

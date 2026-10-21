@@ -89,6 +89,7 @@ class SettingsActivity : AppCompatActivity() {
         NavItem(R.id.nav_item_background, R.string.settings_nav_background, R.drawable.ic_bg, 20, R.layout.submenu_background),
         NavItem(R.id.nav_item_text_style, R.string.settings_nav_text, R.drawable.ic_text_style, 30, R.layout.submenu_text),
         NavItem(R.id.nav_item_border, R.string.settings_nav_border, R.drawable.ic_border_style, 40, R.layout.submenu_border),
+        NavItem(R.id.nav_item_button, R.string.settings_nav_button, R.drawable.ic_button_style, 45, R.layout.submenu_button),
         NavItem(R.id.nav_item_animation, R.string.settings_nav_animation, R.drawable.ic_animation, 50, R.layout.submenu_animation),
         NavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, 60, R.layout.submenu_updates),
         NavItem(R.id.nav_item_modules, R.string.settings_nav_modules, R.drawable.ic_modules, 70, R.layout.submenu_modules),
@@ -415,6 +416,7 @@ class SettingsActivity : AppCompatActivity() {
             R.id.nav_item_background -> R.id.stub_background
             R.id.nav_item_text_style -> R.id.stub_text
             R.id.nav_item_border -> R.id.stub_border
+            R.id.nav_item_button -> R.id.stub_button
             R.id.nav_item_animation -> R.id.stub_animation
             R.id.nav_item_updates -> R.id.stub_updates
             R.id.nav_item_modules -> R.id.stub_modules
@@ -467,6 +469,7 @@ class SettingsActivity : AppCompatActivity() {
                 R.layout.submenu_background -> BackgroundSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_text -> TextSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_border -> BorderSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_button -> ButtonSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_animation -> AnimationSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_advanced -> AdvancedSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_performance -> PerformanceSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
@@ -596,6 +599,13 @@ class SettingsActivity : AppCompatActivity() {
                 drawText(getString(R.string.settings_preview_media), 160f, 100f, paint)
             }.also { cachedPlaceholder = it }
 
+            val sampleButtons = if (currentNavId == R.id.nav_item_button) {
+                listOf(
+                    PopupProps.Button("preview_1", getString(android.R.string.ok)),
+                    PopupProps.Button("preview_2", getString(android.R.string.cancel))
+                )
+            } else emptyList()
+
             val props = PopupProps(
                 title = getString(R.string.settings_preview_title),
                 message = getString(R.string.settings_preview_message),
@@ -613,7 +623,16 @@ class SettingsActivity : AppCompatActivity() {
                 animationType = settings.animationType,
                 animationDuration = settings.animationDuration,
                 animationExit = settings.animationExit,
-                media = PopupProps.Media.Bitmap(placeholder, 180)
+                media = PopupProps.Media.Bitmap(placeholder, 180),
+                buttons = sampleButtons,
+                buttonSize = settings.defaultButtonSize,
+                buttonColor = settings.defaultButtonColor,
+                buttonFocusColor = settings.defaultButtonFocusColor,
+                buttonTextColor = settings.defaultButtonTextColor,
+                buttonFocusTextColor = settings.defaultButtonFocusTextColor,
+                buttonBorderColor = settings.defaultButtonBorderColor,
+                buttonCornerRadius = settings.defaultButtonCornerRadius,
+                isPreview = true
             )
 
             // Optimized update: Check if preview already exists and update it instead of re-creation

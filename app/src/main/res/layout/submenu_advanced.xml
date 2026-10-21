@@ -151,6 +151,18 @@
     <!-- Danger Zone -->
     <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_danger_zone" android:textColor="@color/status_red" android:layout_marginTop="48dp" android:textStyle="bold"/>
     <Button
+        android:id="@+id/btn_clear_active_popups"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/settings_clear_active_popups"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:gravity="start|center_vertical"
+        android:textAllCaps="false"
+        android:textColor="@color/colorOnSurface"/>
+    <Button
         android:id="@+id/btn_reset"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"

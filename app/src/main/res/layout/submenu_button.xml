@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_button_style"
+        android:textColor="@color/colorOnSurface"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_button_text_size"
+            android:textColor="@color/colorOnSurfaceVariant" />
+        <TextView
+            android:id="@+id/text_button_size_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:visibility="gone"
+            tools:text="14 sp" />
+    </LinearLayout>
+    <SeekBar android:id="@+id/seekbar_button_size" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="30" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="24dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_button_radius"
+            android:textColor="@color/colorOnSurfaceVariant" />
+        <TextView
+            android:id="@+id/text_button_radius_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:visibility="gone"
+            tools:text="12 px" />
+    </LinearLayout>
+    <SeekBar android:id="@+id/seekbar_button_radius" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="50" android:focusable="true" android:background="@drawable/focus_background" android:padding="12dp" android:thumbTint="@color/tv_thumb_selector" android:progressTint="@color/tv_thumb_selector" android:progressBackgroundTint="@color/tv_track_selector"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_button_fill_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
+    <Spinner android:id="@+id/spinner_button_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <Button android:id="@+id/btn_edit_button_color_hex"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:text="@string/settings_button_fill_color"
+        tools:text="#EAEEF2"
+        android:visibility="gone"
+        android:background="@drawable/field_background"
+        android:focusable="true"
+        android:gravity="start|center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/colorOnSurface"
+        android:textAllCaps="false"
+        android:fontFamily="monospace"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_button_focus_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
+    <Spinner android:id="@+id/spinner_button_focus_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <Button android:id="@+id/btn_edit_button_focus_color_hex"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:text="@string/settings_button_focus_color"
+        tools:text="#196584"
+        android:visibility="gone"
+        android:background="@drawable/field_background"
+        android:focusable="true"
+        android:gravity="start|center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/colorOnSurface"
+        android:textAllCaps="false"
+        android:fontFamily="monospace"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_button_text_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
+    <Spinner android:id="@+id/spinner_button_text_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <Button android:id="@+id/btn_edit_button_text_color_hex"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:text="@string/settings_button_text_color"
+        tools:text="#DFE3E7"
+        android:visibility="gone"
+        android:background="@drawable/field_background"
+        android:focusable="true"
+        android:gravity="start|center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/colorOnSurface"
+        android:textAllCaps="false"
+        android:fontFamily="monospace"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_button_focus_text_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
+    <Spinner android:id="@+id/spinner_button_focus_text_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <Button android:id="@+id/btn_edit_button_focus_text_color_hex"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:text="@string/settings_button_focus_text_color"
+        tools:text="#0F1417"
+        android:visibility="gone"
+        android:background="@drawable/field_background"
+        android:focusable="true"
+        android:gravity="start|center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/colorOnSurface"
+        android:textAllCaps="false"
+        android:fontFamily="monospace"/>
+
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_button_border_color" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="24dp"/>
+    <Spinner android:id="@+id/spinner_button_border_color" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginBottom="8dp" android:focusable="true" android:background="@drawable/focus_background" android:padding="8dp"/>
+    <Button android:id="@+id/btn_edit_button_border_color_hex"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:layout_marginTop="4dp"
+        android:text="@string/settings_button_border_color"
+        tools:text="#71787D"
+        android:visibility="gone"
+        android:background="@drawable/field_background"
+        android:focusable="true"
+        android:gravity="start|center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/colorOnSurface"
+        android:textAllCaps="false"
+        android:fontFamily="monospace"/>
+
+</LinearLayout>

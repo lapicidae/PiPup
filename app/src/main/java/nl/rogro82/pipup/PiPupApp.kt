@@ -26,6 +26,7 @@ class PiPupApp : Application() {
         const val APP_PACKAGE = BuildConfig.APPLICATION_ID
 
         const val ACTION_SETTINGS_CHANGED = "$APP_PACKAGE.SETTINGS_CHANGED"
+        const val ACTION_POPUP_STATE_CHANGED = "$APP_PACKAGE.POPUP_STATE_CHANGED"
 
         lateinit var settings: AppSettings
             private set

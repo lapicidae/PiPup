@@ -47,8 +47,8 @@ class TextSubmenu(
             settings.messageColor = it
         }
 
-        setupSeekBar(root, R.id.seekbar_title_size, R.id.text_title_size_value, settings.titleSize.toInt()) { settings.titleSize = it.toFloat() }
-        setupSeekBar(root, R.id.seekbar_message_size, R.id.text_message_size_value, settings.messageSize.toInt()) { settings.messageSize = it.toFloat() }
+        setupSeekBar(root, R.id.seekbar_title_size, R.id.text_title_size_value, (settings.titleSize - 10).toInt().coerceIn(0, 30)) { settings.titleSize = (it + 10).toFloat() }
+        setupSeekBar(root, R.id.seekbar_message_size, R.id.text_message_size_value, (settings.messageSize - 10).toInt().coerceIn(0, 30)) { settings.messageSize = (it + 10).toFloat() }
 
         val suffix = context.getString(R.string.settings_default_suffix)
         val alignmentItems = context.resources.getStringArray(R.array.alignment_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }

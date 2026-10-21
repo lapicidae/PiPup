@@ -2,15 +2,19 @@ package nl.rogro82.pipup.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.StateListDrawable
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import androidx.core.graphics.toColorInt
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.PiPupApp
@@ -35,6 +39,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private val settings = PiPupApp.settings
     /** The listener to be notified when the media is fully loaded and ready to be displayed. */
     var readyListener: ReadyListener? = null
+    var onButton: ((PopupProps.Button) -> Unit)? = null
 
     private inner class MediaCallback : MediaRenderer.Callback {
         override fun notifyReady() = this@PopupView.notifyReady()
@@ -180,6 +185,12 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     init {
         clipChildren = false
         clipToPadding = false
+
+        // The [popup.xml] layout already wraps [text_container] and [popup_media_frame]
+        // inside the vertical [contentLayout] LinearLayout. This view group is the single
+        // anchor used by [reorderViews] to arrange media and text (vertical for Top/
+        // Bottom, horizontal for Left/Right). The outer [popupContainer] always stays
+        // vertical so action buttons render below the content, centered horizontally.
 
         // Automatic cleanup when the view is detached from the window.
         addOnAttachStateChangeListener(object : OnAttachStateChangeListener {
@@ -333,10 +344,12 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             binding.popupMessage.isVisible = false
             binding.popupScrollView.isVisible = false
         }
+
+        updateButtons()
     }
 
     private fun reorderViews() {
-        val container = binding.popupContainer
+        val container = binding.contentLayout
         val textContainer = binding.textContainer
         val mediaFrame = binding.popupMediaFrame
 
@@ -433,11 +446,17 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             binding.popupMediaFrame.requestLayout()
         }
 
+        val buttonRow = binding.popupContainer.findViewWithTag<ViewGroup>("popup_button_row")
+        val buttonRowHeight = if (buttonRow != null && buttonRow.isVisible) {
+            buttonRow.measuredHeight + ((buttonRow.layoutParams as? MarginLayoutParams)?.topMargin ?: 0)
+        } else 0
+
         val otherViewsHeight = (if (binding.popupTitle.isVisible) binding.popupTitle.measuredHeight else 0) +
                 (if (binding.popupMediaFrame.isVisible) (if (targetMediaHeight > 0) targetMediaHeight else binding.popupMediaFrame.measuredHeight) else 0) +
-                binding.popupContainer.paddingTop + binding.popupContainer.paddingBottom + context.dpToPx(12)
+                binding.popupContainer.paddingTop + binding.popupContainer.paddingBottom + context.dpToPx(12) +
+                buttonRowHeight
 
-        val maxScrollHeight = if (binding.popupContainer.orientation == LinearLayout.HORIZONTAL) (screenHeight * 0.7).toInt()
+        val maxScrollHeight = if (binding.contentLayout.orientation == LinearLayout.HORIZONTAL) (screenHeight * 0.7).toInt()
         else maxPopupHeight - otherViewsHeight
 
         val contentHeight = binding.popupMessage.measuredHeight
@@ -534,6 +553,134 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
      */
     fun animateOut(completion: () -> Unit) {
         animator.animateOut(props, completion)
+    }
+
+    private fun updateButtons() {
+        val existingRowPopup = binding.popupContainer.findViewWithTag<ViewGroup>("popup_button_row")
+        existingRowPopup?.let { binding.popupContainer.removeView(it) }
+        val existingRowText = binding.textContainer.findViewWithTag<ViewGroup>("popup_button_row")
+        existingRowText?.let { binding.textContainer.removeView(it) }
+
+        if (props.buttons.isEmpty()) return
+
+        val buttonRow = LinearLayout(context).apply {
+            tag = "popup_button_row"
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                topMargin = context.dpToPx(12)
+            }
+        }
+
+        var firstButton: Button? = null
+
+        for (i in props.buttons.indices) {
+            val btn = props.buttons[i]
+            val isFirst = i == 0
+            val size = props.buttonSize?.takeIf { it >= 8f }
+                ?: settings.defaultButtonSize.takeIf { it >= 8f }
+                ?: (props.messageSize * 0.85f).coerceIn(12f, 24f)
+            val button = Button(context).apply {
+                text = btn.label
+                isFocusable = !props.isPreview
+                isClickable = !props.isPreview
+                val normalTextColor = parseColorOrDefault(props.buttonTextColor ?: settings.defaultButtonTextColor, "#FFFFFF")
+                val focusTextColor = parseColorOrDefault(props.buttonFocusTextColor ?: settings.defaultButtonFocusTextColor, "#FFFFFF")
+                if (props.isPreview && isFirst) {
+                    setTextColor(focusTextColor)
+                } else {
+                    setTextColor(createButtonTextColorStateList(normalTextColor, focusTextColor))
+                }
+                textSize = size
+                maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER
+                val scaleFactor = size / 14f
+                val h = context.dpToPx((24f * scaleFactor).toInt()).coerceAtLeast(8)
+                val v = context.dpToPx((10f * scaleFactor).toInt()).coerceAtLeast(4)
+                setPadding(h, v, h, v)
+                minHeight = context.dpToPx(40)
+                background = if (props.isPreview && isFirst) {
+                    createButtonBackground(props, forceFocused = true)
+                } else {
+                    createButtonBackground(props, forceFocused = false)
+                }
+                setOnClickListener { if (!props.isPreview) onButton?.invoke(btn) }
+                val m = context.dpToPx((8f * scaleFactor).toInt()).coerceAtLeast(2)
+                layoutParams = LinearLayout.LayoutParams(
+                    0,
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    1f
+                ).apply {
+                    setMargins(m, m, m, context.dpToPx((4f * scaleFactor).toInt()).coerceAtLeast(2))
+                }
+            }
+            if (firstButton == null) firstButton = button
+            buttonRow.addView(button)
+        }
+
+        if (props.buttonsInline) {
+            binding.textContainer.addView(buttonRow)
+        } else {
+            binding.popupContainer.addView(buttonRow)
+        }
+        if (!props.isPreview) {
+            firstButton?.post { firstButton.requestFocus() }
+        }
+    }
+
+    private fun createButtonBackground(props: PopupProps, forceFocused: Boolean = false): android.graphics.drawable.Drawable {
+        val radius = props.buttonCornerRadius ?: settings.defaultButtonCornerRadius
+        val radiusPx = if (props.scale) context.getScaledPixels(radius.toInt()).toFloat() else context.dpToPx(radius.toInt()).toFloat()
+
+        val normalColor = parseColorOrDefault(props.buttonColor ?: settings.defaultButtonColor, "#EAEEF2")
+        val focusColor = parseColorOrDefault(props.buttonFocusColor ?: settings.defaultButtonFocusColor, "#196584")
+        val borderColor = parseColorOrDefault(props.buttonBorderColor ?: settings.defaultButtonBorderColor, "#71787D")
+
+        val normalDrawable = GradientDrawable().apply {
+            setColor(normalColor)
+            cornerRadius = radiusPx
+            setStroke(context.dpToPx(1), borderColor)
+        }
+
+        val focusDrawable = GradientDrawable().apply {
+            setColor(focusColor)
+            cornerRadius = radiusPx
+            setStroke(context.dpToPx(2), focusColor)
+        }
+
+        return if (forceFocused) {
+            focusDrawable
+        } else {
+            StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_focused), focusDrawable)
+                addState(intArrayOf(android.R.attr.state_pressed), focusDrawable)
+                addState(intArrayOf(), normalDrawable)
+            }
+        }
+    }
+
+    private fun createButtonTextColorStateList(normalColor: Int, focusColor: Int): ColorStateList {
+        return ColorStateList(
+            arrayOf(
+                intArrayOf(android.R.attr.state_focused),
+                intArrayOf(android.R.attr.state_pressed),
+                intArrayOf()
+            ),
+            intArrayOf(focusColor, focusColor, normalColor)
+        )
+    }
+
+    private fun parseColorOrDefault(hex: String, fallback: String): Int {
+        return try {
+            val clean = if (hex.startsWith("#")) hex else "#$hex"
+            clean.toColorInt()
+        } catch (_: Exception) {
+            fallback.toColorInt()
+        }
     }
 
     /**

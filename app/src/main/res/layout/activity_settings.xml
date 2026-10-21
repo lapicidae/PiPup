@@ -101,6 +101,12 @@
                 android:layout="@layout/submenu_border" />
 
             <ViewStub
+                android:id="@+id/stub_button"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_button" />
+
+            <ViewStub
                 android:id="@+id/stub_animation"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

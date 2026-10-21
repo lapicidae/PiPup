@@ -181,6 +181,15 @@ class AppSettings(context: Context) {
     var animationDuration by IntPref("animation_duration", 500)
     /** Whether to play an exit animation when the popup is dismissed. */
     var animationExit by BooleanPref("animation_exit", false)
+
+    // Default Button Styling (M3 Defaults)
+    var defaultButtonSize by FloatPref("default_button_size", 14f)
+    var defaultButtonColor by StringPref("default_button_color", appContext.colorToHex(R.color.preset_gunmetal))
+    var defaultButtonFocusColor by StringPref("default_button_focus_color", appContext.colorToHex(R.color.preset_sky_blue))
+    var defaultButtonTextColor by StringPref("default_button_text_color", appContext.colorToHex(R.color.preset_platinum))
+    var defaultButtonFocusTextColor by StringPref("default_button_focus_text_color", appContext.colorToHex(R.color.preset_deep_slate))
+    var defaultButtonBorderColor by StringPref("default_button_border_color", appContext.colorToHex(R.color.preset_gunmetal))
+    var defaultButtonCornerRadius by FloatPref("default_button_corner_radius", 20f)
     /** The timeout in seconds for loading remote media. */
     var mediaTimeout by IntPref("media_timeout", 10)
     /** The number of retries for failed media loads. */

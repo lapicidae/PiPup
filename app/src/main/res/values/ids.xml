@@ -4,6 +4,8 @@
     <item name="nav_item_background" type="id" />
     <item name="nav_item_text_style" type="id" />
     <item name="nav_item_border" type="id" />
+    <item name="nav_item_button" type="id" />
+    <item name="stub_button" type="id" />
     <item name="nav_item_animation" type="id" />
     <item name="nav_item_updates" type="id" />
     <item name="nav_item_modules" type="id" />

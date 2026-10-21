@@ -177,11 +177,13 @@ abstract class SubmenuBase(
             R.id.seekbar_media_timeout -> context.resources.getQuantityString(R.plurals.settings_media_timeout_seconds, bar.progress, bar.progress)
             R.id.seekbar_media_retries -> context.resources.getQuantityString(R.plurals.settings_media_retries_count, bar.progress, bar.progress)
             R.id.seekbar_max_popups -> "%d"
+            R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -> "%d sp"
             else -> context.getString(R.string.settings_slider_value_format, bar.progress, bar.max)
         }
         textView?.text = when (bar.id) {
             R.id.seekbar_animation_duration -> String.format(format, bar.progress)
             R.id.seekbar_max_popups -> String.format(format, bar.progress + 1)
+            R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -> String.format(format, bar.progress + 10)
             else -> format
         }
     }

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<merge xmlns:android="http://schemas.android.com/apk/res/android">
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <LinearLayout
         android:id="@+id/popup_container"
@@ -10,46 +11,55 @@
         android:minWidth="240dp">
 
         <LinearLayout
-            android:id="@+id/text_container"
+            android:id="@+id/contentLayout"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:orientation="vertical"
+            tools:ignore="UselessParent">
 
-            <TextView
-                android:id="@+id/popup_title"
+            <LinearLayout
+                android:id="@+id/text_container"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:textStyle="bold"
-                android:textColor="@color/popup_text_default"
-                android:textSize="20sp"
-                android:visibility="gone"/>
-
-            <ScrollView
-                android:id="@+id/popup_scroll_view"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:scrollbars="none"
-                android:fillViewport="true"
-                android:overScrollMode="never"
-                android:visibility="gone">
+                android:orientation="vertical">
 
                 <TextView
-                    android:id="@+id/popup_message"
+                    android:id="@+id/popup_title"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:textStyle="bold"
                     android:textColor="@color/popup_text_default"
-                    android:textSize="14sp"/>
-            </ScrollView>
-        </LinearLayout>
+                    android:textSize="20sp"
+                    android:visibility="gone"/>
 
-        <FrameLayout
-            android:id="@+id/popup_media_frame"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center_horizontal"
-            android:visibility="gone"
-            android:layout_marginTop="8dp"/>
+                <ScrollView
+                    android:id="@+id/popup_scroll_view"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:scrollbars="none"
+                    android:fillViewport="true"
+                    android:overScrollMode="never"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:id="@+id/popup_message"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="@color/popup_text_default"
+                        android:textSize="14sp"/>
+                </ScrollView>
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/popup_media_frame"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:visibility="gone"
+                android:layout_marginTop="8dp"/>
+
+        </LinearLayout>
 
     </LinearLayout>
 </merge>

@@ -39,8 +39,23 @@ data class PopupProps(
     val image: String? = null,
     val imageWidth: Int? = null,
     val cache: Boolean = true,
-    val scale: Boolean = true
+    val scale: Boolean = true,
+
+    // Buttons & Callbacks
+    val buttons: List<Button> = emptyList(),
+    val callback: String? = null,
+    val buttonSize: Float? = null,
+    val buttonColor: String? = null,
+    val buttonFocusColor: String? = null,
+    val buttonTextColor: String? = null,
+    val buttonFocusTextColor: String? = null,
+    val buttonBorderColor: String? = null,
+    val buttonCornerRadius: Float? = null,
+    val buttonsInline: Boolean = false,
+    val isPreview: Boolean = false,
+    val isInternalUpdateAction: Boolean = false
 ) {
+    data class Button(val id: String, val label: String)
     companion object {
         private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
         private const val DEFAULT_BG_COLOR = "#CC000000"
@@ -102,17 +117,31 @@ data class PopupProps(
 
             fun optNullableString(key: String): String? = if (j.has(key) && !j.isNull(key)) j.getString(key) else null
 
+            val parsedButtons = mutableListOf<Button>()
+            if (j.has("buttons") && !j.isNull("buttons")) {
+                val bArr = j.getJSONArray("buttons")
+                for (i in 0 until bArr.length()) {
+                    if (parsedButtons.size >= 5) break
+                    val bObj = bArr.optJSONObject(i) ?: continue
+                    val bId = bObj.optString("id", "").trim()
+                    val bLabel = bObj.optString("label", "").trim()
+                    if (bId.isNotEmpty() && bLabel.isNotEmpty() && bId != "null" && bLabel != "null") {
+                        parsedButtons.add(Button(bId, bLabel.take(30)))
+                    }
+                }
+            }
+
             return PopupProps(
                 duration = j.optInt("duration", 10),
                 id = optNullableString("id"),
                 position = j.optInt("position", 0),
                 title = optNullableString("title"),
                 titleSize = j.optDouble("titleSize", 24.0).toFloat(),
-                titleColor = j.optString("titleColor", DEFAULT_TEXT_COLOR),
+                titleColor = j.optString("titleColor", DEFAULT_TEXT_COLOR) ?: DEFAULT_TEXT_COLOR,
                 message = optNullableString("message"),
                 messageSize = j.optDouble("messageSize", 16.0).toFloat(),
-                messageColor = j.optString("messageColor", DEFAULT_TEXT_COLOR),
-                backgroundColor = j.optString("backgroundColor", DEFAULT_BG_COLOR),
+                messageColor = j.optString("messageColor", DEFAULT_TEXT_COLOR) ?: DEFAULT_TEXT_COLOR,
+                backgroundColor = j.optString("backgroundColor", DEFAULT_BG_COLOR) ?: DEFAULT_BG_COLOR,
                 media = media,
                 mediaPosition = if (j.has("mediaPosition") && !j.isNull("mediaPosition")) j.getInt("mediaPosition") else null,
                 animationType = j.optInt("animationType", 0),
@@ -121,14 +150,25 @@ data class PopupProps(
                 overwrite = j.optBoolean("overwrite", false),
                 borderRadius = j.optInt("borderRadius", 0),
                 borderWidth = j.optInt("borderWidth", 0),
-                borderColor = j.optString("borderColor", DEFAULT_BORDER_COLOR),
+                borderColor = j.optString("borderColor", DEFAULT_BORDER_COLOR) ?: DEFAULT_BORDER_COLOR,
                 contentPadding = if (j.has("contentPadding") && !j.isNull("contentPadding")) j.getInt("contentPadding") else null,
                 titleAlignment = j.optInt("titleAlignment", 0),
                 messageAlignment = j.optInt("messageAlignment", 0),
                 image = optNullableString("image"),
                 imageWidth = if (j.has("imageWidth") && !j.isNull("imageWidth")) j.getInt("imageWidth") else null,
                 cache = j.optBoolean("cache", true),
-                scale = j.optBoolean("scale", true)
+                scale = j.optBoolean("scale", true),
+                buttons = parsedButtons,
+                callback = optNullableString("callback"),
+                buttonSize = if (j.has("buttonSize") && !j.isNull("buttonSize")) j.getDouble("buttonSize").toFloat().coerceIn(10f, 40f) else null,
+                buttonColor = optNullableString("buttonColor"),
+                buttonFocusColor = optNullableString("buttonFocusColor"),
+                buttonTextColor = optNullableString("buttonTextColor"),
+                buttonFocusTextColor = optNullableString("buttonFocusTextColor"),
+                buttonBorderColor = optNullableString("buttonBorderColor"),
+                buttonCornerRadius = if (j.has("buttonCornerRadius") && !j.isNull("buttonCornerRadius")) j.getDouble("buttonCornerRadius").toFloat().coerceIn(0f, 50f) else null,
+                buttonsInline = j.optBoolean("buttonsInline", false),
+                isInternalUpdateAction = false
             )
         }
     }
@@ -163,6 +203,27 @@ data class PopupProps(
         j.put("imageWidth", imageWidth ?: JSONObject.NULL)
         j.put("cache", cache)
         j.put("scale", scale)
+        j.put("isPreview", isPreview)
+        if (buttons.isNotEmpty()) {
+            val bArr = org.json.JSONArray()
+            for ((id, label) in buttons) {
+                bArr.put(JSONObject().apply {
+                    put("id", id)
+                    put("label", label)
+                })
+            }
+            j.put("buttons", bArr)
+        }
+        j.put("callback", callback ?: JSONObject.NULL)
+        j.put("buttonSize", buttonSize ?: JSONObject.NULL)
+        j.put("buttonColor", buttonColor ?: JSONObject.NULL)
+        j.put("buttonFocusColor", buttonFocusColor ?: JSONObject.NULL)
+        j.put("buttonTextColor", buttonTextColor ?: JSONObject.NULL)
+        j.put("buttonFocusTextColor", buttonFocusTextColor ?: JSONObject.NULL)
+        j.put("buttonBorderColor", buttonBorderColor ?: JSONObject.NULL)
+        j.put("buttonCornerRadius", buttonCornerRadius ?: JSONObject.NULL)
+        j.put("buttonsInline", buttonsInline)
+        j.put("isInternalUpdateAction", isInternalUpdateAction)
 
         media?.let { m ->
             val mj = JSONObject()

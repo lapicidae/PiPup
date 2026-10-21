@@ -162,6 +162,7 @@ class UpdateManager(context: Context) {
         val appSettings = PiPupApp.settings
         val appName = appContext.getString(R.string.app_name)
         val props = PopupProps(
+            id = CONFIRM_POPUP_ID,
             title = appContext.getString(R.string.notification_update_title, appName),
             message = appContext.getString(R.string.notification_update_msg, release.tagName),
             duration = 10,
@@ -179,14 +180,22 @@ class UpdateManager(context: Context) {
             mediaPosition = appSettings.mediaPosition,
             animationType = appSettings.animationType,
             animationDuration = appSettings.animationDuration,
-            animationExit = appSettings.animationExit
+            animationExit = appSettings.animationExit,
+            buttons = listOf(PopupProps.Button("install", appContext.getString(R.string.settings_update_install))),
+            isInternalUpdateAction = true
         )
 
-        val serviceIntent = Intent(appContext, PipUpService::class.java).apply {
-            action = "DISPLAY_NOTIFICATION"
-            putExtra("props", props.toJson())
+        val serviceInstance = PipUpService.getInstance()
+        if (serviceInstance != null) {
+            serviceInstance.notificationManager.enqueueInternalPopup(props, isInternal = true)
+        } else {
+            val serviceIntent = Intent(appContext, PipUpService::class.java).apply {
+                action = "DISPLAY_NOTIFICATION"
+                putExtra("props", props.toJson())
+                putExtra("is_internal", true)
+            }
+            appContext.startService(serviceIntent)
         }
-        appContext.startService(serviceIntent)
     }
 
     private fun showToastNotification(release: GitHubRelease) {
@@ -452,6 +461,8 @@ class UpdateManager(context: Context) {
     }
 
     companion object {
+        const val CONFIRM_POPUP_ID = "pipup_update_confirm"
+
         private const val REPO_URL = "https://api.github.com/repos/lapicidae/PiPup/releases"
         private const val INSTALL_ACTION = "${PiPupApp.APP_PACKAGE}.INSTALL_RESULT"
 

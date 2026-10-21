@@ -48,9 +48,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val popupStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == PiPupApp.ACTION_POPUP_STATE_CHANGED) {
+                updateCancelAllButton()
+            }
+        }
+    }
+
+    // Cancel All Button
+    private var btnCancelAll: ImageButton? = null
+
     private val refreshTask = object : Runnable {
         override fun run() {
             updateNotificationArea()
+            updateCancelAllButton()
             handler.postDelayed(this, 5000)
         }
     }
@@ -92,11 +104,35 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
+        // Cancel All Button
+        btnCancelAll = findViewById(R.id.btn_cancel_all)
+        btnCancelAll?.setOnClickListener {
+            PipUpService.getInstance()?.cancelAllPopups()
+            updateCancelAllButton()
+            showToast(getString(R.string.settings_active_popups_cleared))
+        }
+
         // Start Background Service
         val serviceIntent = Intent(this, PipUpService::class.java)
         startForegroundService(serviceIntent)
 
         registerProtectedReceiver(settingsReceiver, IntentFilter(PiPupApp.ACTION_SETTINGS_CHANGED))
+        registerProtectedReceiver(popupStateReceiver, IntentFilter(PiPupApp.ACTION_POPUP_STATE_CHANGED))
+    }
+
+    /**
+     * Shows or hides the "Cancel All" button based on whether popups are active or queued.
+     */
+    private fun updateCancelAllButton() {
+        val isDisplaying = PipUpService.getInstance()?.isDisplaying ?: false
+        val btnOpenSettings = findViewById<ImageButton>(R.id.btn_open_settings)
+        if (isDisplaying) {
+            btnCancelAll?.visibility = View.VISIBLE
+            btnOpenSettings?.nextFocusLeftId = R.id.btn_cancel_all
+        } else {
+            btnCancelAll?.visibility = View.GONE
+            btnOpenSettings?.nextFocusLeftId = R.id.btn_open_settings
+        }
     }
 
     override fun onResume() {
@@ -104,6 +140,7 @@ class MainActivity : AppCompatActivity() {
         Permissions.onActivityResumed()
         refreshVersionAndUpdates()
         updateNotificationArea()
+        updateCancelAllButton()
         handler.post(refreshTask)
 
         // Check for finished update downloads that might have been missed
@@ -132,6 +169,9 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         try {
             unregisterReceiver(settingsReceiver)
+        } catch (_: Exception) {}
+        try {
+            unregisterReceiver(popupStateReceiver)
         } catch (_: Exception) {}
     }
 

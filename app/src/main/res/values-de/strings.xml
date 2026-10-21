@@ -6,7 +6,6 @@
     <!-- %1$s: Versionsname -->
     <string name="version_number_debug">v%1$s (debug)</string>
     <string name="version_number">v%1$s</string>
-    <string name="settings_module_setting_format">%1$s: %2$s</string>
     <string name="server_running">Der Server ist erreichbar unter:</string>
     <!-- %1$s: IP-Adresse, %2$d: Port -->
     <string name="server_address">%1$s:%2$d</string>
@@ -18,6 +17,7 @@
     <string name="settings_nav_background">Hintergrund</string>
     <string name="settings_nav_text">Textstil</string>
     <string name="settings_nav_border">Rahmen</string>
+    <string name="settings_nav_button">Buttons</string>
     <string name="settings_nav_animation">Animation</string>
     <string name="settings_nav_updates">Updates</string>
     <string name="settings_nav_modules">Module</string>
@@ -82,6 +82,16 @@
     <string name="settings_border_width">Rahmenbreite</string>
     <string name="settings_border_color">Rahmenfarbe</string>
 
+    <!-- Button Appearance & Styling -->
+    <string name="settings_button_style">Button-Stil</string>
+    <string name="settings_button_text_size">Button-Schriftgröße (sp)</string>
+    <string name="settings_button_radius">Eckenradius (px)</string>
+    <string name="settings_button_fill_color">Button-Füllfarbe</string>
+    <string name="settings_button_focus_color">Button-Fokusfarbe</string>
+    <string name="settings_button_text_color">Button-Textfarbe</string>
+    <string name="settings_button_focus_text_color">Button-Fokustextfarbe</string>
+    <string name="settings_button_border_color">Button-Rahmenfarbe</string>
+
     <!-- Experten-Tools & Migration -->
     <string name="settings_migration">Migration &amp; Synchronisation</string>
     <string name="settings_tools">Experten-Tools</string>
@@ -94,6 +104,8 @@
     <string name="settings_import_no_devices">Keine anderen Geräte gefunden.</string>
     <string name="settings_import_manual">Manuelle IP-Eingabe</string>
     <string name="settings_reset_settings">Einstellungen zurücksetzen</string>
+    <string name="settings_active_popups_cleared">Aktive Popups gelöscht</string>
+    <string name="settings_clear_active_popups">Aktive Popups löschen</string>
 
     <!-- Self-Update Engine -->
     <string name="settings_update_channel">Update-Kanal</string>
@@ -165,6 +177,7 @@
     <string name="version_placeholder">v?.?.?</string>
 
     <!-- Module & Power-Steuerung -->
+    <string name="settings_module_setting_format">%1$s: %2$s</string>
     <!-- Modul: System -->
     <string name="settings_module_system">System-Diagnose</string>
 

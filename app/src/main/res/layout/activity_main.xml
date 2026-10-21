@@ -22,6 +22,27 @@
             android:src="@drawable/ic_banner_clear"
             app:tint="@color/main_logo_tint" />
 
+    <ImageButton
+            android:id="@+id/btn_cancel_all"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginTop="24dp"
+            android:layout_marginStart="24dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_cancel"
+            android:scaleType="fitCenter"
+            android:padding="12dp"
+            android:focusable="true"
+            android:visibility="gone"
+            android:nextFocusLeft="@id/btn_cancel_all"
+            android:nextFocusRight="@id/btn_open_settings"
+            android:nextFocusUp="@id/btn_cancel_all"
+            android:nextFocusDown="@id/btn_cancel_all"
+            android:contentDescription="@string/settings_clear_active_popups"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:tint="@color/main_on_background"/>
+
     <TextView
             android:alpha="0.9"
             android:id="@+id/textViewConnection"
@@ -118,7 +139,7 @@
             android:focusable="true"
             android:nextFocusUp="@id/btn_open_settings"
             android:nextFocusDown="@id/btn_open_settings"
-            android:nextFocusLeft="@id/btn_open_settings"
+            android:nextFocusLeft="@id/btn_cancel_all"
             android:nextFocusRight="@id/btn_open_settings"
             android:contentDescription="@string/settings_open"
             app:layout_constraintTop_toTopOf="parent"
