@@ -1,7 +1,7 @@
 [versions]
 androidsvg = "1.4"
 appcompat = "1.8.0"
-catalog-update-plugin = "1.1.1"
+catalog-update-plugin = "1.1.2"
 constraintlayout = "2.2.2"
 coreKtx = "1.19.1"
 detekt = "1.23.8"
