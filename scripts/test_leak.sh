@@ -5,17 +5,14 @@
 
 set -euo pipefail
 
-# --- Global Constants ---
+# --- Source Shared Common Library ---
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly SCRIPT_DIR
-readonly NOTIFY_SCRIPT="${SCRIPT_DIR}/send_notify.sh"
-readonly APP_PACKAGE="nl.rogro82.pipup"
-readonly APP_ACTIVITY="${APP_PACKAGE}/.MainActivity"
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/common.sh"
 
+readonly NOTIFY_SCRIPT="${SCRIPT_DIR}/send_notify.sh"
 readonly TIMEOUT_SEC=120
 readonly ADB_TIMEOUT_SEC=10
-readonly DEFAULT_IP="127.0.0.1"
-readonly PORT="7979"
 
 # --- Global State ---
 TARGET_IP="${PIPUP_IP:-${DEFAULT_IP}}"
@@ -69,18 +66,15 @@ set_media_mode() {
 #######################################
 cleanup() {
   local exit_code=$?
-  # Disable trap to prevent recursive loops
   trap - EXIT INT TERM
 
   printf "\nCleaning up and exiting...\n" >&2
 
-  # Instantly obliterate hanging child processes (sleep, timeout, adb)
   pkill -9 -P $$ >/dev/null 2>&1 || true
   pkill -9 -f "${NOTIFY_SCRIPT}" >/dev/null 2>&1 || true
 
   if [[ -n "${ORIGINAL_MODE:-}" && ${ORIGINAL_MODE} != 2 ]]; then
     printf "Restoring original media mode (%s)...\n" "${ORIGINAL_MODE}" >&2
-    # Dedicated ultra-short timeout curl so it never blocks the exit
     curl -s --max-time 1 --connect-timeout 1 -X POST \
       -H "Content-Type: application/json" \
       -d "{\"moduleModes\":{\"media\":${ORIGINAL_MODE}}}" \
@@ -89,7 +83,6 @@ cleanup() {
 
   [[ -f "${TMP_LOG}" ]] && rm -f "${TMP_LOG}"
 
-  # Translate SIGINT/SIGTERM to standard bash exit codes
   [[ ${exit_code} -eq 130 || ${exit_code} -eq 143 ]] && exit 130
   exit "${exit_code}"
 }
@@ -114,7 +107,7 @@ usage() {
 format_bytes() {
   local kb="${1:-0}"
   local abs_kb="${kb#-}"
-  
+
   if [[ "${abs_kb}" -ge 1024 ]]; then
     awk -v val="${kb}" 'BEGIN { printf "%+.2f MB", val / 1024 }'
   else
@@ -135,7 +128,6 @@ extract_metric() {
   local pattern="${2}"
   local value
 
-  # Strip ANSI codes and non-breaking spaces, then parse target column
   value=$(echo "${raw_output}" \
     | sed -e 's/\x1b\[[0-9;]*m//g' -e 's/\xc2\xa0/ /g' \
     | awk -F'|' -v pat="^[[:space:]]*${pattern}" '$0 ~ pat { gsub(/^[ \t]+|[ \t]+$/, "", $4); print $4 }' \
@@ -167,7 +159,6 @@ run_test_type() {
   local java_diff="N/A"
   local ctx_diff="N/A"
 
-  # Force-stop and restart app cleanly
   adb_shell_safe am force-stop "${APP_PACKAGE}"
   sleep 2
   adb_shell_safe am start -n "${APP_ACTIVITY}"
@@ -179,10 +170,9 @@ run_test_type() {
   local baseline_pss
   baseline_pss=$(get_current_pss)
 
-  # Execute notification script in background to prevent SIGINT blocking
   timeout -k 1s "${TIMEOUT_SEC}s" "${NOTIFY_SCRIPT}" -d "${TARGET_IP}" -t "${test_type}" -M u </dev/null >"${TMP_LOG}" 2>&1 &
   local notify_pid=$!
-  
+
   local exit_code=0
   wait "${notify_pid}" || exit_code=$?
 
@@ -190,7 +180,6 @@ run_test_type() {
     java_diff="TIMEOUT"
     ctx_diff="TIMEOUT"
   elif [[ ${exit_code} -gt 128 ]]; then
-    # Interrupted by signal (e.g., Ctrl+C). Exit function early to let cleanup trap run.
     return 130
   else
     local raw_output
@@ -203,12 +192,10 @@ run_test_type() {
   local peak_pss
   peak_pss=$(get_current_pss)
 
-  # Calculate PSS difference (KISS: printf "%+d" automatically handles +/- signs)
   if [[ "${baseline_pss}" -gt 0 && "${peak_pss}" -gt 0 ]]; then
     pss_diff=$(format_bytes "$((peak_pss - baseline_pss))")
   fi
 
-  # Handle unload logic for media types
   if [[ "${test_type}" =~ ^(web|whep)$ ]]; then
     api_request "POST" "/debug/idle?ms=1000" >/dev/null
     sleep 2
@@ -217,7 +204,7 @@ run_test_type() {
 
     local recovered_pss
     recovered_pss=$(get_current_pss)
-    
+
     if [[ "${baseline_pss}" -gt 0 && "${recovered_pss}" -gt 0 ]]; then
       local net_diff=$((recovered_pss - baseline_pss))
       local dropped=$((peak_pss - recovered_pss))
@@ -225,7 +212,7 @@ run_test_type() {
       local drop_fmt
       net_fmt=$(format_bytes "${net_diff}")
       drop_fmt=$(format_bytes "${dropped}")
-      after_unload="${net_fmt} (${drop_fmt#+})" # Removes leading '+' from drop format
+      after_unload="${net_fmt} (${drop_fmt#+})"
     else
       after_unload="0 KB"
     fi
@@ -247,21 +234,15 @@ main() {
     esac
   done
 
-  # Setup temp file location
   local tmp_dir="${TMPDIR:-/tmp}"
   [[ -d "/dev/shm" && -w "/dev/shm" ]] && tmp_dir="/dev/shm"
   TMP_LOG=$(mktemp -p "${tmp_dir}" pipup_test_XXXXXX.log)
 
-  # Setup ADB Port Forwarding
-  local adb_cmd="adb"
-  [[ -n "${ANDROID_SERIAL:-}" ]] && adb_cmd="adb -s ${ANDROID_SERIAL}"
-  $adb_cmd forward "tcp:${PORT}" "tcp:${PORT}" >/dev/null 2>&1 || true
+  setup_adb_forwarding "${TARGET_IP}"
 
-  # Ensure app is running to fetch original settings
   adb_shell_safe am start -n "${APP_ACTIVITY}"
   sleep 4
 
-  # Fetch original mode, fallback to 2 (ECO) if unreachable
   ORIGINAL_MODE=$(api_request "GET" "/settings" | grep -o '"media":[0-9]*' | awk -F':' '{print $2}' || true)
   ORIGINAL_MODE="${ORIGINAL_MODE:-2}"
 

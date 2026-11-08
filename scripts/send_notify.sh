@@ -86,8 +86,13 @@ readonly THEME_KEYS=("${!THEMES[@]}")
 # Test Assets
 readonly JPG_URL="https://picsum.photos/427/240.jpg"
 # readonly JPG_URL="https://loremflickr.com/427/240/all"
-PNG_URL=$(printf 'https://robohash.org/hash_%s.png?size=427x240' "$RANDOM")
+
+mapfile -t styles < <(curl -s "https://api.dicebear.com/10.x" | jq -r '.styles[]')
+random_style="${styles[RANDOM % ${#styles[@]}]}"
+PNG_URL=$(printf 'https://api.dicebear.com/10.x/%s/png?size=256&seed=%s' "$random_style" "$RANDOM")
+# PNG_URL=$(printf 'https://robohash.org/hash_%s.png?size=427x240' "$RANDOM")
 readonly PNG_URL
+
 readonly SVG_URL="https://upload.wikimedia.org/wikipedia/commons/1/16/Eye_svg.svg"
 readonly VIDEO_URL="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/360/Big_Buck_Bunny_360_10s_5MB.mp4"
 readonly WEB_URL="https://opensource.org"
@@ -514,21 +519,63 @@ get_timeout_display() {
 # Outputs:
 #   Writes the JSON formatted string or "null" to STDOUT.
 #######################################
+get_random_media_size() {
+  local type="${1}"
+  local media_w=0
+  local media_h=0
+  local media_label="--"
+
+  case "${type}" in
+    png|jpg|webp|svg|multipart|cancel)
+      media_w=$(( 100 + (RANDOM % 541) ))
+      media_label="${media_w}px"
+      ;;
+    video)
+      media_w=$(( 200 + (RANDOM % 441) ))
+      media_label="${media_w}px"
+      ;;
+    whep)
+      media_w=$(( 240 + (RANDOM % 481) ))
+      media_label="${media_w}px"
+      ;;
+    web)
+      media_w=$(( 280 + (RANDOM % 441) ))
+      media_h=$(( 180 + (RANDOM % 321) ))
+      media_label="${media_w}x${media_h}px"
+      ;;
+  esac
+
+  printf '%s %s %s' "${media_w}" "${media_h}" "${media_label}"
+}
+
+#######################################
+# Resolves the corresponding JSON media payload string for a given test type.
+# Arguments:
+#   type: String category identifier (e.g., "png", "video").
+#   url: Optional string custom URL.
+#   fit: Optional string video fit mode (default: "cover").
+#   media_w: Optional integer media width in pixels.
+#   media_h: Optional integer media height in pixels.
+# Outputs:
+#   Writes the JSON formatted string or "null" to STDOUT.
+#######################################
 get_media_payload() {
   local type="${1}"
   local url="${2:-}"
   local fit="${3:-cover}"
+  local media_w="${4:-}"
+  local media_h="${5:-}"
   local cache_field=""
   [[ "${USE_CACHE}" == "false" ]] && cache_field=", \"cache\": false"
 
   case "${type}" in
-    png)   printf '%s' "{\"image\": {\"uri\": \"${url:-$PNG_URL}\", \"width\": 480${cache_field}}}" ;;
-    jpg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$JPG_URL}\", \"width\": 480${cache_field}}}" ;;
-    webp)  printf '%s' "{\"image\": {\"uri\": \"${url:-$WEBP_URL}\", \"width\": 480${cache_field}}}" ;;
-    svg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$SVG_URL}\", \"width\": 480${cache_field}}}" ;;
-    video) printf '%s' "{\"video\": {\"uri\": \"${url:-$VIDEO_URL}\", \"width\": 480}}" ;;
-    whep)  printf '%s' "{\"whep\": {\"uri\": \"${url:-$WHEP_URL}\", \"width\": 640, \"videoFit\": \"${fit}\"}}" ;;
-    web)   printf '%s' "{\"web\": {\"uri\": \"${url:-$WEB_URL}\", \"width\": 640, \"height\": 480${cache_field}}}" ;;
+    png)   printf '%s' "{\"image\": {\"uri\": \"${url:-$PNG_URL}\", \"width\": ${media_w:-480}${cache_field}}}" ;;
+    jpg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$JPG_URL}\", \"width\": ${media_w:-480}${cache_field}}}" ;;
+    webp)  printf '%s' "{\"image\": {\"uri\": \"${url:-$WEBP_URL}\", \"width\": ${media_w:-480}${cache_field}}}" ;;
+    svg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$SVG_URL}\", \"width\": ${media_w:-480}${cache_field}}}" ;;
+    video) printf '%s' "{\"video\": {\"uri\": \"${url:-$VIDEO_URL}\", \"width\": ${media_w:-480}}}" ;;
+    whep)  printf '%s' "{\"whep\": {\"uri\": \"${url:-$WHEP_URL}\", \"width\": ${media_w:-640}, \"videoFit\": \"${fit}\"}}" ;;
+    web)   printf '%s' "{\"web\": {\"uri\": \"${url:-$WEB_URL}\", \"width\": ${media_w:-640}, \"height\": ${media_h:-480}${cache_field}}}" ;;
     *)     printf 'null' ;;
   esac
 }
@@ -561,10 +608,10 @@ get_random_theme_colors() {
 #   Writes the table header to STDOUT.
 #######################################
 print_table_header() {
-  printf "%b%-12s | %-15s | %-76s | %-15s | %-6s | %-20s%b\n" \
+  printf "%b%-12s | %-15s | %-98s | %-15s | %-6s | %-20s%b\n" \
     "${CLR_HEADER}" "TEST TYPE" "THEME" "STYLE PARAMETERS" "ENDPOINT" "HTTP" "JSON STATUS" "${CLR_RESET}"
   printf "%b%s%b\n" \
-    "${CLR_PARAM}" "--------------------------------------------------------------------------------------------------------------------------------------------------------" "${CLR_RESET}"
+    "${CLR_PARAM}" "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------" "${CLR_RESET}"
 }
 
 #######################################
@@ -603,8 +650,8 @@ get_random_style() {
   local rand_padding=$(( MIN_PADDING + (RANDOM % 25) ))
   local rand_anim_type=$(( RANDOM % 11 ))
   local rand_anim_duration=$(( 300 + RANDOM % 1201 ))
-  local rand_title_size=$(( 18 + RANDOM % 20 ))
-  local rand_msg_size=$(( 12 + RANDOM % 10 ))
+  local rand_title_size=$(( 10 + RANDOM % 21 ))
+  local rand_msg_size=$(( 10 + RANDOM % 11 ))
 
   local fit="cover"
   if [[ "${type}" == "whep" ]]; then
@@ -663,7 +710,7 @@ print_result_row() {
     status_display=$(printf '%s' "${body}" | head -n 1 | cut -c 1-40)
   fi
 
-  printf "%b%-12s%b | %b%-15s%b | %b%-76s%b | %-15s | %b%-6s%b | %b%-20s%b\n" \
+  printf "%b%-12s%b | %b%-15s%b | %b%-98s%b | %-15s | %b%-6s%b | %b%-20s%b\n" \
     "${CLR_TEST}" "${type}" "${CLR_RESET}" \
     "${CLR_THEME}" "${theme}" "${CLR_RESET}" \
     "${CLR_PARAM}" "${style}" "${CLR_RESET}" \
@@ -1132,6 +1179,7 @@ send_json_notification() {
   local msg_align="${18:-0}"
   local title_size="${19:-24}"
   local msg_size="${20:-14}"
+  local popup_duration="${21:-${DURATION}}"
 
   local endpoint="http://${target_ip}:${PORT}/notify"
 
@@ -1147,7 +1195,7 @@ send_json_notification() {
   local json_payload
   json_payload=$(cat <<EOF
 {
-  "duration": ${DURATION},
+  "duration": ${popup_duration},
   "position": ${position},
   "title": "${escaped_title}",
   "titleColor": "${title_color}",
@@ -1192,7 +1240,7 @@ EOF
 #   MULTIPART_IMAGES
 # Arguments:
 #   target_ip: String IP address of the target server.
-#   position: Integer screen position index (0-4).
+#   position: Integer screen position index (0-8).
 #   suffix: Optional string debug message.
 #   media_pos: Optional integer alignment index (0-3).
 #   padding: Optional integer padding in pixels.
@@ -1211,22 +1259,26 @@ send_multipart_test() {
   local anim_type="${6:-0}"
   local anim_duration="${7:-500}"
   local overwrite="${8:-false}"
+  local popup_duration="${9:-${DURATION}}"
   local endpoint="http://${target_ip}:${PORT}/notify"
 
   local rand_idx=$(( RANDOM % ${#MULTIPART_IMAGES[@]} ))
   local img_file="${MULTIPART_IMAGES[$rand_idx]}"
   local img_ext="${img_file##*.}"
+  local media_w media_h media_label
+  read -r media_w media_h media_label <<< "$(get_random_media_size "multipart")"
 
   local full_msg
-  full_msg=$(printf "Mode: Form-Data (Source: %s)\nPos: %s\nMediaPos: %s\nPadding: %s\nOverwrite: %s%b" \
-    "${img_ext^^}" "${position}" "${media_pos}" "${padding}" "${overwrite}" "${suffix}")
+  full_msg=$(printf "Mode: Form-Data (Source: %s)\nPos: %s | Duration: %ss\nMediaPos: %s | MediaSize: %s\nPadding: %s\nOverwrite: %s%b" \
+    "${img_ext^^}" "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${padding}" "${overwrite}" "${suffix}")
 
   local response
   response=$(curl -s --max-time 60 -w "\n%{http_code}" -X POST "${endpoint}" \
     -F "title=Multipart Test" \
     -F "message=${full_msg}" \
     -F "image=@${img_file}" \
-    -F "duration=${DURATION}" \
+    -F "imageWidth=${media_w}" \
+    -F "duration=${popup_duration}" \
     -F "position=${position}" \
     -F "mediaPosition=${media_pos}" \
     -F "contentPadding=${padding}" \
@@ -1242,8 +1294,8 @@ send_multipart_test() {
   # rm -f "${temp_file}" # No longer needed with SHARED_MULTIPART_IMAGE
 
   local style_info
-  style_info=$(printf "Pos:%s MedPos:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-    "${position}" "${media_pos}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
+  style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+    "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
 
   print_result_row "MULTIPART" "N/A (Form-Data)" "${style_info}" "${target_ip}" "${code}|${body}"
 }
@@ -1575,6 +1627,8 @@ main() {
     local pos="${3}"
     local media="${4}"
     local fit="${5:-}"
+    local popup_duration="${6:-${DURATION}}"
+    local media_size_label="${7:---}"
 
     local theme_name="${THEME_KEYS[$(( RANDOM % ${#THEME_KEYS[@]} ))]}"
     local theme_str="${THEMES[$theme_name]}"
@@ -1594,15 +1648,15 @@ main() {
 
     local info_msg fit_label=""
     [[ "${type}" == "whep" ]] && fit_label=" | Fit: ${fit}"
-    info_msg=$(printf "Theme: %s\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
-      "${theme_name}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${rand_media_pos}" "${padding}" \
+    info_msg=$(printf "Position: %s | Duration: %ss\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | MediaSize: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
+      "${pos}" "${popup_duration}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${rand_media_pos}" "${media_size_label}" "${padding}" \
       "${anim_type}" "${anim_dur}" "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${overwrite}" "${suffix}")
 
     local response
     response=$(send_json_notification "${target_ip}" "${title}" "${info_msg}" "${media}" \
       "${pos}" "${bg}" "${border_w}" "${border}" "${title_c}" "${msg_c}" \
       "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}" \
-      "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}")
+      "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${popup_duration}")
 
     local table_type="${type^^}"
     if [[ "${type}" == "whep" ]]; then
@@ -1617,8 +1671,8 @@ main() {
     fi
 
     local style_info
-    style_info=$(printf "Pos:%s MedPos:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-      "${pos}" "${rand_media_pos}" "${radius}" "${border_w}" "${padding}" \
+    style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+      "${pos}" "${popup_duration}" "${rand_media_pos}" "${media_size_label}" "${radius}" "${border_w}" "${padding}" \
       "${anim_type}" "${anim_dur}" "${overwrite}")
 
     print_result_row "${table_type}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
@@ -1640,6 +1694,7 @@ main() {
   #   overwrite: Optional boolean string.
   #   suffix: Optional string debug suffix.
   #   is_async: Optional boolean string ("true" for background).
+  #   popup_duration: Optional integer duration in seconds.
   # Outputs:
   #   Writes test results to STDOUT.
   #######################################
@@ -1652,12 +1707,13 @@ main() {
     local overwrite="${6:-false}"
     local suffix="${7:-}"
     local is_async="${8:-false}"
+    local popup_duration="${9:-${DURATION}}"
 
     if [[ "${type}" == "multipart" ]]; then
       if [[ "${is_async}" == "true" ]]; then
-        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" &
+        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" &
       else
-        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}"
+        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}"
       fi
     else
       local radius border_w padding anim_type anim_dur fit title_s msg_s
@@ -1665,12 +1721,15 @@ main() {
       style_data=$(get_random_style "${type}")
       read -r radius border_w padding anim_type anim_dur fit title_s msg_s <<< "${style_data}"
 
+      local media_w media_h media_label
+      read -r media_w media_h media_label <<< "$(get_random_media_size "${type}")"
+
       local media
-      media=$(get_media_payload "${type}" "${custom_url}" "${fit}")
+      media=$(get_media_payload "${type}" "${custom_url}" "${fit}" "${media_w}" "${media_h}")
       if [[ "${is_async}" == "true" ]]; then
-        dispatch_test "${type}" "${title}" "${pos}" "${media}" "${fit}" &
+        dispatch_test "${type}" "${title}" "${pos}" "${media}" "${fit}" "${popup_duration}" "${media_label}" &
       else
-        dispatch_test "${type}" "${title}" "${pos}" "${media}" "${fit}"
+        dispatch_test "${type}" "${title}" "${pos}" "${media}" "${fit}" "${popup_duration}" "${media_label}"
       fi
     fi
   }
@@ -1716,8 +1775,9 @@ main() {
          type="${TEST_TYPES[rand_idx]}"
       done
 
-      local stress_pos="${user_position:-$(( RANDOM % 5 ))}"
-      trigger_test "${type}" "Stress #${i}" "${stress_pos}" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "true"
+      local stress_pos="${user_position:-$(( RANDOM % 9 ))}"
+      local stress_dur=$(( 3 + (RANDOM % 6) ))
+      trigger_test "${type}" "Stress #${i}" "${stress_pos}" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "true" "${stress_dur}"
       test_pids+=($!)
     done
 
@@ -1779,18 +1839,18 @@ main() {
     local a e
     for e in "false" "true"; do
       for a in {0..10}; do
-        local target_p="${user_position:-$(( RANDOM % 5 ))}"
+        local target_p="${user_position:-$(( RANDOM % 9 ))}"
         local rand_t_a=$(( RANDOM % 3 ))
         local rand_m_a=$(( RANDOM % 3 ))
-        local rand_t_s=$(( 18 + RANDOM % 15 ))
-        local rand_m_s=$(( 12 + RANDOM % 10 ))
+        local rand_t_s=$(( 10 + RANDOM % 21 ))
+        local rand_m_s=$(( 10 + RANDOM % 11 ))
 
         local title="Gallery Anim ${a}"
-        local info="Pos: ${POS_NAMES[$target_p]} | Exit: ${e}\nAlign: T=${ALIGN_NAMES[$rand_t_a]}, M=${ALIGN_NAMES[$rand_m_a]}\nSize: T=${rand_t_s}, M=${rand_m_s}"
+        local info="Pos: ${POS_NAMES[$target_p]} | Duration: ${DURATION}s | Exit: ${e}\nAlign: T=${ALIGN_NAMES[$rand_t_a]}, M=${ALIGN_NAMES[$rand_m_a]}\nSize: T=${rand_t_s}, M=${rand_m_s}"
 
         local style_info
-        style_info=$(printf "Pos:%s Algn:%s/%s Size:%s/%s Anim:%s (%sms) Exit:%s" \
-            "${target_p}" "${rand_t_a}" "${rand_m_a}" "${rand_t_s}" "${rand_m_s}" "${a}" "500" "${e}")
+        style_info=$(printf "Pos:%s Dur:%ss Algn:%s/%s Size:%s/%s Anim:%s (%sms) Exit:%s" \
+            "${target_p}" "${DURATION}" "${rand_t_a}" "${rand_m_a}" "${rand_t_s}" "${rand_m_s}" "${a}" "500" "${e}")
 
         # Mix in some colors and borders from themes
         local theme_str
@@ -1819,15 +1879,17 @@ main() {
     for ((r = 1; r <= repeat_count; r++)); do
       [[ "${repeat_count}" -gt 1 ]] && printf "%b[RUN %d/%d]%b\n" "${CLR_MONITOR}" "${r}" "${repeat_count}" "${CLR_RESET}"
 
-      local multi_pos="${user_position:-$(( RANDOM % 5 ))}"
+      local multi_pos="${user_position:-$(( RANDOM % 9 ))}"
       trigger_test "multipart" "Multipart Test" "${multi_pos}" "${target_ip}" "" "${overwrite}" "${suffix}" "false"
       [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
     done
   elif [[ "${test_type}" == "cancel" ]]; then
+    local media_w media_h media_label
+    read -r media_w media_h media_label <<< "$(get_random_media_size "png")"
     local media
-    media=$(get_media_payload "png")
+    media=$(get_media_payload "png" "" "cover" "${media_w}" "${media_h}")
     print_table_header
-    dispatch_test "cancel" "Abort Test" "${user_position:-0}" "${media}"
+    dispatch_test "cancel" "Abort Test" "${user_position:-0}" "${media}" "" "${DURATION}" "${media_label}"
     sleep 2
     send_cancel_request "${target_ip}"
   else
@@ -1853,9 +1915,9 @@ main() {
     for ((r = 1; r <= repeat_count; r++)); do
       [[ "${repeat_count}" -gt 1 ]] && printf "%b[RUN %d/%d]%b\n" "${CLR_MONITOR}" "${r}" "${repeat_count}" "${CLR_RESET}"
 
-      local single_pos="${user_position:-$(( RANDOM % 5 ))}"
+      local single_pos="${user_position:-$(( RANDOM % 9 ))}"
       trigger_test "${test_type}" "${test_type^^} Test" "${single_pos}" "${target_ip}" "${custom_url}" "${overwrite}" "${suffix}" "false"
-      [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
+    #   [[ $r -lt $repeat_count ]] && sleep "$((DURATION - 1))"
     done
   fi
 

@@ -5,65 +5,16 @@
 
 set -euo pipefail
 
-#######################################
-# GLOBALS
-#######################################
-readonly DEFAULT_IP='127.0.0.1'
-readonly PORT='7979'
-
-# UI Coloring
-readonly CLR_RESET='\033[0m'
-readonly CLR_HEADER='\033[1;35m'
-readonly CLR_SUCCESS='\033[1;32m'
-readonly CLR_ERROR='\033[1;31m'
-readonly CLR_WARN='\033[1;33m'
-
-#######################################
-# HELPERS
-#######################################
+# --- Source Shared Common Library ---
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=/dev/null
+source "${SCRIPT_DIR}/common.sh"
 
 extract_json_val() {
   local json="${1:-}"
   local key="${2:-}"
   [[ -z "${json}" || -z "${key}" ]] && return
   printf '%s\n' "${json}" | sed -n "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"\?\([^\",}]*\)\"\?.*/\1/p"
-}
-
-setup_adb_forwarding() {
-  local target_ip="${1}"
-  if (printf '' > "/dev/tcp/127.0.0.1/${PORT}") >/dev/null 2>&1; then
-    return 0
-  fi
-  if ! command -v adb >/dev/null 2>&1; then
-    return 1
-  fi
-
-  local adb_cmd="adb"
-  local adb_device=""
-
-  if [[ "${target_ip}" != "127.0.0.1" && "${target_ip}" != "localhost" ]]; then
-    local matched_device
-    matched_device=$(adb devices | tail -n +2 | grep "^${target_ip}" | awk '{print $1}' | head -n 1)
-    if [[ -n "${matched_device}" ]]; then
-      adb_device="${matched_device}"
-    else
-      if adb connect "${target_ip}:5555" >/dev/null 2>&1; then
-        adb_device="${target_ip}:5555"
-      fi
-    fi
-  fi
-
-  if [[ -z "${adb_device}" ]]; then
-    local device_count
-    device_count=$(adb devices | tail -n +2 | grep -cv '^$')
-    if [ "${device_count}" -gt 1 ]; then
-      adb_device=$(adb devices | tail -n +2 | head -n 1 | awk '{print $1}')
-    fi
-  fi
-
-  [[ -n "${adb_device}" ]] && adb_cmd="adb -s ${adb_device}"
-  printf "[SYSTEM] ADB: Forwarding tcp:%s via %s... " "${PORT}" "${adb_cmd}"
-  $adb_cmd forward "tcp:${PORT}" "tcp:${PORT}" >/dev/null 2>&1 && printf "OK\n" || printf "FAILED\n"
 }
 
 usage() {
@@ -83,50 +34,61 @@ EOF
 }
 
 #######################################
-# MAIN
+# Main execution logic.
+# Globals:
+#   DEFAULT_IP
+#   PORT
+#   CLR_HEADER
+#   CLR_SUCCESS
+# Arguments:
+#   @: Command-line arguments passed to the script.
+# Outputs:
+#   Writes progress and execution results to stdout.
+# Returns:
+#   0 on success, non-zero on error.
 #######################################
+main() {
+  local target_ip="${DEFAULT_IP}"
+  local command=""
+  local state=""
+  local endpoint body response code
+  local name model ver power_block p_on p_wake p_sleep p_method perm_admin perm_acc
 
-target_ip="${DEFAULT_IP}"
+  while getopts "d:h" opt; do
+    case "${opt}" in
+      d) target_ip="${OPTARG}" ;;
+      h|?) usage ;;
+    esac
+  done
+  shift $((OPTIND - 1))
 
-while getopts "d:h" opt; do
-  case "${opt}" in
-    d) target_ip="${OPTARG}" ;;
-    h) usage ;;
-    *) usage ;;
+  command="${1:-}"
+  [[ -z "${command}" ]] && usage
+
+  case "${command}" in
+    on|wake|up) state="on" ;;
+    off|sleep|down) state="off" ;;
+    toggle) state="toggle" ;;
+    status|state) state="status" ;;
+    *) printf "Unknown command: %s\n" "${command}" ; usage ;;
   esac
-done
-shift $((OPTIND - 1))
 
-command="${1:-}"
-[[ -z "${command}" ]] && usage
+  setup_adb_forwarding "${target_ip}"
 
-# Normalize command
-case "${command}" in
-  on|wake|up) state="on" ;;
-  off|sleep|down) state="off" ;;
-  toggle) state="toggle" ;;
-  status|state) state="status" ;;
-  *) printf "Unknown command: %s\n" "${command}" ; usage ;;
-esac
-
-setup_adb_forwarding "${target_ip}" || true
-
-if [[ "${state}" == "status" ]]; then
+  if [[ "${state}" == "status" ]]; then
     endpoint="http://${target_ip}:${PORT}/state"
     printf "%b[POWER] Requesting current state from %s...%b\n" "${CLR_HEADER}" "${target_ip}" "${CLR_RESET}"
 
-    body=$(curl -s "${endpoint}" || printf "")
+    body=$(curl -s --connect-timeout 3 --max-time 5 "${endpoint}" || printf "")
     if [[ -z "${body}" ]]; then
         printf "%b[ERROR] Could not connect to PiPup server.%b\n" "${CLR_ERROR}" "${CLR_RESET}"
         exit 1
     fi
 
-    # Extract relevant fields (Power block is usually at the end)
     name=$(extract_json_val "${body}" "name")
     model=$(extract_json_val "${body}" "model")
     ver=$(extract_json_val "${body}" "version")
 
-    # Power Block (targeted extraction via sed to handle nested JSON)
     power_block=$(printf '%s' "${body}" | sed -n 's/.*"power":{\([^}]*\)}.*/\1/p')
 
     p_on=$(extract_json_val "${power_block}" "screenOn")
@@ -134,13 +96,11 @@ if [[ "${state}" == "status" ]]; then
     p_sleep=$(extract_json_val "${power_block}" "canSleep")
     p_method=$(extract_json_val "${power_block}" "sleepMethod")
 
-    # Permissions
     perm_admin=$(extract_json_val "${body}" "deviceAdmin")
     perm_acc=$(extract_json_val "${body}" "accessibility")
 
-    # Formatting helper
     format_bool() { [[ "${1}" == "true" ]] && printf "%bYES%b" "${CLR_SUCCESS}" "${CLR_RESET}" || printf "%bNO%b" "${CLR_ERROR}" "${CLR_RESET}"; }
-    format_on_off() { [[ "${1}" == "true" ]] && printf "%bON%b" "${CLR_SUCCESS}" "${CLR_RESET}" || printf "%bOFF%b" "${CLR_WARN}" "${CLR_RESET}"; }
+    format_on_off() { [[ "${1}" == "true" ]] && printf "%bON%b" "${CLR_SUCCESS}" "${CLR_RESET}" || printf "%bOFF%b" "${CLR_WARNING}" "${CLR_RESET}"; }
 
     printf "\n%bDevice Information:%b\n" "${CLR_HEADER}" "${CLR_RESET}"
     printf "  Name:    %s\n" "${name}"
@@ -157,11 +117,11 @@ if [[ "${state}" == "status" ]]; then
     printf "  Device Admin:     " ; format_bool "${perm_admin}" ; printf "\n"
     printf "  Accessibility:    " ; format_bool "${perm_acc}" ; printf "\n\n"
 
-else
+  else
     endpoint="http://${target_ip}:${PORT}/power?state=${state}"
     printf "%b[POWER] Sending '%s' command to %s...%b\n" "${CLR_HEADER}" "${state^^}" "${target_ip}" "${CLR_RESET}"
 
-    response=$(curl -s -w "|%{http_code}" -X POST "${endpoint}" || printf "Error|000")
+    response=$(curl -s --connect-timeout 3 --max-time 5 -w "|%{http_code}" -X POST "${endpoint}" || printf "Error|000")
     body="${response%|*}"
     code="${response##*|}"
 
@@ -174,4 +134,7 @@ else
     else
         printf "%b[FAILED] HTTP %s: %s%b\n" "${CLR_ERROR}" "${code}" "${body}" "${CLR_RESET}"
     fi
-fi
+  fi
+}
+
+main "$@"
