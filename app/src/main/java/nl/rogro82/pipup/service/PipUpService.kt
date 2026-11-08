@@ -87,6 +87,9 @@ class PipUpService : Service() {
                 emit("popup_removed", mapOf("reason" to reason, "removedId" to removedId))
                 notifyLocalStateChange()
             }
+            onStateChanged = {
+                notifyLocalStateChange()
+            }
         }
     }
     /** The module manager for this service. */

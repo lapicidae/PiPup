@@ -51,7 +51,11 @@ class PayloadParserTest {
             1 to PopupProps.Position.TopLeft,
             2 to PopupProps.Position.BottomRight,
             3 to PopupProps.Position.BottomLeft,
-            4 to PopupProps.Position.Center
+            4 to PopupProps.Position.Center,
+            5 to PopupProps.Position.TopCenter,
+            6 to PopupProps.Position.BottomCenter,
+            7 to PopupProps.Position.CenterLeft,
+            8 to PopupProps.Position.CenterRight
         )
 
         for ((index, expectedEnum) in expectedPositions) {
@@ -107,5 +111,53 @@ class PayloadParserTest {
 
         val props = PopupProps.fromJson(jsonStr)
         assertFalse(props.isInternalUpdateAction)
+    }
+
+    @Test
+    fun testStackingParsing() {
+        val jsonVertical = """{"title": "Vertical Stack", "stack": "vertical"}"""
+        val propsVertical = PopupProps.fromJson(jsonVertical)
+        assertEquals("vertical", propsVertical.stack)
+
+        val jsonHorizontal = """{"title": "Horizontal Stack", "stack": "HORIZONTAL"}"""
+        val propsHorizontal = PopupProps.fromJson(jsonHorizontal)
+        assertEquals("horizontal", propsHorizontal.stack)
+
+        val jsonInvalid = """{"title": "Invalid Stack", "stack": "invalid_mode"}"""
+        val propsInvalid = PopupProps.fromJson(jsonInvalid)
+        org.junit.Assert.assertNull(propsInvalid.stack)
+    }
+
+    @Test
+    fun testInternalUpdateActionDefaults() {
+        val props = PopupProps(title = "Internal Action Test")
+        assertFalse(props.isInternalUpdateAction)
+    }
+
+    @Test
+    fun testPositionAndSideMapping() {
+        val topLeft = PopupProps.Position.TopLeft
+        assertEquals(PopupProps.ScreenSide.LEFT, topLeft.getScreenSide())
+        assertEquals(PopupProps.VerticalAnchor.TOP, topLeft.getVerticalAnchor())
+
+        val center = PopupProps.Position.Center
+        assertEquals(PopupProps.ScreenSide.CENTER, center.getScreenSide())
+        assertEquals(PopupProps.VerticalAnchor.CENTER, center.getVerticalAnchor())
+
+        val bottomRight = PopupProps.Position.BottomRight
+        assertEquals(PopupProps.ScreenSide.RIGHT, bottomRight.getScreenSide())
+        assertEquals(PopupProps.VerticalAnchor.BOTTOM, bottomRight.getVerticalAnchor())
+    }
+
+    @Test
+    fun testStackDirectionNormalization() {
+        val vert = PopupProps.parseStackDirection("VERTICAL")
+        assertEquals(PopupProps.StackDirection.VERTICAL, vert)
+
+        val horiz = PopupProps.parseStackDirection("  Horizontal  ")
+        assertEquals(PopupProps.StackDirection.HORIZONTAL, horiz)
+
+        val fallback = PopupProps.parseStackDirection("invalid_string")
+        assertEquals(PopupProps.StackDirection.VERTICAL, fallback)
     }
 }

@@ -14,16 +14,18 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 
 **JSON Payload Properties:**
 
-| Field           | Type   | Default | Description                                                         |
-| :-------------- | :----- | :------ | :------------------------------------------------------------------ |
-| `id`            | String | null    | Unique identifier for popup stacking and in-place updates.          |
-| `duration`      | Int    | 10      | Seconds to display.                                                 |
-| `position`      | Int    | 0       | 0:TR, 1:TL, 2:BR, 3:BL, 4:Center.                                   |
-| `title`         | String | null    | Heading text.                                                       |
-| `message`       | String | null    | Main body text.                                                     |
-| `media`         | Object | null    | Media configuration (see below).                                    |
-| `animationType` | Int    | 0       | 0..10 (Fade, Slide, Scale, etc.).                                   |
-| `overwrite`     | Bool   | false   | If true and max concurrency is reached, evicts oldest ID-less popup |
+| Field                  | Type   | Default | Description                                                                                                                      |
+| :--------------------- | :----- | :------ | :------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                   | String | null    | Unique identifier for popup stacking and in-place updates.                                                                       |
+| `duration`             | Int    | 10      | Seconds to display.                                                                                                              |
+| `position`             | Int    | 0       | 0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center, 5: TopCenter, 6: BottomCenter, 7: CenterLeft, 8: CenterRight. |
+| `stack`                | String | null    | Stacking axis direction: `"vertical"` or `"horizontal"`.                                                                         |
+| `title`                | String | null    | Heading text.                                                                                                                    |
+| `message`              | String | null    | Main body text.                                                                                                                  |
+| `media`                | Object | null    | Media configuration (see below).                                                                                                 |
+| `animationType`        | Int    | 0       | 0..10 (Fade, Slide, Scale, etc.).                                                                                                |
+| `overwrite`            | Bool   | false   | If true and max concurrency is reached, evicts oldest ID-less popup                                                              |
+| `popupLoadingBehavior` | Int    | 0       | 0: Strict Sequential (Default), 1: Parallel Fast-Track                                                                           |
 
 **Popup Stacking & ID Behavior:**
 
@@ -35,8 +37,8 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 
 - **Image:** `{"image": {"uri": "url", "width": 480, "cache": true}}`
 - **Video:** `{"video": {"uri": "url", "width": 480, "muted": true, "udp": false}}`
-- **Web:** `{"web": {"uri": "url", "width": 640, "height": 480}}`
-- **WHEP:** `{"whep": {"uri": "url", "width": 640, "videoFit": "cover"}}`
+- **Web:** `{"web": {"uri": "url", "width": 640, "height": 480}}` (height is optional, defaults to 16:9 ratio `width * 9 / 16`)
+- **WHEP:** `{"whep": {"uri": "url", "width": 640, "height": 360, "videoFit": "cover"}}` (height is optional, defaults to source video aspect ratio)
 
 **Multipart Form Fields:**
 Supports all top-level JSON keys as form fields. Local image upload uses the `image` field.

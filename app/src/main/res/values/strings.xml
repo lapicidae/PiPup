@@ -95,9 +95,12 @@
     <!-- Advanced Tools, Migration & Actions -->
     <string name="settings_migration">Migration &amp; Sync</string>
     <string name="settings_tools">Expert Tools</string>
+    <string name="settings_media_loading">Media Loading</string>
     <string name="settings_danger_zone">Danger Zone</string>
     <string name="settings_advanced_mode">Advanced Mode</string>
     <string name="settings_advanced_mode_desc">Enables manual HEX code input and displays precise numeric slider values.</string>
+    <string name="settings_loading_behavior">Parallel Fast-Track Loading</string>
+    <string name="settings_loading_behavior_desc">Skips arrival order when other popups have already finished loading in the background.</string>
     <!-- %1$s: App Name -->
     <string name="settings_import_network">Import from another %1$s</string>
     <string name="settings_import_discover">Searching for devices…</string>

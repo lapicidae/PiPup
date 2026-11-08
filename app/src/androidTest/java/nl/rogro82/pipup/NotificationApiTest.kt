@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import nl.rogro82.pipup.service.PipUpService
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -384,6 +385,118 @@ class NotificationApiTest {
         assertEquals(200, res.code)
         assertEquals("OK: Enqueued", res.body)
         sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+    }
+
+    @Test
+    fun testNonOverlappingStackingAndLoadingModes() {
+        val origMax = PiPupApp.settings.maxPopups
+        val origBehavior = PiPupApp.settings.popupLoadingBehavior
+        try {
+            sendPostWithResponse(
+                "$baseUrl/settings",
+                """{"maxPopups": 5, "popupLoadingBehavior": 1}""".toByteArray()
+            )
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            Thread.sleep(300)
+
+            val multiline = (1..7).joinToString("\\n") { "Line $it of tall popup content" }
+
+            // 1. Place tall popup #1 at TopRight (pos 0) and tall popup #2 at BottomRight (pos 2)
+            val tr1 = """{"id": "tr_1", "title": "TR 1", "message": "$multiline", "position": 0, "duration": 30}"""
+            val br1 = """{"id": "br_1", "title": "BR 1", "message": "$multiline", "position": 2, "duration": 30}"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", tr1.toByteArray()).code)
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", br1.toByteArray()).code)
+            Thread.sleep(600)
+
+            // 2. Enqueue a 2nd tall popup at TopRight (tr_2, overwrite=false) -> would shift down into br_1, so must queue!
+            val tr2 = """{"id": "tr_2", "title": "TR 2", "message": "$multiline", "position": 0, "overwrite": false, "duration": 30}"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", tr2.toByteArray()).code)
+            Thread.sleep(500)
+
+            val stateAfterTr2 = org.json.JSONObject(sendGetWithResponse("$baseUrl/state").body)
+            val activeIdsAfterTr2 = mutableSetOf<String>()
+            val popupsArr1 = stateAfterTr2.getJSONArray("popups")
+            for (i in 0 until popupsArr1.length()) {
+                activeIdsAfterTr2.add(popupsArr1.getJSONObject(i).getString("id"))
+            }
+            assertTrue("tr_1 should be active", activeIdsAfterTr2.contains("tr_1"))
+            assertTrue("br_1 should be active", activeIdsAfterTr2.contains("br_1"))
+            assertTrue("tr_2 must wait in queue to prevent overlap", !activeIdsAfterTr2.contains("tr_2"))
+
+            // 3. In Parallel Fast-Track mode (1), enqueue a non-colliding popup at TopLeft (pos 1) -> overtakes queued tr_2!
+            val tl1 = """{"id": "tl_1", "title": "TL FastTrack", "message": "Fits on left", "position": 1, "overwrite": false, "duration": 30}"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", tl1.toByteArray()).code)
+            Thread.sleep(500)
+
+            val stateAfterTl1 = org.json.JSONObject(sendGetWithResponse("$baseUrl/state").body)
+            val activeIdsAfterTl1 = mutableSetOf<String>()
+            val popupsArr2 = stateAfterTl1.getJSONArray("popups")
+            for (i in 0 until popupsArr2.length()) {
+                activeIdsAfterTl1.add(popupsArr2.getJSONObject(i).getString("id"))
+            }
+            assertTrue("tl_1 should fast-track and become active", activeIdsAfterTl1.contains("tl_1"))
+            assertTrue("tr_2 must still wait in queue", !activeIdsAfterTl1.contains("tr_2"))
+
+            // 4. Cancel br_1 -> now tr_2 has space at TopRight and must automatically display!
+            val cancelBr1 = sendPostWithResponse("$baseUrl/cancel?id=br_1", ByteArray(0))
+            assertEquals(200, cancelBr1.code)
+            Thread.sleep(1000)
+
+            val stateAfterCancel = org.json.JSONObject(sendGetWithResponse("$baseUrl/state").body)
+            val activeIdsAfterCancel = mutableSetOf<String>()
+            val popupsArr3 = stateAfterCancel.getJSONArray("popups")
+            for (i in 0 until popupsArr3.length()) {
+                activeIdsAfterCancel.add(popupsArr3.getJSONObject(i).getString("id"))
+            }
+            assertTrue("tr_2 should now be active after br_1 was removed", activeIdsAfterCancel.contains("tr_2"))
+
+            // 5. Verify First-Ready-Wins (popupLoadingBehavior=1) at the same position with maxPopups=1:
+            // A slow media popup is enqueued first, followed immediately by a fast text popup.
+            // The fast text popup becomes ready first and wins the screen slot; once cancelled,
+            // the slow popup (waiting in mReadyWaiting) is displayed.
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            sendPostWithResponse(
+                "$baseUrl/settings",
+                """{"maxPopups": 1, "popupLoadingBehavior": 1}""".toByteArray()
+            )
+            Thread.sleep(300)
+
+            val slowImgUrl = "https://dummyimage.com/320x180/112233/ffffff&text=Slow+${System.currentTimeMillis()}"
+            val slowPopup = """{
+                "id": "slow_1",
+                "title": "Slow Media",
+                "position": 0,
+                "duration": 30,
+                "media": { "image": { "uri": "$slowImgUrl", "width": 320 } }
+            }"""
+            val fastPopup = """{
+                "id": "fast_2",
+                "title": "Fast Text",
+                "message": "Ready immediately",
+                "position": 0,
+                "duration": 30
+            }"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", slowPopup.toByteArray()).code)
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", fastPopup.toByteArray()).code)
+            Thread.sleep(150)
+
+            val stateRace = org.json.JSONObject(sendGetWithResponse("$baseUrl/state").body)
+            assertEquals(
+                "fast_2 should overtake slow_1 while slow_1 is still loading",
+                "fast_2",
+                stateRace.getJSONObject("popup").getString("id")
+            )
+        } finally {
+            try {
+                sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            } catch (_: Exception) {}
+            try {
+                sendPostWithResponse(
+                    "$baseUrl/settings",
+                    """{"maxPopups": $origMax, "popupLoadingBehavior": $origBehavior}""".toByteArray()
+                )
+            } catch (_: Exception) {}
+        }
     }
 
     private data class ApiResponse(val code: Int, val body: String)

@@ -155,26 +155,28 @@ All fields below are optional.
 
 #### General & Text Settings
 
-| _Field_               | _Type_  | _Default_ | _Description_                                                          |
-| --------------------- | ------- | --------- | ---------------------------------------------------------------------- |
-| **id**                | String  | null      | Unique identifier for popup stacking and in-place updates              |
-| **duration**          | Integer | 10        | Duration in seconds                                                    |
-| **position**          | Integer | 0         | Position index on the screen (0..4)                                    |
-| **contentPadding**    | Integer | 20        | Inner padding in pixels between the border and content                 |
-| **title**             | String  |           | Title text                                                             |
-| **titleSize**         | Float   | 22        | Title font size                                                        |
-| **titleColor**        | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format                         |
-| **titleAlignment**    | Integer | 0         | Title alignment (0..2)                                                 |
-| **message**           | String  |           | Message text                                                           |
-| **messageSize**       | Float   | 16        | Message font size                                                      |
-| **messageColor**      | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format                       |
-| **messageAlignment**  | Integer | 0         | Message alignment (0..2)                                               |
-| **animationType**     | Integer | 0         | Animation type index for popup entrance (0..10)                        |
-| **animationDuration** | Integer | 500       | Duration of the entrance animation in milliseconds                     |
-| **animationExit**     | Boolean | false     | Toggles whether the entrance animation is inverted upon dismissal      |
-| **overwrite**         | Boolean | false     | Toggles whether to interrupt the current popup and prioritize this one |
-| **mediaTimeout**      | Integer | 10        | Global timeout in seconds for loading external media (1..30)           |
-| **mediaRetries**      | Integer | 3         | Number of retry attempts when loading media streams fails (0..10)      |
+| _Field_                  | _Type_  | _Default_ | _Description_                                                            |
+| ------------------------ | ------- | --------- | ------------------------------------------------------------------------ |
+| **id**                   | String  | null      | Unique identifier for popup stacking and in-place updates                |
+| **duration**             | Integer | 10        | Duration in seconds                                                      |
+| **position**             | Integer | 0         | Position index on the screen (0..8)                                      |
+| **stack**                | String  | null      | Stacking axis direction (`"vertical"` or `"horizontal"`)                 |
+| **contentPadding**       | Integer | 20        | Inner padding in pixels between the border and content                   |
+| **title**                | String  |           | Title text                                                               |
+| **titleSize**            | Float   | 22        | Title font size                                                          |
+| **titleColor**           | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format                           |
+| **titleAlignment**       | Integer | 0         | Title alignment (0..2)                                                   |
+| **message**              | String  |           | Message text                                                             |
+| **messageSize**          | Float   | 16        | Message font size                                                        |
+| **messageColor**         | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format                         |
+| **messageAlignment**     | Integer | 0         | Message alignment (0..2)                                                 |
+| **animationType**        | Integer | 0         | Animation type index for popup entrance (0..10)                          |
+| **animationDuration**    | Integer | 500       | Duration of the entrance animation in milliseconds                       |
+| **animationExit**        | Boolean | false     | Toggles whether the entrance animation is inverted upon dismissal        |
+| **overwrite**            | Boolean | false     | Toggles whether to interrupt the current popup and prioritize this one   |
+| **mediaTimeout**         | Integer | 10        | Global timeout in seconds for loading external media (1..30)             |
+| **mediaRetries**         | Integer | 3         | Number of retry attempts when loading media streams fails (0..10)        |
+| **popupLoadingBehavior** | Integer | 0         | Stacking loading behavior (0: Strict Sequential, 1: Parallel Fast-Track) |
 
 #### Background & Border Styling
 
@@ -211,6 +213,10 @@ All fields below are optional.
 | **2**   | BottomRight        |
 | **3**   | BottomLeft         |
 | **4**   | Center             |
+| **5**   | TopCenter          |
+| **6**   | BottomCenter       |
+| **7**   | CenterLeft         |
+| **8**   | CenterRight        |
 
 - **`titleAlignment`** and **`messageAlignment`** control text alignment inside the layout:
 

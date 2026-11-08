@@ -6,6 +6,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.Drawable
 import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
@@ -88,9 +89,13 @@ class MediaRenderer(
             cleanup()
             frame.removeAllViews()
             Log.i("MediaRenderer", "No media in props, notifying ready immediately")
-            mainHandler.postAtTime({
+            if (Looper.myLooper() == Looper.getMainLooper()) {
                 callback?.notifyReady() ?: Log.e("MediaRenderer", "Callback is NULL in setup(null)")
-            }, rendererToken, SystemClock.uptimeMillis())
+            } else {
+                mainHandler.postAtTime({
+                    callback?.notifyReady() ?: Log.e("MediaRenderer", "Callback is NULL in setup(null)")
+                }, rendererToken, SystemClock.uptimeMillis())
+            }
             return
         }
 
@@ -173,21 +178,31 @@ class MediaRenderer(
     }
 
     fun fullCleanup(frame: FrameLayout, media: PopupProps.Media?) {
-        cleanup()
-        try {
-            for (i in 0 until frame.childCount) {
-                val child = frame.getChildAt(i)
-                if (child is ImageView) {
-                    Glide.with(appContext).clear(child)
-                    child.setImageDrawable(null)
+        val runnable = Runnable {
+            cleanup()
+            try {
+                for (i in 0 until frame.childCount) {
+                    val child = frame.getChildAt(i)
+                    if (child is ImageView) {
+                        try {
+                            Glide.with(appContext).clear(child)
+                            child.setImageDrawable(null)
+                        } catch (_: Exception) {}
+                    }
                 }
+                frame.removeAllViews()
+            } catch (e: Exception) {
+                Log.d("MediaRenderer", "UI cleanup error: ${e.message}")
             }
-            frame.removeAllViews()
-        } catch (e: Exception) {
-            Log.d("MediaRenderer", "UI cleanup error: ${e.message}")
+            (media as? PopupProps.Media.LocalFile)?.let {
+                PayloadParser.deleteFileAsync(it.path)
+            }
         }
-        (media as? PopupProps.Media.LocalFile)?.let {
-            PayloadParser.deleteFileAsync(it.path)
+
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            runnable.run()
+        } else {
+            mainHandler.post(runnable)
         }
     }
 
@@ -196,7 +211,7 @@ class MediaRenderer(
     }
 
     private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean, udp: Boolean = false, retryCount: Int = 0, videoContext: Context) {
-        val tw = if (scale) appContext.getScaledPixels(width) else appContext.dpToPx(width)
+        val tw = if (scale) appContext.getScaledPixels(width) else width
         val th = (tw * 9) / 16
         callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
@@ -231,8 +246,8 @@ class MediaRenderer(
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun renderWeb(uiContext: Context, frame: FrameLayout, uri: String, width: Int, height: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0) {
-        val tw = if (scale) appContext.getScaledPixels(width) else appContext.dpToPx(width)
-        val th = if (scale) appContext.getScaledPixels(height) else appContext.dpToPx(height)
+        val tw = if (scale) appContext.getScaledPixels(width) else width
+        val th = if (scale) appContext.getScaledPixels(height) else height
         callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
@@ -264,7 +279,7 @@ class MediaRenderer(
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun renderWhep(frame: FrameLayout, uri: String, width: Int, height: Int, scale: Boolean, videoFit: String, retryCount: Int = 0) {
+    private fun renderWhep(frame: FrameLayout, uri: String, width: Int, height: Int?, scale: Boolean, videoFit: String, retryCount: Int = 0) {
         val finalUri = if (isEmulator()) uri.replace("127.0.0.1", "10.0.2.2").replace("localhost", "10.0.2.2") else uri
 
         try {
@@ -272,8 +287,8 @@ class MediaRenderer(
             val injectedHtml = html.replace("'{{STREAM_URL}}'", "'$finalUri'")
                 .replace("object-fit: cover;", "object-fit: $videoFit !important;")
 
-            val tw = if (scale) appContext.getScaledPixels(width) else appContext.dpToPx(width)
-            val th = if (scale) appContext.getScaledPixels(height) else appContext.dpToPx(height)
+            val tw = if (scale) appContext.getScaledPixels(width) else width
+            val th = height?.let { if (scale) appContext.getScaledPixels(it) else it } ?: ((tw * 9) / 16)
             callback?.onDimensionsUpdated(tw, th)
             frame.layoutParams.width = tw
             frame.layoutParams.height = th
@@ -285,7 +300,7 @@ class MediaRenderer(
                 visibility = View.INVISIBLE
                 setBackgroundColor(Color.TRANSPARENT)
                 webView = this
-                addJavascriptInterface(WhepJsBridge(WeakReference(this@MediaRenderer), retryCount), "PiPup")
+                addJavascriptInterface(WhepJsBridge(WeakReference(this@MediaRenderer), WeakReference(frame), tw, height != null, retryCount), "PiPup")
                 webViewClient = WhepWebViewClient(this@MediaRenderer, retryCount)
                 webChromeClient = AppWebChromeClient()
                 settings.apply {
@@ -313,8 +328,8 @@ class MediaRenderer(
     }
 
     private fun renderGlide(uiContext: Context, frame: FrameLayout, source: Any, width: Int, scale: Boolean, diskCache: DiskCacheStrategy, skipMemory: Boolean, retryCount: Int) {
-        val maxDim = if (scale) appContext.getScaledPixels(1280) else appContext.dpToPx(1280)
-        val tw = (if (scale) appContext.getScaledPixels(width) else appContext.dpToPx(width)).coerceAtMost(maxDim)
+        val maxDim = if (scale) appContext.getScaledPixels(1280) else 1280
+        val tw = (if (scale) appContext.getScaledPixels(width) else width).coerceAtMost(maxDim)
         callback?.onDimensionsUpdated(tw, 0)
         frame.layoutParams.width = tw
         frame.requestLayout()
@@ -354,7 +369,7 @@ class MediaRenderer(
 
     private fun renderBitmap(uiContext: Context, frame: FrameLayout, bitmap: Bitmap, width: Int, scale: Boolean) {
         if (bitmap.isRecycled) { callback?.notifyReady(); return }
-        val tw = if (scale) appContext.getScaledPixels(width) else appContext.dpToPx(width)
+        val tw = if (scale) appContext.getScaledPixels(width) else width
         val th = (tw * bitmap.height) / bitmap.width
         callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
@@ -573,8 +588,14 @@ class MediaRenderer(
             val f = frame.get() ?: return false
             val imageView = iv.get() ?: return false
             if (renderer.callback?.isReadyCalled() == true || renderer.callback?.isCleanedUp() == true) return false
-            if (resource.intrinsicWidth > 0) {
-                renderer.callback?.onDimensionsUpdated(tw, (tw * resource.intrinsicHeight) / resource.intrinsicWidth)
+            if (resource.intrinsicWidth > 0 && resource.intrinsicHeight > 0) {
+                val maxH = (renderer.appContext.resources.displayMetrics.heightPixels * 0.40).toInt()
+                val targetH = ((tw * resource.intrinsicHeight) / resource.intrinsicWidth).coerceAtMost(maxH)
+                val fittedW = (targetH * resource.intrinsicWidth) / resource.intrinsicHeight
+                f.layoutParams.width = fittedW
+                f.layoutParams.height = targetH
+                f.requestLayout()
+                renderer.callback?.onDimensionsUpdated(fittedW, targetH)
             }
             renderer.removeStaleViews(f, imageView)
             renderer.callback?.notifyReady()
@@ -583,7 +604,36 @@ class MediaRenderer(
         }
     }
 
-    internal class WhepJsBridge(private val rendererRef: WeakReference<MediaRenderer>, private val retryCount: Int) {
+    fun onWhepSourceDimensions(frame: FrameLayout?, tw: Int, srcWidth: Int, srcHeight: Int) {
+        if (srcWidth <= 0 || srcHeight <= 0 || frame == null) return
+        val calculatedHeight = (tw * srcHeight) / srcWidth
+        if (calculatedHeight > 0 && frame.layoutParams.height != calculatedHeight) {
+            frame.layoutParams.height = calculatedHeight
+            frame.requestLayout()
+            callback?.onDimensionsUpdated(tw, calculatedHeight)
+            callback?.adjustHeights()
+        }
+    }
+
+    internal class WhepJsBridge(
+        private val rendererRef: WeakReference<MediaRenderer>,
+        private val frameRef: WeakReference<FrameLayout>,
+        private val tw: Int,
+        private val hasExplicitHeight: Boolean,
+        private val retryCount: Int
+    ) {
+        @JavascriptInterface
+        fun onSourceDimensions(sourceWidth: Int, sourceHeight: Int) {
+            if (hasExplicitHeight) return
+            val renderer = rendererRef.get() ?: return
+            val frame = frameRef.get() ?: return
+            renderer.mainHandler.postAtTime({
+                if (renderer.callback?.isCleanedUp() == false) {
+                    renderer.onWhepSourceDimensions(frame, tw, sourceWidth, sourceHeight)
+                }
+            }, renderer.rendererToken, SystemClock.uptimeMillis())
+        }
+
         @JavascriptInterface
         fun onMediaPlaying() {
             val renderer = rendererRef.get() ?: return

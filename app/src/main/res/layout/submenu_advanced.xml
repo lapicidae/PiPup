@@ -14,14 +14,57 @@
         android:textStyle="bold"
         android:layout_marginBottom="32dp"/>
 
-    <!-- Migration -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_migration" android:textColor="@color/colorOnSurfaceVariant" android:layout_marginTop="20dp"/>
+    <!-- 1. Expert Tools -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_tools"
+        android:textColor="@color/colorOnSurfaceVariant"
+        android:layout_marginBottom="8dp" />
+
+    <LinearLayout
+        android:id="@+id/container_advanced"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:layout_marginTop="4dp"
+        android:gravity="center_vertical">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_advanced_mode"
+                android:textColor="@color/colorOnSurface"
+                android:textSize="16sp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_advanced_mode_desc"
+                android:textColor="@color/colorOnSurfaceVariant"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_advanced"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:focusable="false"
+            android:clickable="false"/>
+    </LinearLayout>
+
     <Button
-        android:id="@+id/btn_import_network"
+        android:id="@+id/btn_clear_active_popups"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="@string/settings_import_network"
+        android:text="@string/settings_clear_active_popups"
         android:focusable="true"
         android:background="@drawable/focus_background"
         android:padding="12dp"
@@ -29,20 +72,20 @@
         android:textAllCaps="false"
         android:textColor="@color/colorOnSurface"/>
 
-    <!-- Tools -->
+    <!-- 2. Media Loading -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="@string/settings_tools"
+        android:text="@string/settings_media_loading"
         android:textColor="@color/colorOnSurfaceVariant"
         android:layout_marginTop="32dp"
-        android:layout_marginBottom="15dp" />
+        android:layout_marginBottom="12dp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="8dp">
+        android:layout_marginTop="4dp">
 
         <TextView
             android:id="@+id/text_media_timeout"
@@ -108,60 +151,38 @@
         android:thumbTint="@color/tv_thumb_selector"
         android:progressTint="@color/tv_thumb_selector"
         android:progressBackgroundTint="@color/tv_track_selector"
-        android:layout_marginBottom="24dp" />
+        android:layout_marginBottom="8dp" />
 
-
-    <LinearLayout
-        android:id="@+id/container_advanced"
+    <!-- 3. Migration & Sync -->
+    <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:focusable="true"
-        android:background="@drawable/focus_background"
-        android:padding="12dp"
-        android:layout_marginTop="8dp"
-        android:gravity="center_vertical">
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_weight="1"
-            android:layout_height="wrap_content"
-            android:orientation="vertical">
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_advanced_mode"
-                android:textColor="@color/colorOnSurface"
-                android:textSize="16sp"/>
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_advanced_mode_desc"
-                android:textColor="@color/colorOnSurfaceVariant"
-                android:textSize="12sp"
-                android:layout_marginTop="2dp"/>
-        </LinearLayout>
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/switch_advanced"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:focusable="false"
-            android:clickable="false"/>
-    </LinearLayout>
+        android:text="@string/settings_migration"
+        android:textColor="@color/colorOnSurfaceVariant"
+        android:layout_marginTop="32dp" />
 
-    <!-- Danger Zone -->
-    <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/settings_danger_zone" android:textColor="@color/status_red" android:layout_marginTop="48dp" android:textStyle="bold"/>
     <Button
-        android:id="@+id/btn_clear_active_popups"
+        android:id="@+id/btn_import_network"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="8dp"
-        android:text="@string/settings_clear_active_popups"
+        android:text="@string/settings_import_network"
         android:focusable="true"
         android:background="@drawable/focus_background"
         android:padding="12dp"
         android:gravity="start|center_vertical"
         android:textAllCaps="false"
         android:textColor="@color/colorOnSurface"/>
+
+    <!-- 4. Danger Zone -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_danger_zone"
+        android:textColor="@color/status_red"
+        android:layout_marginTop="48dp"
+        android:textStyle="bold"/>
+
     <Button
         android:id="@+id/btn_reset"
         android:layout_width="match_parent"

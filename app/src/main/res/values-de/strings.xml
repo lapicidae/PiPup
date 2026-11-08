@@ -95,9 +95,12 @@
     <!-- Experten-Tools & Migration -->
     <string name="settings_migration">Migration &amp; Synchronisation</string>
     <string name="settings_tools">Experten-Tools</string>
+    <string name="settings_media_loading">Medien-Ladeverhalten</string>
     <string name="settings_danger_zone">Gefahrenzone</string>
     <string name="settings_advanced_mode">Erweiterter Modus</string>
     <string name="settings_advanced_mode_desc">Aktiviert die manuelle HEX-Code Eingabe und zeigt präzise numerische Schieberegler-Werte an.</string>
+    <string name="settings_loading_behavior">Schnelles paralleles Laden</string>
+    <string name="settings_loading_behavior_desc">Weicht von der Eingangsreihenfolge ab, wenn andere Popups im Hintergrund bereits fertig geladen sind.</string>
     <!-- %1$s: App-Name -->
     <string name="settings_import_network">Von anderem %1$s importieren</string>
     <string name="settings_import_discover">Suche nach Geräten…</string>

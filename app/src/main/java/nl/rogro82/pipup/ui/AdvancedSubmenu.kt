@@ -11,6 +11,7 @@ import android.view.KeyEvent
 import android.view.View
 import android.view.ViewTreeObserver
 import android.view.WindowManager
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
@@ -126,7 +127,7 @@ class AdvancedSubmenu(
 
         val devices = mutableListOf<NsdServiceInfo>()
         val deviceNames = mutableListOf<String>()
-        val adapter = android.widget.ArrayAdapter(context, android.R.layout.simple_list_item_1, deviceNames)
+        val adapter = ArrayAdapter(context, android.R.layout.simple_list_item_1, deviceNames)
         val localId = settings.deviceId
         val myIp = getIpAddress()
 

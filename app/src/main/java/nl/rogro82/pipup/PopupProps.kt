@@ -53,8 +53,12 @@ data class PopupProps(
     val buttonCornerRadius: Float? = null,
     val buttonsInline: Boolean = false,
     val isPreview: Boolean = false,
-    val isInternalUpdateAction: Boolean = false
+    val isInternalUpdateAction: Boolean = false,
+    val stack: String? = null
 ) {
+    @Transient
+    var measuredSize: Pair<Int, Int>? = null
+
     data class Button(val id: String, val label: String)
     companion object {
         private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
@@ -93,10 +97,16 @@ data class PopupProps(
                     }
                     m.has("web") -> {
                         val w = m.getJSONObject("web")
+                        val width = w.optInt("width", 640)
+                        val height = if (w.has("height") && !w.isNull("height") && w.optInt("height", 0) > 0) {
+                            w.getInt("height")
+                        } else {
+                            (width * 9) / 16
+                        }
                         media = Media.Web(
                             uri = w.getString("uri"),
-                            width = w.optInt("width", 640),
-                            height = w.optInt("height", 480),
+                            width = width,
+                            height = height,
                             cache = w.optBoolean("cache", true),
                             scale = w.optBoolean("scale", true),
                             muted = w.optBoolean("muted", true)
@@ -104,10 +114,14 @@ data class PopupProps(
                     }
                     m.has("whep") -> {
                         val w = m.getJSONObject("whep")
+                        val width = w.optInt("width", 640)
+                        val height = if (w.has("height") && !w.isNull("height") && w.optInt("height", 0) > 0) {
+                            w.getInt("height")
+                        } else null
                         media = Media.Whep(
                             uri = w.getString("uri"),
-                            width = w.optInt("width", 640),
-                            height = w.optInt("height", 480),
+                            width = width,
+                            height = height,
                             scale = w.optBoolean("scale", true),
                             videoFit = w.optString("videoFit", "cover")
                         )
@@ -168,8 +182,16 @@ data class PopupProps(
                 buttonBorderColor = optNullableString("buttonBorderColor"),
                 buttonCornerRadius = if (j.has("buttonCornerRadius") && !j.isNull("buttonCornerRadius")) j.getDouble("buttonCornerRadius").toFloat().coerceIn(0f, 50f) else null,
                 buttonsInline = j.optBoolean("buttonsInline", false),
-                isInternalUpdateAction = false
+                isInternalUpdateAction = false,
+                stack = optNullableString("stack")?.trim()?.lowercase()?.takeIf { it == "vertical" || it == "horizontal" }
             )
+        }
+
+        /**
+         * Parses a raw stack direction string ("horizontal" or "vertical") into a [StackDirection].
+         */
+        fun parseStackDirection(raw: String?): StackDirection {
+            return if (raw?.trim()?.lowercase() == "horizontal") StackDirection.HORIZONTAL else StackDirection.VERTICAL
         }
     }
 
@@ -224,6 +246,7 @@ data class PopupProps(
         j.put("buttonCornerRadius", buttonCornerRadius ?: JSONObject.NULL)
         j.put("buttonsInline", buttonsInline)
         j.put("isInternalUpdateAction", isInternalUpdateAction)
+        j.put("stack", stack ?: JSONObject.NULL)
 
         media?.let { m ->
             val mj = JSONObject()
@@ -245,7 +268,9 @@ data class PopupProps(
                 }
                 is Media.Whep -> {
                     mj.put("whep", JSONObject().apply {
-                        put("uri", m.uri); put("width", m.width); put("height", m.height); put("scale", m.scale); put("videoFit", m.videoFit)
+                        put("uri", m.uri); put("width", m.width)
+                        m.height?.let { put("height", it) }
+                        put("scale", m.scale); put("videoFit", m.videoFit)
                     })
                 }
                 else -> {} // LocalFile and Bitmap are not serialized back to JSON for external use
@@ -281,7 +306,7 @@ data class PopupProps(
         data class Whep(
             val uri: String,
             val width: Int = 640,
-            val height: Int = 480,
+            val height: Int? = null,
             val scale: Boolean = true,
             val videoFit: String = "cover" // cover, contain, fill
         ) : Media()
@@ -298,14 +323,97 @@ data class PopupProps(
     }
 
     /**
-     * Enum defining supported screen positions.
+     * Enum defining supported screen positions across the full 3x3 grid.
      */
     enum class Position(val index: Int) {
-        TopRight(0), TopLeft(1), BottomRight(2), BottomLeft(3), Center(4)
+        TopRight(0),
+        TopLeft(1),
+        BottomRight(2),
+        BottomLeft(3),
+        Center(4),
+        TopCenter(5),
+        BottomCenter(6),
+        CenterLeft(7),
+        CenterRight(8);
+
+        /**
+         * Returns the horizontal screen side corresponding to this position.
+         */
+        fun getScreenSide(): ScreenSide {
+            return when (this) {
+                TopLeft, BottomLeft, CenterLeft -> ScreenSide.LEFT
+                TopRight, BottomRight, CenterRight -> ScreenSide.RIGHT
+                TopCenter, BottomCenter, Center -> ScreenSide.CENTER
+            }
+        }
+
+        /**
+         * Returns the vertical screen anchor corresponding to this position.
+         */
+        fun getVerticalAnchor(): VerticalAnchor {
+            return when (this) {
+                TopLeft, TopRight, TopCenter -> VerticalAnchor.TOP
+                BottomLeft, BottomRight, BottomCenter -> VerticalAnchor.BOTTOM
+                CenterLeft, CenterRight, Center -> VerticalAnchor.CENTER
+            }
+        }
     }
 
+    /**
+     * Horizontal screen alignment bucket for a popup position.
+     */
+    enum class ScreenSide {
+        LEFT, RIGHT, CENTER
+    }
+
+    /**
+     * Vertical screen alignment anchor for a popup position.
+     */
+    enum class VerticalAnchor {
+        TOP, BOTTOM, CENTER
+    }
+
+    /**
+     * Stacking growth axis for multiple popups at the same position.
+     */
+    enum class StackDirection {
+        VERTICAL, HORIZONTAL
+    }
+
+    /**
+     * Resolves the numeric [position] index into a [Position] enum value.
+     */
     fun getPositionEnum(): Position {
         return Position.entries.find { it.index == position } ?: Position.TopRight
+    }
+
+    /**
+     * Resolves the [stack] property into a [StackDirection] enum value.
+     */
+    fun getStackDirectionEnum(): StackDirection {
+        return parseStackDirection(stack)
+    }
+
+    /**
+     * Returns the unscaled media width in pixels if media or legacy image is configured, or null otherwise.
+     */
+    fun rawMediaWidth(): Int? {
+        return when (val m = media) {
+            is Media.Image -> m.width
+            is Media.Video -> m.width
+            is Media.Web -> m.width
+            is Media.Whep -> m.width
+            is Media.LocalFile -> m.width
+            is Media.Bitmap -> m.width
+            null -> imageWidth ?: if (!image.isNullOrEmpty()) 480 else null
+        }
+    }
+
+    /**
+     * Scales [px] according to the current screen resolution if [scale] is enabled on this popup.
+     */
+    fun scaleValue(context: android.content.Context, px: Int): Int {
+        return if (scale) context.getScaledPixels(px) else px
     }
 
     fun getTitleGravity(): Int = mapAlignmentToGravity(titleAlignment)
@@ -324,10 +432,171 @@ data class PopupProps(
     fun getTitleColorInt(): Int = safeParseColor(titleColor, Color.WHITE)
     fun getMessageColorInt(): Int = safeParseColor(messageColor, Color.WHITE)
 
+    /**
+     * Computes pre-inflation 2D layout metrics for this popup.
+     */
+    fun calculateMetrics(context: android.content.Context, settings: AppSettings = PiPupApp.settings): PopupLayoutMetrics {
+        return PopupLayoutMetrics.calculate(context, this, settings)
+    }
+
     private fun safeParseColor(hex: String, fallback: Int): Int {
         return try {
             val clean = if (hex.startsWith("#")) hex else "#$hex"
             clean.toColorInt()
         } catch (_: Exception) { fallback }
+    }
+
+    /**
+     * Pure data calculation component for popup width, height, and 2D bounding boxes using StaticLayout without UI inflation.
+     */
+    data class PopupLayoutMetrics(
+        val width: Int,
+        val height: Int,
+        val boundingBox: android.graphics.Rect
+    ) {
+        companion object {
+            /**
+             * Estimates multiline text height in pixels for a given target [width].
+             */
+            fun calculateTextHeight(text: String, paint: android.text.TextPaint, width: Int): Int {
+                if (text.isEmpty() || width <= 0) return 0
+                return try {
+                    android.text.StaticLayout.Builder.obtain(text, 0, text.length, paint, width)
+                        .setAlignment(android.text.Layout.Alignment.ALIGN_NORMAL)
+                        .setIncludePad(true)
+                        .build()
+                        .height
+                } catch (_: Exception) {
+                    (paint.textSize * 1.2f * (text.length / 30 + 1)).toInt()
+                }
+            }
+
+            /**
+             * Computes estimated dimensions and initial bounding box for [props] on the given [context] display.
+             */
+            fun calculate(context: android.content.Context, props: PopupProps, settings: AppSettings): PopupLayoutMetrics {
+                val screenWidth = context.resources.displayMetrics.widthPixels
+                val screenHeight = context.resources.displayMetrics.heightPixels
+                val baseMargin = context.dpToPx(20)
+
+                val paddingVal = props.contentPadding ?: settings.contentPadding
+                val scaledPadding = props.scaleValue(context, paddingVal)
+
+                var mediaWidthEst = 0
+                var mediaHeightEst = 0
+                props.rawMediaWidth()?.let { w ->
+                    val scaledWidth = props.scaleValue(context, w)
+                    mediaWidthEst = scaledWidth
+                    mediaHeightEst = when (val m = props.media) {
+                        is Media.Web -> props.scaleValue(context, m.height)
+                        is Media.Whep -> m.height?.let { props.scaleValue(context, it) } ?: ((scaledWidth * 9) / 16)
+                        else -> (scaledWidth * 9) / 16
+                    }
+                }
+
+                val hasMedia = props.media != null || !props.image.isNullOrEmpty()
+                val isHorizontalMedia = (props.mediaPosition == 2 || props.mediaPosition == 3) && hasMedia
+
+                val maxTextWidth = props.scaleValue(context, 500)
+                val dm = context.resources.displayMetrics
+                val titlePaint = android.text.TextPaint().apply {
+                    textSize = android.util.TypedValue.applyDimension(
+                        android.util.TypedValue.COMPLEX_UNIT_SP,
+                        props.titleSize,
+                        dm
+                    )
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                }
+                val msgPaint = android.text.TextPaint().apply {
+                    textSize = android.util.TypedValue.applyDimension(
+                        android.util.TypedValue.COMPLEX_UNIT_SP,
+                        props.messageSize,
+                        dm
+                    )
+                    typeface = android.graphics.Typeface.DEFAULT
+                }
+
+                val titleText = props.title?.takeIf { it.isNotEmpty() }
+                val msgText = props.message?.takeIf { it.isNotEmpty() }
+                val hasTitle = titleText != null
+                val hasMessage = msgText != null
+                val hasAnyText = hasTitle || hasMessage
+
+                val titleW = titleText?.lines()?.maxOf { titlePaint.measureText(it).toInt() } ?: 0
+                val msgW = msgText?.lines()?.maxOf { msgPaint.measureText(it).toInt() } ?: 0
+                val textWidthEst = if (hasAnyText) {
+                    maxOf(titleW, msgW).coerceIn(context.dpToPx(180), maxTextWidth)
+                } else {
+                    0
+                }
+
+                val titleH = if (titleText != null) calculateTextHeight(titleText, titlePaint, textWidthEst) else 0
+                val msgH = if (msgText != null) calculateTextHeight(msgText, msgPaint, textWidthEst) else 0
+                val titleMsgGap = if (hasTitle && hasMessage) context.dpToPx(4) else 0
+                val buttonRowH = if (props.buttons.isNotEmpty()) context.dpToPx(60) else 0
+                val mediaTextGap = if (hasMedia && (hasAnyText || buttonRowH > 0)) {
+                    if (isHorizontalMedia) context.dpToPx(12) else context.dpToPx(8)
+                } else {
+                    0
+                }
+
+                val totalTextContentH = titleH + titleMsgGap + msgH + buttonRowH
+
+                val width = if (isHorizontalMedia) {
+                    (textWidthEst + mediaTextGap + mediaWidthEst + scaledPadding * 2)
+                        .coerceAtLeast(context.dpToPx(240))
+                        .coerceAtMost(screenWidth - baseMargin * 2)
+                } else {
+                    (maxOf(textWidthEst, mediaWidthEst) + scaledPadding * 2)
+                        .coerceAtLeast(context.dpToPx(240))
+                        .coerceAtMost(screenWidth - baseMargin * 2)
+                }
+
+                val pos = props.getPositionEnum()
+
+                val maxAllowedHeight = (screenHeight * 0.75).toInt()
+                val minContentHeight = scaledPadding * 2 + context.dpToPx(36)
+                val height = if (isHorizontalMedia) {
+                    (maxOf(totalTextContentH, mediaHeightEst) + scaledPadding * 2)
+                        .coerceAtLeast(minContentHeight)
+                        .coerceAtMost(maxAllowedHeight)
+                } else {
+                    (totalTextContentH + mediaTextGap + mediaHeightEst + scaledPadding * 2)
+                        .coerceAtLeast(minContentHeight)
+                        .coerceAtMost(maxAllowedHeight)
+                }
+
+                val left = when (pos.getScreenSide()) {
+                    ScreenSide.LEFT -> baseMargin
+                    ScreenSide.RIGHT -> screenWidth - baseMargin - width
+                    ScreenSide.CENTER -> (screenWidth - width) / 2
+                }
+                val right = left + width
+
+                val top = when (pos.getVerticalAnchor()) {
+                    VerticalAnchor.TOP -> baseMargin
+                    VerticalAnchor.BOTTOM -> screenHeight - baseMargin - height
+                    VerticalAnchor.CENTER -> (screenHeight - height) / 2
+                }
+                val bottom = top + height
+
+                return PopupLayoutMetrics(width, height, android.graphics.Rect(left, top, right, bottom))
+            }
+
+            /**
+             * Checks whether the display is too small to render a minimum viable popup.
+             */
+            fun isFundamentallyUnplaceable(context: android.content.Context): Boolean {
+                val screenWidth = context.resources.displayMetrics.widthPixels
+                val screenHeight = context.resources.displayMetrics.heightPixels
+                val maxAllowedWidth = screenWidth - context.dpToPx(40)
+                val maxAllowedHeight = screenHeight - context.dpToPx(40)
+
+                val minRenderableWidth = context.dpToPx(200)
+                val minRenderableHeight = context.dpToPx(100)
+
+                return minRenderableWidth > maxAllowedWidth || minRenderableHeight > maxAllowedHeight
+            }
+        }
     }
 }

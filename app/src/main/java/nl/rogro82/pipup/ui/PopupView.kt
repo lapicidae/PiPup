@@ -40,6 +40,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     /** The listener to be notified when the media is fully loaded and ready to be displayed. */
     var readyListener: ReadyListener? = null
     var onButton: ((PopupProps.Button) -> Unit)? = null
+    var onLayoutAdjusted: (() -> Unit)? = null
 
     private inner class MediaCallback : MediaRenderer.Callback {
         override fun notifyReady() = this@PopupView.notifyReady()
@@ -119,16 +120,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
 
         // Determine width once to keep layout stable
-        val width = when (val m = props.media) {
-            is PopupProps.Media.Image -> m.width
-            is PopupProps.Media.Video -> m.width
-            is PopupProps.Media.Web -> m.width
-            is PopupProps.Media.Whep -> m.width
-            is PopupProps.Media.LocalFile -> m.width
-            is PopupProps.Media.Bitmap -> m.width
-            else -> props.imageWidth ?: 480
-        }
-        val tw = if (props.scale) context.getScaledPixels(width) else context.dpToPx(width)
+        val width = props.rawMediaWidth() ?: 480
+        val tw = props.scaleValue(context, width)
 
         // Preserve original target height if already set (e.g. from WHEP props)
         // to prevent jumps during error state transitions.
@@ -248,21 +241,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     private fun calculateTargetDimensions(media: PopupProps.Media?, props: PopupProps) {
-        val width = when (media) {
-            is PopupProps.Media.Image -> media.width
-            is PopupProps.Media.Video -> media.width
-            is PopupProps.Media.Web -> media.width
-            is PopupProps.Media.Whep -> media.width
-            is PopupProps.Media.LocalFile -> media.width
-            is PopupProps.Media.Bitmap -> media.width
-            else -> props.imageWidth ?: 480
-        }
-        targetMediaWidth = if (props.scale) context.getScaledPixels(width) else context.dpToPx(width)
+        val width = props.rawMediaWidth() ?: 480
+        targetMediaWidth = props.scaleValue(context, width)
 
         targetMediaHeight = when (media) {
             is PopupProps.Media.Video -> (targetMediaWidth * 9) / 16
-            is PopupProps.Media.Web -> if (props.scale) context.getScaledPixels(media.height) else context.dpToPx(media.height)
-            is PopupProps.Media.Whep -> if (props.scale) context.getScaledPixels(media.height) else context.dpToPx(media.height)
+            is PopupProps.Media.Web -> props.scaleValue(context, media.height)
+            is PopupProps.Media.Whep -> media.height?.let { props.scaleValue(context, it) } ?: ((targetMediaWidth * 9) / 16)
             is PopupProps.Media.Bitmap -> (targetMediaWidth * media.bitmap.height) / media.bitmap.width
             else -> 0 // For images, height is determined after load in renderGlide
         }
@@ -275,7 +260,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             is PopupProps.Media.Image -> (m2 as PopupProps.Media.Image).let { m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale }
             is PopupProps.Media.Video -> (m2 as PopupProps.Media.Video).let { m1.uri == it.uri && m1.scale == it.scale }
             is PopupProps.Media.Web -> (m2 as PopupProps.Media.Web).let { m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale }
-            is PopupProps.Media.Whep -> (m2 as PopupProps.Media.Whep).let { m1.uri == it.uri && m1.scale == it.scale }
+            is PopupProps.Media.Whep -> (m2 as PopupProps.Media.Whep).let {
+                m1.uri == it.uri && m1.scale == it.scale && m1.height == it.height && m1.videoFit == it.videoFit
+            }
             is PopupProps.Media.LocalFile -> m1.path == (m2 as PopupProps.Media.LocalFile).path
             else -> m1 == m2
         }
@@ -294,22 +281,24 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         // 1. Padding
         val paddingVal = props.contentPadding ?: settings.contentPadding
-        val scaledPadding = if (props.scale) context.getScaledPixels(paddingVal) else context.dpToPx(paddingVal)
+        val scaledPadding = if (props.scale) context.getScaledPixels(paddingVal) else paddingVal
         binding.popupContainer.setPadding(scaledPadding, scaledPadding, scaledPadding, scaledPadding)
+        binding.popupMessage.maxLines = Integer.MAX_VALUE
+        binding.popupMessage.ellipsize = null
 
         // 2. Background
-        val radiusPx = if (props.scale) context.getScaledPixels(props.borderRadius).toFloat() else context.dpToPx(props.borderRadius).toFloat()
+        val radiusPx = if (props.scale) context.getScaledPixels(props.borderRadius).toFloat() else props.borderRadius.toFloat()
         binding.popupContainer.background = GradientDrawable().apply {
             setColor(props.getBackgroundColorInt())
             cornerRadius = radiusPx
             if (props.borderWidth > 0) {
-                val bw = if (props.scale) context.getScaledPixels(props.borderWidth) else context.dpToPx(props.borderWidth)
+                val bw = if (props.scale) context.getScaledPixels(props.borderWidth) else props.borderWidth
                 setStroke(bw, props.getBorderColorInt())
             }
         }
 
         // 3. Constraints
-        val maxTextWidth = if (props.scale) context.getScaledPixels(500) else context.dpToPx(500)
+        val maxTextWidth = if (props.scale) context.getScaledPixels(500) else 500
         binding.popupTitle.maxWidth = maxTextWidth
         binding.popupMessage.maxWidth = maxTextWidth
 
@@ -339,7 +328,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             // Additionally align the text container content block within the popup
             (binding.textContainer.layoutParams as? LinearLayout.LayoutParams)?.gravity = gravity
 
-            binding.popupContainer.post { adjustHeights() }
+            adjustHeightsRunnable.run()
         } ?: run {
             binding.popupMessage.isVisible = false
             binding.popupScrollView.isVisible = false
@@ -436,18 +425,45 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     private val adjustHeightsRunnable = Runnable {
-        if (isCleanedUp) return@Runnable
+        applyHeightConstraints(notifyCallback = true)
+    }
+
+    /**
+     * Synchronously applies media and scroll height constraints prior to view measurement.
+     */
+    fun syncLayoutForMeasurement() {
+        applyHeightConstraints(notifyCallback = false)
+    }
+
+    private fun applyHeightConstraints(notifyCallback: Boolean) {
+        if (isCleanedUp) return
         val screenHeight = resources.displayMetrics.heightPixels
         val maxPopupHeight = (screenHeight * 0.85).toInt()
 
         if (binding.popupMediaFrame.isVisible && targetMediaWidth > 0 && targetMediaHeight > 0) {
-            binding.popupMediaFrame.layoutParams.width = targetMediaWidth
-            binding.popupMediaFrame.layoutParams.height = targetMediaHeight
-            binding.popupMediaFrame.requestLayout()
+            if (binding.popupMediaFrame.layoutParams.width != targetMediaWidth || binding.popupMediaFrame.layoutParams.height != targetMediaHeight) {
+                binding.popupMediaFrame.layoutParams.width = targetMediaWidth
+                binding.popupMediaFrame.layoutParams.height = targetMediaHeight
+                binding.popupMediaFrame.requestLayout()
+            }
+        }
+
+        val maxTextWidth = if (props.scale) context.getScaledPixels(500) else 500
+        if (binding.popupTitle.isVisible && binding.popupTitle.measuredHeight <= 0) {
+            binding.popupTitle.measure(
+                MeasureSpec.makeMeasureSpec(maxTextWidth, MeasureSpec.AT_MOST),
+                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+            )
         }
 
         val buttonRow = binding.popupContainer.findViewWithTag<ViewGroup>("popup_button_row")
         val buttonRowHeight = if (buttonRow != null && buttonRow.isVisible) {
+            if (buttonRow.measuredHeight <= 0) {
+                buttonRow.measure(
+                    MeasureSpec.makeMeasureSpec(maxTextWidth, MeasureSpec.AT_MOST),
+                    MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+                )
+            }
             buttonRow.measuredHeight + ((buttonRow.layoutParams as? MarginLayoutParams)?.topMargin ?: 0)
         } else 0
 
@@ -456,8 +472,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 binding.popupContainer.paddingTop + binding.popupContainer.paddingBottom + context.dpToPx(12) +
                 buttonRowHeight
 
-        val maxScrollHeight = if (binding.contentLayout.orientation == LinearLayout.HORIZONTAL) (screenHeight * 0.7).toInt()
-        else maxPopupHeight - otherViewsHeight
+        val maxScrollHeight = if (binding.contentLayout.orientation == LinearLayout.HORIZONTAL) (screenHeight * 0.45).toInt()
+        else (maxPopupHeight - otherViewsHeight).coerceAtLeast(context.dpToPx(150))
+
+        binding.popupMessage.measure(
+            MeasureSpec.makeMeasureSpec(maxTextWidth, MeasureSpec.AT_MOST),
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+        )
 
         val contentHeight = binding.popupMessage.measuredHeight
         if (contentHeight > maxScrollHeight) {
@@ -467,6 +488,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         } else {
             binding.popupScrollView.layoutParams.height = LinearLayout.LayoutParams.WRAP_CONTENT
             binding.popupScrollView.requestLayout()
+        }
+        if (notifyCallback) {
+            onLayoutAdjusted?.invoke()
         }
     }
 
@@ -482,7 +506,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val runnable = object : Runnable {
             var scrollPos = 0
             override fun run() {
-                val maxScroll = binding.popupMessage.height - binding.popupScrollView.height
+                val msgH = if (binding.popupMessage.height > 0) binding.popupMessage.height else binding.popupMessage.measuredHeight
+                val scrollH = if (binding.popupScrollView.height > 0) binding.popupScrollView.height else binding.popupScrollView.measuredHeight
+                val maxScroll = msgH - scrollH
                 if (maxScroll <= 0) { isScrolling = false; return }
 
                 scrollPos += 1
@@ -634,7 +660,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     private fun createButtonBackground(props: PopupProps, forceFocused: Boolean = false): android.graphics.drawable.Drawable {
         val radius = props.buttonCornerRadius ?: settings.defaultButtonCornerRadius
-        val radiusPx = if (props.scale) context.getScaledPixels(radius.toInt()).toFloat() else context.dpToPx(radius.toInt()).toFloat()
+        val radiusPx = if (props.scale) context.getScaledPixels(radius.toInt()).toFloat() else radius
 
         val normalColor = parseColorOrDefault(props.buttonColor ?: settings.defaultButtonColor, "#EAEEF2")
         val focusColor = parseColorOrDefault(props.buttonFocusColor ?: settings.defaultButtonFocusColor, "#196584")

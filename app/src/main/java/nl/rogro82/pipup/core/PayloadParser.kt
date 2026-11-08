@@ -114,6 +114,7 @@ class PayloadParser(private val context: Context) {
         val animationDuration = getVal("animationDuration")?.toIntOrNull() ?: 500
         val animationExit = getVal("animationExit")?.toBoolean() ?: false
         val overwrite = getVal("overwrite")?.toBoolean() ?: false
+        val stack = getVal("stack")?.trim()?.lowercase()?.takeIf { it == "vertical" || it == "horizontal" }
 
         var media: PopupProps.Media? = null
         files["image"]?.let { tempPath ->
@@ -128,7 +129,7 @@ class PayloadParser(private val context: Context) {
                     val persistentFile = File(context.cacheDir, "multipart_${System.currentTimeMillis()}_${(0..1000).random()}.png")
                     srcFile.copyTo(persistentFile, overwrite = true)
                     Log.d(TAG, "Successfully persisted image to: ${persistentFile.absolutePath}, final size=${persistentFile.length()}")
-                    media = PopupProps.Media.LocalFile(persistentFile.absolutePath, imageWidth)
+                    media = PopupProps.Media.LocalFile(persistentFile.absolutePath, imageWidth, scale = scale)
 
                     // Trigger async cache cleanup
                     triggerCacheCleanup()
@@ -147,7 +148,8 @@ class PayloadParser(private val context: Context) {
             borderWidth = borderWidth, borderColor = borderColor, titleAlignment = titleAlignment,
             messageAlignment = messageAlignment, mediaPosition = mediaPosition,
             animationType = animationType, animationDuration = animationDuration,
-            animationExit = animationExit, overwrite = overwrite, scale = scale, media = media
+            animationExit = animationExit, overwrite = overwrite, scale = scale, media = media,
+            stack = stack
         )
     } catch (e: Exception) {
         Log.e(TAG, "Multipart parsing error", e)

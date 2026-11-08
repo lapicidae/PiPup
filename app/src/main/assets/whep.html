@@ -73,7 +73,19 @@
 
                     video.onplaying = () => {
                         console.log('WHEP: Video playing after ' + (Date.now() - startTime) + 'ms');
-                        if (window.PiPup) window.PiPup.onMediaPlaying();
+                        if (window.PiPup) {
+                            if (video.videoWidth > 0 && video.videoHeight > 0) {
+                                window.PiPup.onSourceDimensions(video.videoWidth, video.videoHeight);
+                            }
+                            window.PiPup.onMediaPlaying();
+                        }
+                    };
+
+                    video.onloadedmetadata = () => {
+                        console.log(`WHEP: Metadata loaded: ${video.videoWidth}x${video.videoHeight}`);
+                        if (window.PiPup && video.videoWidth > 0 && video.videoHeight > 0) {
+                            window.PiPup.onSourceDimensions(video.videoWidth, video.videoHeight);
+                        }
                     };
 
                     pc.ontrack = (e) => {
