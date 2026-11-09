@@ -9,10 +9,12 @@ import kotlinx.coroutines.launch
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.UpdateManager
 import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
+import nl.rogro82.pipup.core.NotificationManager
 import nl.rogro82.pipup.core.PayloadParser
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.PowerController
@@ -34,6 +36,7 @@ class SystemModule : PiPupModule {
     override val nameRes: Int = R.string.settings_module_system
     override val descriptionRes: Int = R.string.settings_nav_permissions // Use a relevant existing string
 
+    override val isUserConfigurable: Boolean = false
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.ON
 
@@ -173,7 +176,7 @@ class SystemModule : PiPupModule {
         } ?: return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Failed to parse input")
 
         // Guard: Check if media module is required and enabled
-        val isRichMedia = props.media is nl.rogro82.pipup.PopupProps.Media.Web || props.media is nl.rogro82.pipup.PopupProps.Media.Whep
+        val isRichMedia = props.media is PopupProps.Media.Web || props.media is PopupProps.Media.Whep
         val mediaMode = settings.getModuleMode("media")
         if (isRichMedia) {
             if (mediaMode == ModuleMode.OFF) {
@@ -205,9 +208,9 @@ class SystemModule : PiPupModule {
         if (!all && id != null) {
             val res = nm.cancelById(id)
             val msg = when (res) {
-                nl.rogro82.pipup.core.NotificationManager.CancelResult.CANCELLED_ACTIVE -> "OK: Cancelled"
-                nl.rogro82.pipup.core.NotificationManager.CancelResult.REMOVED_FROM_QUEUE -> "OK: Removed from queue"
-                nl.rogro82.pipup.core.NotificationManager.CancelResult.NOT_FOUND -> {
+                NotificationManager.CancelResult.CANCELLED_ACTIVE -> "OK: Cancelled"
+                NotificationManager.CancelResult.REMOVED_FROM_QUEUE -> "OK: Removed from queue"
+                NotificationManager.CancelResult.NOT_FOUND -> {
                     if (!nm.isDisplaying()) "OK: Nothing to cancel" else "ID not found: $id"
                 }
             }

@@ -9,6 +9,9 @@ import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.colorToHex
 
+/**
+ * Settings submenu controller for action button appearance, corner radius, focus highlights, and color states.
+ */
 @UnstableApi
 class ButtonSubmenu(
     context: Context,

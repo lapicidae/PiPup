@@ -9,12 +9,13 @@ import android.util.Log
 import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.Json
 import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
+import nl.rogro82.pipup.triggerSystemGc
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
-import nl.rogro82.pipup.R
 
 /**
  * Module providing debug and diagnostic endpoints.
@@ -30,6 +31,7 @@ class DebugModule : PiPupModule {
     override val nameRes: Int = R.string.settings_module_debug
     override val descriptionRes: Int = R.string.settings_nav_advanced
 
+    override val isUserConfigurable: Boolean = false
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.OFF
     override val supportedRoutes: List<String> = listOf("/debug/idle", "/debug/unload", "/debug/memory")
@@ -84,7 +86,7 @@ class DebugModule : PiPupModule {
                 app.moduleManager.forceIdleCleanup()
 
                 // 3. Trigger manual GC
-                nl.rogro82.pipup.triggerSystemGc()
+                triggerSystemGc()
             } catch (e: Exception) {
                 Log.e(TAG, "Error during forced unload: ${e.message}")
             } finally {

@@ -14,6 +14,11 @@ interface PiPupModule {
     val descriptionRes: Int
 
     /**
+     * Whether this module should be displayed as a user-configurable toggle in the modules submenu.
+     */
+    val isUserConfigurable: Boolean
+
+    /**
      * List of modes supported by this module.
      */
     val supportedModes: List<ModuleMode>
@@ -87,4 +92,47 @@ interface PiPupModule {
      * Returns the menu definition for integration into the Settings UI.
      */
     fun getSettingsMenu(): ModuleMenuDefinition? = null
+
+    /**
+     * Optional lifecycle hook invoked when the module's mode is changed in the UI.
+     *
+     * @param context The Android context.
+     * @param newMode The new target [ModuleMode].
+     */
+    fun onModeToggled(context: android.content.Context, newMode: ModuleMode) {
+        // Optional hook for module-specific toggle reactions (e.g., prerequisite prompts)
+    }
 }
+
+/**
+ * Common peer descriptor for discovered network instances.
+ */
+data class DiscoveredPeer(
+    val name: String,
+    val address: String,
+    val id: String? = null
+)
+
+/**
+ * Interface for modules capable of discovering other PiPup peers on the network.
+ */
+interface PeerDiscoveryProvider {
+    /**
+     * Listener callback for discovered peers.
+     */
+    interface Listener {
+        fun onPeerFound(peer: DiscoveredPeer)
+        fun onPeerLost(peerName: String)
+    }
+
+    /**
+     * Starts discovering peers using the provided listener.
+     */
+    fun startPeerDiscovery(listener: Listener)
+
+    /**
+     * Stops discovering peers.
+     */
+    fun stopPeerDiscovery()
+}
+

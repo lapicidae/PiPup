@@ -18,6 +18,7 @@ import java.util.ArrayDeque
 import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
@@ -30,7 +31,7 @@ import nl.rogro82.pipup.ui.PopupView
 
 /**
  * Manages the lifecycle and queueing of notifications using a unified FIFO queue
- * and native LinearLayout position containers up to [nl.rogro82.pipup.AppSettings.maxPopups] concurrency.
+ * and native LinearLayout position containers up to [AppSettings.maxPopups] concurrency.
  */
 @UnstableApi
 class NotificationManager(
@@ -382,11 +383,11 @@ class NotificationManager(
                 val anchor = pos.getVerticalAnchor()
                 if (anchor == PopupProps.VerticalAnchor.BOTTOM) {
                     var cursorY = screenHeight - baseMargin
-                    for (item in vItems) {
+                    for ((key, _, width, height) in vItems) {
                         val bottom = cursorY
-                        val top = bottom - item.height
-                        result[item.key] = computeVerticalItemRect(
-                            pos, item.width, top, bottom, screenWidth, baseMargin
+                        val top = bottom - height
+                        result[key] = computeVerticalItemRect(
+                            pos, width, top, bottom, screenWidth, baseMargin
                         )
                         cursorY = top - gapPx
                     }
@@ -396,11 +397,11 @@ class NotificationManager(
                     } else {
                         (screenHeight - vMeasuredHeight) / 2
                     }
-                    for (item in vItems) {
+                    for ((key, _, width, height) in vItems) {
                         val top = cursorY
-                        val bottom = top + item.height
-                        result[item.key] = computeVerticalItemRect(
-                            pos, item.width, top, bottom, screenWidth, baseMargin
+                        val bottom = top + height
+                        result[key] = computeVerticalItemRect(
+                            pos, width, top, bottom, screenWidth, baseMargin
                         )
                         cursorY = bottom + gapPx
                     }
@@ -414,11 +415,11 @@ class NotificationManager(
 
                 if (side == PopupProps.ScreenSide.RIGHT) {
                     var cursorX = screenWidth - baseMargin - (if (vWidth > 0) vWidth + gapPx else 0)
-                    for (item in hItems) {
+                    for ((key, _, width, height) in hItems) {
                         val right = cursorX
-                        val left = right - item.width
-                        result[item.key] = computeHorizontalItemRect(
-                            pos, item.height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
+                        val left = right - width
+                        result[key] = computeHorizontalItemRect(
+                            pos, height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
                         )
                         cursorX = left - gapPx
                     }
@@ -428,11 +429,11 @@ class NotificationManager(
                     } else {
                         (screenWidth - hMeasuredWidth) / 2
                     }
-                    for (item in hItems) {
+                    for ((key, _, width, height) in hItems) {
                         val left = cursorX
-                        val right = left + item.width
-                        result[item.key] = computeHorizontalItemRect(
-                            pos, item.height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
+                        val right = left + width
+                        result[key] = computeHorizontalItemRect(
+                            pos, height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
                         )
                         cursorX = right + gapPx
                     }

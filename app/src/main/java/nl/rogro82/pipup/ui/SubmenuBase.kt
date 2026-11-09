@@ -262,7 +262,7 @@ abstract class SubmenuBase(
 
         modules.forEach { module ->
             // Only show settings for logically active modules (Eco or On)
-            if (module.id != "system" && settings.getModuleMode(module.id) == ModuleMode.OFF) {
+            if (ModuleMode.OFF in module.supportedModes && settings.getModuleMode(module.id) == ModuleMode.OFF) {
                 return@forEach
             }
 

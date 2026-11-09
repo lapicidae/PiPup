@@ -16,7 +16,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import nl.rogro82.pipup.*
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.SettingCategory
 
+/**
+ * Settings submenu controller for managing GitHub release updates, check intervals, and installation workflows.
+ */
 @UnstableApi
 class UpdatesSubmenu(
     context: Context,
@@ -80,7 +84,7 @@ class UpdatesSubmenu(
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
 
-        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.UPDATES)
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.UPDATES)
     }
 
     private fun updateButtonText(btn: Button) {

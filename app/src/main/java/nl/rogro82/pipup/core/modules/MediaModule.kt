@@ -9,6 +9,7 @@ import nl.rogro82.pipup.core.ModuleMenuDefinition
 import nl.rogro82.pipup.core.ModuleSettingDefinition
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.SettingCategory
+import nl.rogro82.pipup.core.SettingType
 
 /**
  * Module responsible for rich media support (WebView, WHEP).
@@ -25,6 +26,7 @@ class MediaModule : PiPupModule {
     override val descriptionRes: Int = R.string.settings_module_media_desc
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ECO, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.ECO
+    override val isUserConfigurable: Boolean = true
     override val supportedRoutes: List<String> = emptyList()
 
     private var moduleContext: ModuleContext? = null
@@ -52,7 +54,7 @@ class MediaModule : PiPupModule {
     override fun getSettingsMetadata(): List<ModuleSettingDefinition> = listOf(
         ModuleSettingDefinition(
             key = "resource_mode",
-            type = nl.rogro82.pipup.core.SettingType.STRING_SELECT,
+            type = SettingType.STRING_SELECT,
             labelRes = R.string.settings_module_media_resource_mode,
             descriptionRes = R.string.settings_module_media_resource_mode_desc,
             defaultValue = "eco",

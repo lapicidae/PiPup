@@ -8,7 +8,11 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.SettingCategory
 
+/**
+ * Settings submenu controller for entrance and exit animations and duration configurations.
+ */
 @UnstableApi
 class AnimationSubmenu(
     context: Context,
@@ -40,6 +44,6 @@ class AnimationSubmenu(
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
 
-        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.ANIMATION)
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.ANIMATION)
     }
 }

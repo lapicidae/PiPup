@@ -12,8 +12,12 @@ import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.SettingCategory
 import java.util.Locale
 
+/**
+ * Settings submenu controller for general preferences including language, screen position, and display duration.
+ */
 @UnstableApi
 class GeneralSubmenu(
     context: Context,
@@ -98,6 +102,6 @@ class GeneralSubmenu(
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
 
-        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.GENERAL)
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.GENERAL)
     }
 }

@@ -9,12 +9,10 @@ import android.widget.TextView
 import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
-import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.PiPupModule
-import nl.rogro82.pipup.core.PowerController
 
 /**
  * Submenu for managing optional PiPup modules.
@@ -42,7 +40,7 @@ class ModulesSubmenu(
         rootContainer.addView(titleView)
 
         val mm = (context.applicationContext as PiPupApp).moduleManager
-        val modules = mm.getAllModules().filter { it.id != "system" && it.id != "debug" }
+        val modules = mm.getAllModules().filter { it.isUserConfigurable }
 
         modules.forEach { module ->
             renderModuleToggle(module)
@@ -78,10 +76,7 @@ class ModulesSubmenu(
 
             notifySettingsChanged()
 
-            // Special handling for Power Module permission nag
-            if (module.id == "power" && next != ModuleMode.OFF && PowerController.getSleepMethod(context) == null) {
-                Permissions.showFixDialog(context, Permissions.KEY_POWER)
-            }
+            module.onModeToggled(context, next)
 
             onSettingsChanged(false)
         }

@@ -15,7 +15,6 @@ import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
-import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.core.PowerController
 import nl.rogro82.pipup.core.SettingCategory
@@ -65,7 +64,6 @@ class PermissionsSubmenu(
         if (submenuRoot == null || (submenuRoot.id != R.id.permissions_root && root.id != R.id.permissions_root)) return
 
         val sleepMethod = PowerController.getSleepMethod(context)
-        val powerModuleEnabled = settings.getModuleMode("power") != ModuleMode.OFF
         val overlayGranted = Permissions.overlay(context)
         val installGranted = Permissions.installPackages(context)
         val energyGranted = (context.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(context.packageName)
@@ -75,7 +73,7 @@ class PermissionsSubmenu(
         val mm = (context.applicationContext as PiPupApp).moduleManager
         val modulePermissions = mm.getEnabledModules().flatMap { it.getRequiredPermissions() }.toSet()
 
-        val currentSignature = "pow:$powerModuleEnabled:$sleepMethod|acc:$accGranted|ov:$overlayGranted|in:$installGranted|en:$energyGranted|mods:${modulePermissions.joinToString(",")}"
+        val currentSignature = "pow:$sleepMethod|acc:$accGranted|ov:$overlayGranted|in:$installGranted|en:$energyGranted|mods:${modulePermissions.joinToString(",")}"
 
         if (submenuRoot.tag == currentSignature) return
         submenuRoot.tag = currentSignature

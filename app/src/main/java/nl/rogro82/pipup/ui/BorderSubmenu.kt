@@ -7,8 +7,12 @@ import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.SettingCategory
 import nl.rogro82.pipup.colorToHex
 
+/**
+ * Settings submenu controller for popup border properties including width, color, and corner radius.
+ */
 @UnstableApi
 class BorderSubmenu(
     context: Context,
@@ -34,6 +38,6 @@ class BorderSubmenu(
             settings.borderColor = it
         }
 
-        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.BORDER)
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.BORDER)
     }
 }

@@ -3,14 +3,7 @@ package nl.rogro82.pipup.ui
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
-import android.graphics.Rect
-import android.net.nsd.NsdServiceInfo
-import android.os.Build
-import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
-import android.view.ViewTreeObserver
-import android.view.WindowManager
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
@@ -19,10 +12,14 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.*
-import nl.rogro82.pipup.core.ModuleMode
+import nl.rogro82.pipup.core.DiscoveredPeer
+import nl.rogro82.pipup.core.PeerDiscoveryProvider
+import nl.rogro82.pipup.core.SettingCategory
 import nl.rogro82.pipup.service.PipUpService
-import nl.rogro82.pipup.core.modules.DiscoveryModule
 
+/**
+ * Settings submenu controller for expert configuration, backup/restore, migration, and diagnostics.
+ */
 @UnstableApi
 class AdvancedSubmenu(
     context: Context,
@@ -80,7 +77,7 @@ class AdvancedSubmenu(
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
 
-        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.ADVANCED)
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.ADVANCED)
     }
 
     private fun showResetConfirmation() {
@@ -116,53 +113,48 @@ class AdvancedSubmenu(
     }
 
     private fun showImportDeviceDialog() {
-        val service = PipUpService.getInstance()
-        val discovery = service?.moduleManager?.getModule("discovery") as? DiscoveryModule
+        val discoveryProvider = PipUpService.getInstance()?.moduleManager?.getActiveCapability<PeerDiscoveryProvider>()
 
-        if (discovery == null || settings.getModuleMode("discovery") == ModuleMode.OFF) {
-            context.showToast(context.getString(R.string.error_module_disabled, context.getString(R.string.settings_module_discovery)))
+        if (discoveryProvider == null) {
             showImportIpDialog()
             return
         }
 
-        val devices = mutableListOf<NsdServiceInfo>()
-        val deviceNames = mutableListOf<String>()
-        val adapter = ArrayAdapter(context, android.R.layout.simple_list_item_1, deviceNames)
+        val peers = mutableListOf<DiscoveredPeer>()
+        val peerDisplayNames = mutableListOf<String>()
+        val adapter = ArrayAdapter(context, android.R.layout.simple_list_item_1, peerDisplayNames)
         val localId = settings.deviceId
         val myIp = getIpAddress()
 
-        val deviceListener = object : DiscoveryModule.DeviceListener {
-            override fun onDeviceFound(serviceInfo: NsdServiceInfo) {
-                val address = serviceInfo.getHostAddress()
-
+        val peerListener = object : PeerDiscoveryProvider.Listener {
+            override fun onPeerFound(peer: DiscoveredPeer) {
                 // 1. Filter out self (by unique ID or IP address)
-                val remoteId = serviceInfo.attributes["id"]?.let { String(it) }
-                if (remoteId == localId || (address != null && address == myIp)) {
+                if (peer.id == localId || peer.address == myIp) {
                     return
                 }
 
                 settingsActivity?.runOnUiThread {
-                    // 2. Filter duplicates by service name to allow multiple mocks from one IP (stress test)
-                    if (devices.none { it.serviceName == serviceInfo.serviceName }) {
-                        devices.add(serviceInfo)
-                        val displayName = serviceInfo.serviceName.removePrefix("PiPup ").trim()
-                        deviceNames.add("$displayName (${address ?: "???"})")
-                        if (deviceNames.getOrNull(0) == context.getString(R.string.settings_import_discover)) {
-                            deviceNames.removeAt(0)
+                    // 2. Filter duplicates by peer name to allow multiple mocks from one IP (stress test)
+                    if (peers.none { it.name == peer.name }) {
+                        peers.add(peer)
+                        val displayName = peer.name.removePrefix("PiPup ").trim()
+                        peerDisplayNames.add("$displayName (${peer.address})")
+                        if (peerDisplayNames.getOrNull(0) == context.getString(R.string.settings_import_discover)) {
+                            peerDisplayNames.removeAt(0)
                         }
                         adapter.notifyDataSetChanged()
                     }
                 }
             }
 
-            override fun onDeviceLost(serviceInfo: NsdServiceInfo) {
+            override fun onPeerLost(peerName: String) {
                 settingsActivity?.runOnUiThread {
-                    val index = devices.indexOfFirst { it.serviceName == serviceInfo.serviceName }
+                    val index = peers.indexOfFirst { it.name == peerName }
                     if (index != -1) {
-                        devices.removeAt(index)
-                        deviceNames.removeAt(index)
-                        if (deviceNames.isEmpty()) {
-                            deviceNames.add(context.getString(R.string.settings_import_no_devices))
+                        peers.removeAt(index)
+                        peerDisplayNames.removeAt(index)
+                        if (peerDisplayNames.isEmpty()) {
+                            peerDisplayNames.add(context.getString(R.string.settings_import_no_devices))
                         }
                         adapter.notifyDataSetChanged()
                     }
@@ -173,36 +165,36 @@ class AdvancedSubmenu(
         val builder = AlertDialog.Builder(context)
         builder.setTitle(context.getString(R.string.settings_import_network, context.getString(R.string.app_name)))
         builder.setAdapter(adapter) { _: DialogInterface, which: Int ->
-            discovery.stopDiscovery()
-            val host = devices.getOrNull(which)?.getHostAddress()
+            discoveryProvider.stopPeerDiscovery()
+            val host = peers.getOrNull(which)?.address
             host?.let { performNetworkImport(it) }
         }
         builder.setNeutralButton(R.string.settings_import_manual) { d: DialogInterface, _: Int ->
-            discovery.stopDiscovery()
+            discoveryProvider.stopPeerDiscovery()
             d.dismiss()
             showImportIpDialog()
         }
         builder.setNegativeButton(android.R.string.cancel) { d: DialogInterface, _: Int ->
-            discovery.stopDiscovery()
+            discoveryProvider.stopPeerDiscovery()
             d.dismiss()
         }
 
         val dialog = builder.create()
 
         dialog.setOnShowListener {
-            if (deviceNames.isEmpty()) {
-                deviceNames.add(context.getString(R.string.settings_import_discover))
+            if (peerDisplayNames.isEmpty()) {
+                peerDisplayNames.add(context.getString(R.string.settings_import_discover))
                 adapter.notifyDataSetChanged()
             }
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
         }
 
         dialog.setOnDismissListener {
-            discovery.stopDiscovery()
+            discoveryProvider.stopPeerDiscovery()
         }
 
         dialog.show()
-        discovery.startDiscovery(deviceListener)
+        discoveryProvider.startPeerDiscovery(peerListener)
     }
 
     private fun showImportIpDialog() {
@@ -224,56 +216,7 @@ class AdvancedSubmenu(
             }.setNegativeButton(android.R.string.cancel, null)
             .create()
 
-        // Initial state: TOP to avoid overlap and resizing
-        dialog.window?.apply {
-            setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL)
-            attributes = attributes.apply { y = 100 }
-            setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
-        }
-        dialog.show()
-
-        // Reliable detection via Activity decor view
-        context.findActivity()?.window?.decorView?.let { decor ->
-            var wasKeyboardVisible = true
-            val posUpdater = Runnable {
-                dialog.window?.let { win ->
-                    val p = win.attributes
-                    p.gravity = if (wasKeyboardVisible) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
-                    p.y = if (wasKeyboardVisible) 100 else 0
-                    win.attributes = p
-                }
-            }
-            val listener = ViewTreeObserver.OnGlobalLayoutListener {
-                val r = Rect()
-                decor.getWindowVisibleDisplayFrame(r)
-                val screenHeight = decor.rootView.height
-                val keypadHeight = screenHeight - r.bottom
-                val isKeyboardVisible = (keypadHeight > screenHeight * 0.15) ||
-                        (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
-
-                if (isKeyboardVisible != wasKeyboardVisible) {
-                    wasKeyboardVisible = isKeyboardVisible
-                    handler.removeCallbacks(posUpdater)
-                    // Immediate move to top, 250ms delay to move to center (debouncing)
-                    handler.postDelayed(posUpdater, if (isKeyboardVisible) 0 else 250)
-                }
-            }
-            decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
-            dialog.setOnDismissListener {
-                decor.viewTreeObserver.removeOnGlobalLayoutListener(listener)
-                handler.removeCallbacks(posUpdater)
-            }
-        }
-
-        val buttonKeyListener = View.OnKeyListener { _, keyCode, event ->
-            if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_DOWN) {
-                input.requestFocus()
-                true
-            } else false
-        }
-        dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnKeyListener(buttonKeyListener)
-        dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setOnKeyListener(buttonKeyListener)
-
+        dialog.setupTvKeyboardAvoidance(input)
         input.requestFocus()
     }
 
@@ -308,14 +251,5 @@ class AdvancedSubmenu(
                 }
             }
         }.start()
-    }
-
-    private fun NsdServiceInfo.getHostAddress(): String? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            hostAddresses.firstOrNull()?.hostAddress
-        } else {
-            @Suppress("DEPRECATION")
-            host?.hostAddress
-        }
     }
 }

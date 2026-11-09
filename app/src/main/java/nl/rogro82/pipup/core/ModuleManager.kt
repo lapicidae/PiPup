@@ -211,6 +211,19 @@ class ModuleManager {
     }
 
     /**
+     * Returns the first active module implementing the requested capability type [T], or null if none is active.
+     */
+    inline fun <reified T> getActiveCapability(): T? {
+        val s = PiPupApp.settings
+        for (module in getAllModules()) {
+            if (module is T && s.getModuleMode(module.id) != ModuleMode.OFF) {
+                return module
+            }
+        }
+        return null
+    }
+
+    /**
      * Legacy/Debug: Triggered by DebugModule to clean up memory.
      */
     @OptIn(UnstableApi::class)
@@ -218,8 +231,8 @@ class ModuleManager {
         Log.i(TAG, "Forced module cleanup triggered")
         activeModules.toList().forEach { id ->
             val module = modules[id] ?: return@forEach
-            // Only non-system modules can be unloaded
-            if (id != "system") {
+            // Only modules supporting OFF can be disabled/unloaded
+            if (ModuleMode.OFF in module.supportedModes) {
                 Log.i(TAG, "Module $id forced to disable to save RAM")
                 module.onDisable()
                 activeModules.remove(id)

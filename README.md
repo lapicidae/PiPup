@@ -142,8 +142,8 @@ For JSON payloads, the `media` object supports 4 types:
 {
 "image": { "uri": "...", "width": 480, "cache": true, "scale": true },                      "//comment_im": "cache and scale are optional",
 "video": { "uri": "...", "width": 480, "scale": true },                                     "//comment_vi": "scale is optional",
-"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true },       "//comment_we": "cache and scale are optional",
-"whep":  { "uri": "...", "width": 640, "height": 480, "scale": true, "videoFit": "cover" }, "//comment_wh": "videoFit and scale are optional"
+"web":   { "uri": "...", "width": 640, "height": 480, "cache": true, "scale": true },       "//comment_we": "height (default 16:9), cache and scale are optional",
+"whep":  { "uri": "...", "width": 640, "height": 480, "scale": true, "videoFit": "cover" }, "//comment_wh": "height (default source ratio), videoFit and scale are optional"
 }
 ```
 

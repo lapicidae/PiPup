@@ -27,6 +27,7 @@ class VendorModule : PiPupModule {
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.OFF
+    override val isUserConfigurable: Boolean = true
 
     private var moduleContext: ModuleContext? = null
 

@@ -14,6 +14,7 @@ class MyAwesomeModule : PiPupModule {
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.OFF
+    override val isUserConfigurable: Boolean = true // Set to false for internal core modules
 
     override fun onEnable(context: ModuleContext) {
         // Initialization logic
@@ -90,3 +91,41 @@ override fun getRequiredPermissions() = listOf(Permissions.KEY_OVERLAY)
 ```
 
 New permission keys must be implemented in the centralized `Permissions.kt` manager.
+
+## 6. Capability Providers & Core Interactions
+
+To preserve the architectural principle **"The Core is Blind"**, the Core and Settings UI never query modules by their ID (`getModule("...")`). Instead, cross-component interactions use capability interfaces and polymorphic hooks:
+
+### Implementing a Capability Provider
+
+When a module offers services to the Core (such as discovering peer devices across the local network), it implements a capability interface defined in `core`:
+
+```kotlin
+class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
+    override fun startPeerDiscovery(listener: PeerDiscoveryProvider.Listener) {
+        /* start discovery logic */
+    }
+    override fun stopPeerDiscovery() {
+        /* stop discovery logic */
+    }
+}
+```
+
+The Core or Settings UI queries active capabilities polymorphically:
+
+```kotlin
+val provider = moduleManager.getActiveCapability<PeerDiscoveryProvider>()
+provider?.startPeerDiscovery(listener)
+```
+
+### Reacting to Mode Changes (`onModeToggled`)
+
+If a module requires special interaction when toggled in the UI (e.g. requesting missing system permissions or showing an informational warning), override `onModeToggled`:
+
+```kotlin
+override fun onModeToggled(context: Context, newMode: ModuleMode) {
+    if (newMode != ModuleMode.OFF && !hasRequiredPermissions()) {
+        showPermissionPrompt(context)
+    }
+}
+```

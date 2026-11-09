@@ -42,7 +42,9 @@ In the `SettingsActivity.kt`, a centralized `moduleSubmenuFactories` registry is
 
 ## Design Principles
 
-- **The Core is Blind:** No `if (moduleId == "...")` checks are allowed in the core or UI classes.
+- **The Core is Blind:** No `if (moduleId == "...")` checks or hardcoded module queries (`getModule("...")`) are allowed in the core or UI classes.
+    - To interact with modular features, the Core defines capability interfaces (e.g. `PeerDiscoveryProvider`) and queries `moduleManager.getActiveCapability<T>()`.
+    - Modules hook into UI events via polymorphic callbacks (e.g. `onModeToggled(context, newMode)`).
 - **Resource Efficiency:** Modules in `ECO` mode are unloaded when idle to save RAM on Android TV devices.
 - **Centralized Permissions:** All strings and ADB commands for permissions live in `Permissions.kt`, but visibility is driven by module requirements.
 

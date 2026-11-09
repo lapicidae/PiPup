@@ -12,6 +12,10 @@ import nl.rogro82.pipup.core.modules.SystemModule
 import nl.rogro82.pipup.core.modules.VendorModule
 import nl.rogro82.pipup.core.modules.DebugModule
 
+/**
+ * Central application class for PiPup.
+ * Initializes the modular runtime, core settings, and application-level lifecycle scope.
+ */
 class PiPupApp : Application() {
 
     /**

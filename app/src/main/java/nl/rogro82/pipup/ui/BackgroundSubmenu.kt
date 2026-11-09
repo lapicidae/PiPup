@@ -7,8 +7,12 @@ import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.SettingCategory
 import nl.rogro82.pipup.colorToHex
 
+/**
+ * Settings submenu controller for popup background color presets, custom hex values, and alpha transparency.
+ */
 @UnstableApi
 class BackgroundSubmenu(
     context: Context,
@@ -35,6 +39,6 @@ class BackgroundSubmenu(
             settings.backgroundAlpha = it
         }
 
-        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.BACKGROUND)
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.BACKGROUND)
     }
 }

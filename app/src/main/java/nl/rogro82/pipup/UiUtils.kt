@@ -109,18 +109,30 @@ fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
         }.setNegativeButton(android.R.string.cancel, null)
         .create()
 
-    dialog.window?.apply {
+    dialog.setupTvKeyboardAvoidance(input)
+    input.requestFocus()
+}
+/**
+ * Configures an [AlertDialog] for TV input:
+ * 1. Shifts window to TOP initially so the virtual IME does not obscure or distort input fields.
+ * 2. Monitors keyboard visibility via decor view insets / visible display frame and centers the dialog when IME dismisses.
+ * 3. Handles D-pad navigation between input view and dialog action buttons.
+ *
+ * @param input The focused input view (typically an [EditText]).
+ */
+fun AlertDialog.setupTvKeyboardAvoidance(input: View) {
+    window?.apply {
         setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL)
         attributes = attributes.apply { y = 100 }
         setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
     }
-    dialog.show()
+    show()
 
     val handler = Handler(Looper.getMainLooper())
-    findActivity()?.window?.decorView?.let { decor ->
+    context.findActivity()?.window?.decorView?.let { decor ->
         var wasKeyboardVisible = true
         val posUpdater = Runnable {
-            dialog.window?.let { win ->
+            window?.let { win ->
                 val p = win.attributes
                 p.gravity = if (wasKeyboardVisible) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
                 p.y = if (wasKeyboardVisible) 100 else 0
@@ -142,7 +154,7 @@ fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
             }
         }
         decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
-        dialog.setOnDismissListener {
+        setOnDismissListener {
             decor.viewTreeObserver.removeOnGlobalLayoutListener(listener)
             handler.removeCallbacks(posUpdater)
         }
@@ -151,7 +163,7 @@ fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
     input.setOnKeyListener { _, keyCode, event ->
         val handled = event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP
         if (handled) {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).requestFocus()
+            getButton(AlertDialog.BUTTON_POSITIVE)?.requestFocus()
         }
         handled
     }
@@ -164,8 +176,7 @@ fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
             else -> false
         }
     }
-    dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setOnKeyListener(buttonKeyListener)
-    dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setOnKeyListener(buttonKeyListener)
-
-    input.requestFocus()
+    getButton(AlertDialog.BUTTON_POSITIVE)?.setOnKeyListener(buttonKeyListener)
+    getButton(AlertDialog.BUTTON_NEGATIVE)?.setOnKeyListener(buttonKeyListener)
 }
+

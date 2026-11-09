@@ -8,15 +8,17 @@ import androidx.core.content.ContextCompat
 import java.text.Normalizer
 import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.DiscoveredPeer
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.ModuleMode
+import nl.rogro82.pipup.core.PeerDiscoveryProvider
 import nl.rogro82.pipup.core.PiPupModule
 
 /**
  * Module responsible for Network Service Discovery (NSD).
  * Handles both registering this device and discovering other PiPup instances.
  */
-class DiscoveryModule : PiPupModule {
+class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
 
     companion object {
         private const val TAG = "DiscoveryModule"
@@ -29,6 +31,7 @@ class DiscoveryModule : PiPupModule {
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.ON
+    override val isUserConfigurable: Boolean = true
 
     private var moduleContext: ModuleContext? = null
     private var nsdManager: NsdManager? = null
@@ -36,12 +39,7 @@ class DiscoveryModule : PiPupModule {
     private var discoveryListener: NsdManager.DiscoveryListener? = null
     private val discoveredDevices = mutableMapOf<String, NsdServiceInfo>()
 
-    interface DeviceListener {
-        fun onDeviceFound(serviceInfo: NsdServiceInfo)
-        fun onDeviceLost(serviceInfo: NsdServiceInfo)
-    }
-
-    private var deviceListener: DeviceListener? = null
+    private var peerListener: PeerDiscoveryProvider.Listener? = null
     private var mLocalServiceName: String? = null
 
     // Queue for resolving services to avoid NsdManager bottlenecks
@@ -125,14 +123,11 @@ class DiscoveryModule : PiPupModule {
         registrationListener = null
     }
 
-    /**
-     * Starts discovering other PiPup services on the local network.
-     */
-    fun startDiscovery(listener: DeviceListener) {
+    override fun startPeerDiscovery(listener: PeerDiscoveryProvider.Listener) {
         val nsd = nsdManager ?: return
         if (discoveryListener != null) stopDiscovery()
 
-        this.deviceListener = listener
+        this.peerListener = listener
         discoveredDevices.clear()
 
         synchronized(resolveQueue) {
@@ -161,7 +156,7 @@ class DiscoveryModule : PiPupModule {
             override fun onServiceLost(service: NsdServiceInfo) {
                 Log.d(TAG, "Service lost: ${service.serviceName}")
                 discoveredDevices.remove(service.serviceName)
-                deviceListener?.onDeviceLost(service)
+                peerListener?.onPeerLost(service.serviceName)
             }
 
             override fun onDiscoveryStopped(regType: String) {
@@ -241,7 +236,17 @@ class DiscoveryModule : PiPupModule {
         val hostAddress = serviceInfo.getHostAddress()
         Log.d(TAG, "Service resolved successfully: ${serviceInfo.serviceName} -> $hostAddress")
         discoveredDevices[serviceInfo.serviceName] = serviceInfo
-        deviceListener?.onDeviceFound(serviceInfo)
+
+        if (hostAddress != null) {
+            val remoteId = serviceInfo.attributes["id"]?.let { String(it) }
+            val peer = DiscoveredPeer(
+                name = serviceInfo.serviceName,
+                address = hostAddress,
+                id = remoteId
+            )
+            peerListener?.onPeerFound(peer)
+        }
+
         finishResolve()
     }
 
@@ -261,6 +266,10 @@ class DiscoveryModule : PiPupModule {
         }
     }
 
+    override fun stopPeerDiscovery() {
+        stopDiscovery()
+    }
+
     /**
      * Stops service discovery.
      */
@@ -278,7 +287,7 @@ class DiscoveryModule : PiPupModule {
             }
         }
         discoveryListener = null
-        deviceListener = null
+        peerListener = null
     }
 
     private fun sanitizeDeviceName(name: String): String {

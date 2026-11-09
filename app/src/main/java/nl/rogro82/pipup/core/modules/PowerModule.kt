@@ -25,6 +25,7 @@ class PowerModule : PiPupModule {
 
     override val supportedModes: List<ModuleMode> = listOf(ModuleMode.OFF, ModuleMode.ON)
     override val defaultMode: ModuleMode = ModuleMode.OFF
+    override val isUserConfigurable: Boolean = true
 
     private var moduleContext: ModuleContext? = null
 
@@ -97,4 +98,10 @@ class PowerModule : PiPupModule {
     override fun getRequiredPermissions(): List<String> = listOf(
         Permissions.KEY_POWER
     )
+
+    override fun onModeToggled(context: android.content.Context, newMode: ModuleMode) {
+        if (newMode != ModuleMode.OFF && PowerController.getSleepMethod(context) == null) {
+            Permissions.showFixDialog(context, Permissions.KEY_POWER)
+        }
+    }
 }

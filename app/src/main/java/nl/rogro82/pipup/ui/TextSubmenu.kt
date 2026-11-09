@@ -8,8 +8,12 @@ import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.core.SettingCategory
 import nl.rogro82.pipup.colorToHex
 
+/**
+ * Settings submenu controller for notification title and message text styles, sizes, and colors.
+ */
 @UnstableApi
 class TextSubmenu(
     context: Context,
@@ -55,6 +59,6 @@ class TextSubmenu(
         setupSpinner(root, R.id.spinner_title_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.titleAlignment) { settings.titleAlignment = it }
         setupSpinner(root, R.id.spinner_message_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.messageAlignment) { settings.messageAlignment = it }
 
-        renderModuleSettings(root as android.view.ViewGroup, nl.rogro82.pipup.core.SettingCategory.TEXT)
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.TEXT)
     }
 }

@@ -9,6 +9,10 @@ import com.bumptech.glide.module.LibraryGlideModule
 import com.bumptech.glide.integration.okhttp3.OkHttpUrlLoader
 import java.io.InputStream
 
+/**
+ * Custom Glide module to replace standard Android URL loading with OkHttp.
+ * Enables optimized connection pooling, HTTP/2 support, and shared cache management.
+ */
 @GlideModule
 class OkHttpLibraryGlideModule : LibraryGlideModule() {
     override fun registerComponents(context: Context, glide: Glide, registry: Registry) {
