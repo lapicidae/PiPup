@@ -29,6 +29,7 @@ import android.widget.ProgressBar
 import androidx.core.content.ContextCompat
 import androidx.core.view.isNotEmpty
 import androidx.core.view.isVisible
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -708,7 +709,15 @@ class MediaRenderer(
             it.alpha = 0.01f
             it.isVisible = false
         }
-        p.volume = if (video.muted) 0f else 1f
+        if (video.muted) {
+            // Disable audio entirely: avoids audio-codec failures (e.g. RTSP Opus) and keeps TV audio untouched.
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                .build()
+            p.volume = 0f
+        } else {
+            p.volume = 1f
+        }
         p.setVideoTextureView(tv)
         p.repeatMode = Player.REPEAT_MODE_ONE
 
