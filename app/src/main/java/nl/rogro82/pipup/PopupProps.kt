@@ -54,7 +54,11 @@ data class PopupProps(
     val buttonsInline: Boolean = false,
     val isPreview: Boolean = false,
     val isInternalUpdateAction: Boolean = false,
-    val stack: String? = null
+    val stack: String? = null,
+    val liveBadge: Boolean? = null,
+    val liveBadgeColor: String? = null,
+    val liveBadgePosition: String? = null,
+    val mediaFullBleed: Boolean? = null
 ) {
     @Transient
     var measuredSize: Pair<Int, Int>? = null
@@ -71,6 +75,10 @@ data class PopupProps(
         fun fromJson(jsonStr: String): PopupProps {
             val j = JSONObject(jsonStr)
 
+            fun optNullableString(key: String): String? = if (j.has(key) && !j.isNull(key)) j.getString(key) else null
+            fun optNullableStringIn(obj: JSONObject, key: String): String? =
+                if (obj.has(key) && !obj.isNull(key)) obj.getString(key) else null
+
             // Handle polymorphic media structure
             var media: Media? = null
             if (j.has("media") && !j.isNull("media")) {
@@ -78,12 +86,26 @@ data class PopupProps(
                 when {
                     m.has("video") -> {
                         val v = m.getJSONObject("video")
+                        val width = v.optInt("width", 480)
+                        val height = if (v.has("height") && !v.isNull("height") && v.optInt("height", 0) > 0) {
+                            v.getInt("height")
+                        } else {
+                            null
+                        }
                         media = Media.Video(
                             uri = v.getString("uri"),
-                            width = v.optInt("width", 480),
+                            width = width,
+                            height = height,
                             scale = v.optBoolean("scale", true),
                             muted = v.optBoolean("muted", true),
-                            udp = v.optBoolean("udp", false)
+                            udp = v.optBoolean("udp", false),
+                            poster = optNullableStringIn(v, "poster"),
+                            posterMode = parsePosterMode(optNullableStringIn(v, "posterMode"))?.name?.lowercase(),
+                            bufferMs = if (v.has("bufferMs") && !v.isNull("bufferMs")) {
+                                v.optInt("bufferMs").takeIf { it > 0 }?.coerceIn(100, 10_000)
+                            } else {
+                                null
+                            }
                         )
                     }
                     m.has("image") -> {
@@ -109,7 +131,9 @@ data class PopupProps(
                             height = height,
                             cache = w.optBoolean("cache", true),
                             scale = w.optBoolean("scale", true),
-                            muted = w.optBoolean("muted", true)
+                            muted = w.optBoolean("muted", true),
+                            poster = optNullableStringIn(w, "poster"),
+                            posterMode = parsePosterMode(optNullableStringIn(w, "posterMode"))?.name?.lowercase()
                         )
                     }
                     m.has("whep") -> {
@@ -117,19 +141,22 @@ data class PopupProps(
                         val width = w.optInt("width", 640)
                         val height = if (w.has("height") && !w.isNull("height") && w.optInt("height", 0) > 0) {
                             w.getInt("height")
-                        } else null
+                        } else {
+                            null
+                        }
                         media = Media.Whep(
                             uri = w.getString("uri"),
                             width = width,
                             height = height,
                             scale = w.optBoolean("scale", true),
-                            videoFit = w.optString("videoFit", "cover")
+                            videoFit = w.optString("videoFit", "cover"),
+                            poster = optNullableStringIn(w, "poster"),
+                            posterMode = parsePosterMode(optNullableStringIn(w, "posterMode"))?.name?.lowercase(),
+                            muted = w.optBoolean("muted", true)
                         )
                     }
                 }
             }
-
-            fun optNullableString(key: String): String? = if (j.has(key) && !j.isNull(key)) j.getString(key) else null
 
             val parsedButtons = mutableListOf<Button>()
             if (j.has("buttons") && !j.isNull("buttons")) {
@@ -145,10 +172,24 @@ data class PopupProps(
                 }
             }
 
+            val resolvedBorderRadius = when {
+                j.has("borderRadius") && !j.isNull("borderRadius") -> j.optDouble("borderRadius", 0.0).toInt()
+                j.has("cornerRadius") && !j.isNull("cornerRadius") -> j.optDouble("cornerRadius", 0.0).toInt()
+                else -> 0
+            }
+
+            val resolvedContentPadding = when {
+                j.has("contentPadding") && !j.isNull("contentPadding") -> j.getInt("contentPadding")
+                j.has("padding") && !j.isNull("padding") -> j.getInt("padding")
+                else -> null
+            }
+
+            val resolvedPosition = parsePositionIndex(if (j.has("position") && !j.isNull("position")) j.get("position") else null)
+
             return PopupProps(
                 duration = j.optInt("duration", 10),
                 id = optNullableString("id"),
-                position = j.optInt("position", 0),
+                position = resolvedPosition,
                 title = optNullableString("title"),
                 titleSize = j.optDouble("titleSize", 24.0).toFloat(),
                 titleColor = j.optString("titleColor", DEFAULT_TEXT_COLOR) ?: DEFAULT_TEXT_COLOR,
@@ -162,10 +203,10 @@ data class PopupProps(
                 animationDuration = j.optInt("animationDuration", 500),
                 animationExit = j.optBoolean("animationExit", false),
                 overwrite = j.optBoolean("overwrite", false),
-                borderRadius = j.optInt("borderRadius", 0),
+                borderRadius = resolvedBorderRadius,
                 borderWidth = j.optInt("borderWidth", 0),
                 borderColor = j.optString("borderColor", DEFAULT_BORDER_COLOR) ?: DEFAULT_BORDER_COLOR,
-                contentPadding = if (j.has("contentPadding") && !j.isNull("contentPadding")) j.getInt("contentPadding") else null,
+                contentPadding = resolvedContentPadding,
                 titleAlignment = j.optInt("titleAlignment", 0),
                 messageAlignment = j.optInt("messageAlignment", 0),
                 image = optNullableString("image"),
@@ -174,17 +215,46 @@ data class PopupProps(
                 scale = j.optBoolean("scale", true),
                 buttons = parsedButtons,
                 callback = optNullableString("callback"),
-                buttonSize = if (j.has("buttonSize") && !j.isNull("buttonSize")) j.getDouble("buttonSize").toFloat().coerceIn(10f, 40f) else null,
+                buttonSize = if (j.has("buttonSize") && !j.isNull("buttonSize")) {
+                    j.getDouble("buttonSize").toFloat().coerceIn(10f, 40f)
+                } else {
+                    null
+                },
                 buttonColor = optNullableString("buttonColor"),
                 buttonFocusColor = optNullableString("buttonFocusColor"),
                 buttonTextColor = optNullableString("buttonTextColor"),
                 buttonFocusTextColor = optNullableString("buttonFocusTextColor"),
                 buttonBorderColor = optNullableString("buttonBorderColor"),
-                buttonCornerRadius = if (j.has("buttonCornerRadius") && !j.isNull("buttonCornerRadius")) j.getDouble("buttonCornerRadius").toFloat().coerceIn(0f, 50f) else null,
+                buttonCornerRadius = if (j.has("buttonCornerRadius") && !j.isNull("buttonCornerRadius")) {
+                    j.getDouble("buttonCornerRadius").toFloat().coerceIn(0f, 50f)
+                } else {
+                    null
+                },
                 buttonsInline = j.optBoolean("buttonsInline", false),
                 isInternalUpdateAction = false,
-                stack = optNullableString("stack")?.trim()?.lowercase()?.takeIf { it == "vertical" || it == "horizontal" }
+                stack = optNullableString("stack")?.trim()?.lowercase()?.takeIf { it == "vertical" || it == "horizontal" },
+                liveBadge = if (j.has("liveBadge") && !j.isNull("liveBadge")) j.getBoolean("liveBadge") else null,
+                liveBadgeColor = optNullableString("liveBadgeColor"),
+                liveBadgePosition = optNullableString("liveBadgePosition"),
+                mediaFullBleed = if (j.has("mediaFullBleed") && !j.isNull("mediaFullBleed")) j.getBoolean("mediaFullBleed") else null
             )
+        }
+
+        /**
+         * Parses a position value (integer index 0..8 or position name string) into a numeric position index.
+         */
+        fun parsePositionIndex(raw: Any?): Int {
+            return when (raw) {
+                is Number -> raw.toInt().takeIf { it in 0..8 } ?: 0
+                is String -> {
+                    val trimmed = raw.trim()
+                    trimmed.toIntOrNull()?.takeIf { it in 0..8 } ?: run {
+                        val normalized = trimmed.replace("_", "").replace("-", "").lowercase()
+                        Position.entries.find { it.name.lowercase() == normalized }?.index ?: 0
+                    }
+                }
+                else -> 0
+            }
         }
 
         /**
@@ -192,6 +262,17 @@ data class PopupProps(
          */
         fun parseStackDirection(raw: String?): StackDirection {
             return if (raw?.trim()?.lowercase() == "horizontal") StackDirection.HORIZONTAL else StackDirection.VERTICAL
+        }
+
+        /**
+         * Parses a raw poster scaling mode string ("fit", "fill", "stretch", "center") into a [PosterMode].
+         */
+        fun parsePosterMode(raw: String?): PosterMode? = when (raw?.trim()?.lowercase()) {
+            "fit" -> PosterMode.FIT
+            "fill" -> PosterMode.FILL
+            "stretch" -> PosterMode.STRETCH
+            "center" -> PosterMode.CENTER
+            else -> null
         }
     }
 
@@ -248,12 +329,21 @@ data class PopupProps(
         j.put("isInternalUpdateAction", isInternalUpdateAction)
         j.put("stack", stack ?: JSONObject.NULL)
 
+        liveBadge?.let { j.put("liveBadge", it) }
+        liveBadgeColor?.let { j.put("liveBadgeColor", it) }
+        liveBadgePosition?.let { j.put("liveBadgePosition", it) }
+        mediaFullBleed?.let { j.put("mediaFullBleed", it) }
+
         media?.let { m ->
             val mj = JSONObject()
             when (m) {
                 is Media.Video -> {
                     mj.put("video", JSONObject().apply {
                         put("uri", m.uri); put("width", m.width); put("scale", m.scale); put("muted", m.muted); put("udp", m.udp)
+                        m.height?.let { put("height", it) }
+                        m.poster?.let { put("poster", it) }
+                        m.posterMode?.let { put("posterMode", it) }
+                        m.bufferMs?.let { put("bufferMs", it) }
                     })
                 }
                 is Media.Image -> {
@@ -264,13 +354,17 @@ data class PopupProps(
                 is Media.Web -> {
                     mj.put("web", JSONObject().apply {
                         put("uri", m.uri); put("width", m.width); put("height", m.height); put("cache", m.cache); put("scale", m.scale); put("muted", m.muted)
+                        m.poster?.let { put("poster", it) }
+                        m.posterMode?.let { put("posterMode", it) }
                     })
                 }
                 is Media.Whep -> {
                     mj.put("whep", JSONObject().apply {
                         put("uri", m.uri); put("width", m.width)
                         m.height?.let { put("height", it) }
-                        put("scale", m.scale); put("videoFit", m.videoFit)
+                        put("scale", m.scale); put("videoFit", m.videoFit); put("muted", m.muted)
+                        m.poster?.let { put("poster", it) }
+                        m.posterMode?.let { put("posterMode", it) }
                     })
                 }
                 else -> {} // LocalFile and Bitmap are not serialized back to JSON for external use
@@ -281,13 +375,24 @@ data class PopupProps(
         return j.toString()
     }
 
+    /**
+     * Scaling mode for poster snapshot images before live stream playback begins.
+     */
+    enum class PosterMode {
+        FIT, FILL, STRETCH, CENTER
+    }
+
     sealed class Media {
         data class Video(
             val uri: String,
             val width: Int = 480,
+            val height: Int? = null,
             val scale: Boolean = true,
             val muted: Boolean = true,
-            val udp: Boolean = false
+            val udp: Boolean = false,
+            val poster: String? = null,
+            val bufferMs: Int? = null,
+            val posterMode: String? = null
         ) : Media()
         data class Image(
             val uri: String,
@@ -301,14 +406,19 @@ data class PopupProps(
             val height: Int = 480,
             val cache: Boolean = true,
             val scale: Boolean = true,
-            val muted: Boolean = true
+            val muted: Boolean = true,
+            val poster: String? = null,
+            val posterMode: String? = null
         ) : Media()
         data class Whep(
             val uri: String,
             val width: Int = 640,
             val height: Int? = null,
             val scale: Boolean = true,
-            val videoFit: String = "cover" // cover, contain, fill
+            val videoFit: String = "cover", // cover, contain, fill
+            val poster: String? = null,
+            val posterMode: String? = null,
+            val muted: Boolean = true
         ) : Media()
         data class LocalFile(
             val path: String,
@@ -481,6 +591,10 @@ data class PopupProps(
 
                 val paddingVal = props.contentPadding ?: settings.contentPadding
                 val scaledPadding = props.scaleValue(context, paddingVal)
+                val fullBleed = (props.mediaFullBleed ?: settings.mediaFullBleed) &&
+                    (props.media != null || !props.image.isNullOrEmpty())
+                val borderInset = if (props.borderWidth > 0) props.scaleValue(context, props.borderWidth) else 0
+                val mediaPad = if (fullBleed) borderInset else scaledPadding
 
                 var mediaWidthEst = 0
                 var mediaHeightEst = 0
@@ -488,6 +602,7 @@ data class PopupProps(
                     val scaledWidth = props.scaleValue(context, w)
                     mediaWidthEst = scaledWidth
                     mediaHeightEst = when (val m = props.media) {
+                        is Media.Video -> m.height?.let { props.scaleValue(context, it) } ?: ((scaledWidth * 9) / 16)
                         is Media.Web -> props.scaleValue(context, m.height)
                         is Media.Whep -> m.height?.let { props.scaleValue(context, it) } ?: ((scaledWidth * 9) / 16)
                         else -> (scaledWidth * 9) / 16
@@ -543,11 +658,11 @@ data class PopupProps(
                 val totalTextContentH = titleH + titleMsgGap + msgH + buttonRowH
 
                 val width = if (isHorizontalMedia) {
-                    (textWidthEst + mediaTextGap + mediaWidthEst + scaledPadding * 2)
+                    (textWidthEst + mediaTextGap + mediaWidthEst + scaledPadding + mediaPad)
                         .coerceAtLeast(context.dpToPx(240))
                         .coerceAtMost(screenWidth - baseMargin * 2)
                 } else {
-                    (maxOf(textWidthEst, mediaWidthEst) + scaledPadding * 2)
+                    maxOf(textWidthEst + scaledPadding * 2, mediaWidthEst + mediaPad * 2)
                         .coerceAtLeast(context.dpToPx(240))
                         .coerceAtMost(screenWidth - baseMargin * 2)
                 }
@@ -555,13 +670,22 @@ data class PopupProps(
                 val pos = props.getPositionEnum()
 
                 val maxAllowedHeight = (screenHeight * 0.75).toInt()
-                val minContentHeight = scaledPadding * 2 + context.dpToPx(36)
+                val minContentHeight = if (fullBleed && !hasAnyText && buttonRowH == 0) {
+                    mediaHeightEst + mediaPad * 2
+                } else {
+                    scaledPadding * 2 + context.dpToPx(36)
+                }
+                val verticalPad = if (fullBleed) {
+                    if (hasAnyText || buttonRowH > 0) mediaPad + scaledPadding else mediaPad * 2
+                } else {
+                    scaledPadding * 2
+                }
                 val height = if (isHorizontalMedia) {
-                    (maxOf(totalTextContentH, mediaHeightEst) + scaledPadding * 2)
+                    (maxOf(totalTextContentH + scaledPadding * 2, mediaHeightEst + mediaPad * 2))
                         .coerceAtLeast(minContentHeight)
                         .coerceAtMost(maxAllowedHeight)
                 } else {
-                    (totalTextContentH + mediaTextGap + mediaHeightEst + scaledPadding * 2)
+                    (totalTextContentH + mediaTextGap + mediaHeightEst + verticalPad)
                         .coerceAtLeast(minContentHeight)
                         .coerceAtMost(maxAllowedHeight)
                 }

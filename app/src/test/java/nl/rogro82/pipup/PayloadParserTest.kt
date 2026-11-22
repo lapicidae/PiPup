@@ -160,4 +160,110 @@ class PayloadParserTest {
         val fallback = PopupProps.parseStackDirection("invalid_string")
         assertEquals(PopupProps.StackDirection.VERTICAL, fallback)
     }
+
+    @Test
+    fun testMediaPosterBufferAndPosterModeParsing() {
+        val videoJson = """
+        {
+          "title": "Camera",
+          "cornerRadius": 24,
+          "padding": 16,
+          "position": "BottomLeft",
+          "mediaFullBleed": true,
+          "liveBadge": true,
+          "liveBadgeColor": "#FF0000",
+          "liveBadgePosition": "top_left",
+          "media": {
+            "video": {
+              "uri": "rtsp://cam/stream",
+              "width": 640,
+              "height": 360,
+              "muted": false,
+              "poster": "http://cam/snap.jpg",
+              "posterMode": "FILL",
+              "bufferMs": 50
+            }
+          }
+        }
+        """.trimIndent()
+
+        val props = PopupProps.fromJson(videoJson)
+        assertEquals(24, props.borderRadius)
+        assertEquals(16, props.contentPadding)
+        assertEquals(3, props.position)
+        assertEquals(PopupProps.Position.BottomLeft, props.getPositionEnum())
+        assertEquals(true, props.mediaFullBleed)
+        assertEquals(true, props.liveBadge)
+        assertEquals("#FF0000", props.liveBadgeColor)
+        assertEquals("top_left", props.liveBadgePosition)
+
+        val video = props.media as PopupProps.Media.Video
+        assertEquals("rtsp://cam/stream", video.uri)
+        assertEquals(640, video.width)
+        assertEquals(360, video.height)
+        assertFalse(video.muted)
+        assertEquals("http://cam/snap.jpg", video.poster)
+        assertEquals("fill", video.posterMode)
+        assertEquals(100, video.bufferMs) // Clamped to min 100ms
+    }
+
+    @Test
+    fun testBufferMsUpperClampAndWhepWebPosterMode() {
+        val whepJson = """
+        {
+          "position": "top_right",
+          "media": {
+            "whep": {
+              "uri": "http://go2rtc/api/webrtc?src=cam",
+              "width": 800,
+              "height": 450,
+              "muted": false,
+              "poster": "http://cam/poster.jpg",
+              "posterMode": "stretch"
+            }
+          }
+        }
+        """.trimIndent()
+
+        val whepProps = PopupProps.fromJson(whepJson)
+        assertEquals(0, whepProps.position)
+        val whep = whepProps.media as PopupProps.Media.Whep
+        assertEquals(800, whep.width)
+        assertEquals(450, whep.height)
+        assertFalse(whep.muted)
+        assertEquals("http://cam/poster.jpg", whep.poster)
+        assertEquals("stretch", whep.posterMode)
+
+        val webJson = """
+        {
+          "media": {
+            "web": {
+              "uri": "http://cam/player.html",
+              "width": 640,
+              "poster": "http://cam/web.jpg",
+              "posterMode": "invalid_mode"
+            }
+          }
+        }
+        """.trimIndent()
+        val webProps = PopupProps.fromJson(webJson)
+        val web = webProps.media as PopupProps.Media.Web
+        assertEquals(360, web.height)
+        assertEquals("http://cam/web.jpg", web.poster)
+        org.junit.Assert.assertNull(web.posterMode)
+    }
+
+    @Test
+    fun testLowLatencyBufferDurationsAndAnamorphicAspect() {
+        val (minBuf, maxBuf, startBuf, rebuf) = nl.rogro82.pipup.ui.MediaRenderer.lowLatencyBufferDurations(250)!!
+        assertEquals(250, startBuf)
+        assertEquals(500, rebuf)
+        assertEquals(1000, minBuf)
+        assertEquals(5000, maxBuf)
+
+        // Substream 704x576 with DAR 16:9 (PAR ~ 1.4545) -> target height for width 640 should be 360
+        val par = (16f / 9f) / (704f / 576f)
+        val h = nl.rogro82.pipup.ui.MediaRenderer.heightForDisplayAspect(640, 704, 576, par)
+        assertEquals(360, h)
+    }
 }

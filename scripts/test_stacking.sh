@@ -63,7 +63,6 @@ main() {
   local payload
   local update_payload
   local rand_val
-  local cancel_resp cancel_code cancel_body
 
   while getopts "d:p:ocC:h" opt; do
     case "${opt}" in
@@ -81,31 +80,13 @@ main() {
   endpoint_base="http://${target_ip}:${PORT}"
 
   if [[ "${cancel_all}" == "true" ]]; then
-    printf "%b[STACKING] Cancelling all active popups...%b\n" "${CLR_HEADER}" "${CLR_RESET}"
-    cancel_resp=$(curl -s --connect-timeout 3 --max-time 5 -w "|%{http_code}" -X POST "${endpoint_base}/cancel?all=true" || printf "Error|000")
-    cancel_body="${cancel_resp%|*}"
-    cancel_code="${cancel_resp##*|}"
-    if [[ "${cancel_code}" == "200" ]]; then
-      printf "%b[SUCCESS] All popups cancelled (%s).%b\n" "${CLR_SUCCESS}" "${cancel_body}" "${CLR_RESET}"
-      exit 0
-    else
-      printf "%b[ERROR] Cancel all failed (HTTP %s): %s%b\n" "${CLR_ERROR}" "${cancel_code}" "${cancel_body}" "${CLR_RESET}"
-      exit 1
-    fi
+    cancel_all_popups "${endpoint_base}"
+    exit $?
   fi
 
   if [[ -n "${cancel_id}" ]]; then
-    printf "%b[STACKING] Cancelling popup with ID '%s'...%b\n" "${CLR_HEADER}" "${cancel_id}" "${CLR_RESET}"
-    cancel_resp=$(curl -s --connect-timeout 3 --max-time 5 -w "|%{http_code}" -X POST "${endpoint_base}/cancel?id=${cancel_id}" || printf "Error|000")
-    cancel_body="${cancel_resp%|*}"
-    cancel_code="${cancel_resp##*|}"
-    if [[ "${cancel_code}" == "200" ]]; then
-      printf "%b[SUCCESS] Cancel request sent for ID '%s' (%s).%b\n" "${CLR_SUCCESS}" "${cancel_id}" "${cancel_body}" "${CLR_RESET}"
-      exit 0
-    else
-      printf "%b[ERROR] Cancel by ID failed (HTTP %s): %s%b\n" "${CLR_ERROR}" "${cancel_code}" "${cancel_body}" "${CLR_RESET}"
-      exit 1
-    fi
+    cancel_popup_by_id "${endpoint_base}" "${cancel_id}"
+    exit $?
   fi
 
   check_max_popups "${endpoint_base}" 4
@@ -174,14 +155,8 @@ EOF
 
   # Wait 3 seconds, then test cancel by ID for Popup #3
   sleep 3
-  printf "\n%b[CANCEL] Testing cancel by ID for Popup #3 (ID: stack_test_3)...%b\n" "${CLR_HEADER}" "${CLR_RESET}"
-  cancel_resp=$(curl -s --connect-timeout 3 --max-time 5 -w "|%{http_code}" -X POST "${endpoint_base}/cancel?id=stack_test_3" || printf "Error|000")
-  cancel_code="${cancel_resp##*|}"
-  if [[ "${cancel_code}" == "200" ]]; then
-    printf "%b  [OK] Popup #3 cancelled successfully via ID.%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
-  else
-    printf "%b  [ERROR] Cancel by ID failed (HTTP %s)%b\n" "${CLR_ERROR}" "${cancel_code}" "${CLR_RESET}"
-  fi
+  printf "\n"
+  cancel_popup_by_id "${endpoint_base}" "stack_test_3"
 
   printf "\n%b[SUCCESS] Dual-Axis L-Shape Stacking, In-Place & Cancel-by-ID test completed!%b\n" "${CLR_SUCCESS}" "${CLR_RESET}"
 }

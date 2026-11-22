@@ -43,6 +43,26 @@ class GeneralSubmenu(
             settings.contentPadding = it
         }
 
+        // Media Full Bleed Toggle
+        setupSwitch(root, R.id.container_media_full_bleed, R.id.switch_media_full_bleed, settings.mediaFullBleed) {
+            settings.mediaFullBleed = it
+        }
+
+        // Live Badge Toggle & Position
+        val liveBadgePosItems = context.resources.getStringArray(R.array.live_badge_position_options)
+        val liveBadgePosKeys = listOf("bottom_right", "top_right", "top_left", "bottom_left")
+        val currentLiveBadgePosIndex = liveBadgePosKeys.indexOf(settings.liveBadgePosition).coerceAtLeast(0)
+
+        setupSwitch(root, R.id.container_live_badge, R.id.switch_live_badge, settings.liveBadge) {
+            settings.liveBadge = it
+        }
+
+        setupSpinner(root, R.id.spinner_live_badge_position, ArrayAdapter(context, android.R.layout.simple_spinner_item, liveBadgePosItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }, currentLiveBadgePosIndex) {
+            settings.liveBadgePosition = liveBadgePosKeys.getOrElse(it) { "bottom_right" }
+        }
+
         val langCodes = context.resources.getStringArray(R.array.language_codes)
         val langItems = langCodes.map { code ->
             if (code == "default") {
@@ -70,7 +90,7 @@ class GeneralSubmenu(
                 AppCompatDelegate.setApplicationLocales(appLocale)
 
                 val settingsIntent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED)
-                settingsIntent.setPackage(context.packageName)
+                settingsIntent.setPackage(PiPupApp.APP_PACKAGE)
                 context.sendBroadcast(settingsIntent)
             }
         }
@@ -85,7 +105,7 @@ class GeneralSubmenu(
 
                 // Notify service to clear web cache
                 val settingsIntent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED)
-                settingsIntent.setPackage(context.packageName)
+                settingsIntent.setPackage(PiPupApp.APP_PACKAGE)
                 context.sendBroadcast(settingsIntent)
 
                 // AppCompatDelegate.setDefaultNightMode already triggers activity recreation

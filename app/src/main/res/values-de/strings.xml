@@ -77,6 +77,28 @@
     <string name="settings_title_alignment">Titel-Ausrichtung</string>
     <string name="settings_message_alignment">Nachrichten-Ausrichtung</string>
 
+    <!-- Medien-Performance & Erweiterte Optionen -->
+    <string name="settings_buffer_ms">Stream-Puffer</string>
+    <string name="settings_buffer_ms_desc">Initiale Pufferzeit für Video-Streams (ExoPlayer). Niedrige Werte reduzieren Verzögerung, höhere Werte verhindern Ruckler.</string>
+    <string name="settings_buffer_ms_default">Standard (~2500 ms) – Empfohlen bei schwachem WLAN</string>
+    <string name="settings_buffer_ms_low">Niedrig (%1$d ms) – Ultra-Echtzeit (Türklingel / Sprechanlage)</string>
+    <string name="settings_buffer_ms_medium">Ausgewogen (%1$d ms) – Empfohlen für LAN &amp; stabiles WLAN</string>
+    <string name="settings_buffer_ms_high">Hoch (%1$d ms) – Hoher Puffer gegen Bildstottern</string>
+    <!-- %1$d: Pufferzeit in Millisekunden -->
+    <string name="settings_buffer_ms_value">%1$d ms</string>
+    <string name="settings_media_loading_placeholder">Lade-Vorschau anzeigen</string>
+    <string name="settings_media_loading_placeholder_desc">Zeigt eine dezente Kachel an, während Video- oder Web-Streams die Verbindung aufbauen.</string>
+    <string name="settings_media_full_bleed">Vollflächen-Medien (Edge-to-Edge)</string>
+    <string name="settings_media_full_bleed_desc">Streckt Medien nahtlos an die oberen Ränder des Popups ohne Außenabstand.</string>
+    <string name="settings_live_badge">\"Live\"-Indikator anzeigen</string>
+    <string name="settings_live_badge_desc">Blendet eine rote LIVE-Pille bei laufenden Video- und WHEP-Streams ein.</string>
+    <string name="settings_live_badge_position">Position der Live-Pille</string>
+    <string name="settings_live_badge_pos_bottom_right">Unten Rechts</string>
+    <string name="settings_live_badge_pos_top_right">Oben Rechts</string>
+    <string name="settings_live_badge_pos_top_left">Oben Links</string>
+    <string name="settings_live_badge_pos_bottom_left">Unten Links</string>
+    <string name="live_badge_text_label">LIVE</string>
+
     <!-- Rahmen-Optik -->
     <string name="settings_border_radius">Eckenradius</string>
     <string name="settings_border_width">Rahmenbreite</string>

@@ -97,7 +97,7 @@ class PayloadParser(private val context: Context) {
         val message = getVal("message")
         Log.d(TAG, "Parsed multipart text: title=$title, message=$message")
         val duration = getVal("duration")?.toIntOrNull() ?: 10
-        val position = getVal("position")?.toIntOrNull() ?: 0
+        val position = PopupProps.parsePositionIndex(getVal("position"))
         val bgColor = getVal("backgroundColor") ?: "#CC000000"
         val scale = getVal("scale")?.toBoolean() ?: true
 
@@ -105,9 +105,12 @@ class PayloadParser(private val context: Context) {
         val titleColor = getVal("titleColor") ?: context.colorToHex(R.color.preset_platinum)
         val messageSize = getVal("messageSize")?.toFloatOrNull() ?: AppSettings.DEFAULT_MSG_SIZE
         val messageColor = getVal("messageColor") ?: context.colorToHex(R.color.preset_silver)
-        val borderRadius = getVal("borderRadius")?.toIntOrNull() ?: AppSettings.DEFAULT_RADIUS
+        val borderRadius = getVal("borderRadius")?.toFloatOrNull()?.toInt()
+            ?: getVal("cornerRadius")?.toFloatOrNull()?.toInt()
+            ?: AppSettings.DEFAULT_RADIUS
         val borderWidth = getVal("borderWidth")?.toIntOrNull() ?: AppSettings.DEFAULT_BORDER_WIDTH
         val borderColor = getVal("borderColor") ?: context.colorToHex(R.color.preset_gunmetal)
+        val contentPadding = getVal("contentPadding")?.toIntOrNull() ?: getVal("padding")?.toIntOrNull()
         val titleAlignment = getVal("titleAlignment")?.toIntOrNull() ?: 0
         val messageAlignment = getVal("messageAlignment")?.toIntOrNull() ?: 0
         val mediaPosition = getVal("mediaPosition")?.toIntOrNull()
@@ -116,6 +119,10 @@ class PayloadParser(private val context: Context) {
         val animationExit = getVal("animationExit")?.toBoolean() ?: false
         val overwrite = getVal("overwrite")?.toBoolean() ?: false
         val stack = getVal("stack")?.trim()?.lowercase()?.takeIf { it == "vertical" || it == "horizontal" }
+        val mediaFullBleed = getVal("mediaFullBleed")?.toBooleanStrictOrNull()
+        val liveBadge = getVal("liveBadge")?.toBooleanStrictOrNull()
+        val liveBadgeColor = getVal("liveBadgeColor")
+        val liveBadgePosition = getVal("liveBadgePosition")
 
         var media: PopupProps.Media? = null
         files["image"]?.let { tempPath ->
@@ -127,9 +134,16 @@ class PayloadParser(private val context: Context) {
             if (tempPath.isNotEmpty() && srcFile.exists() && srcFile.length() > 0) {
                 // Copy to app's cache dir to prevent deletion on session close
                 try {
-                    val persistentFile = File(context.cacheDir, "multipart_${System.currentTimeMillis()}_${(0..1000).random()}.png")
+                    val persistentFile = File(
+                        context.cacheDir,
+                        "multipart_${System.currentTimeMillis()}_${(0..1000).random()}.png"
+                    )
                     srcFile.copyTo(persistentFile, overwrite = true)
-                    Log.d(TAG, "Successfully persisted image to: ${persistentFile.absolutePath}, final size=${persistentFile.length()}")
+                    Log.d(
+                        TAG,
+                        "Successfully persisted image to: ${persistentFile.absolutePath}, " +
+                            "final size=${persistentFile.length()}"
+                    )
                     media = PopupProps.Media.LocalFile(persistentFile.absolutePath, imageWidth, scale = scale)
 
                     // Trigger async cache cleanup
@@ -146,11 +160,13 @@ class PayloadParser(private val context: Context) {
             title = title, message = message, duration = duration, position = position,
             backgroundColor = bgColor, titleSize = titleSize, titleColor = titleColor,
             messageSize = messageSize, messageColor = messageColor, borderRadius = borderRadius,
-            borderWidth = borderWidth, borderColor = borderColor, titleAlignment = titleAlignment,
-            messageAlignment = messageAlignment, mediaPosition = mediaPosition,
-            animationType = animationType, animationDuration = animationDuration,
-            animationExit = animationExit, overwrite = overwrite, scale = scale, media = media,
-            stack = stack
+            borderWidth = borderWidth, borderColor = borderColor, contentPadding = contentPadding,
+            titleAlignment = titleAlignment, messageAlignment = messageAlignment,
+            mediaPosition = mediaPosition, animationType = animationType,
+            animationDuration = animationDuration, animationExit = animationExit,
+            overwrite = overwrite, scale = scale, media = media, stack = stack,
+            mediaFullBleed = mediaFullBleed, liveBadge = liveBadge,
+            liveBadgeColor = liveBadgeColor, liveBadgePosition = liveBadgePosition
         )
     } catch (e: Exception) {
         Log.e(TAG, "Multipart parsing error", e)

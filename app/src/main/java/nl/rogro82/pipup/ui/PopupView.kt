@@ -41,6 +41,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     var readyListener: ReadyListener? = null
     var onButton: ((PopupProps.Button) -> Unit)? = null
     var onLayoutAdjusted: (() -> Unit)? = null
+    var onFirstFrame: ((Long) -> Unit)? = null
+    var onMediaError: ((String) -> Unit)? = null
 
     private inner class MediaCallback : MediaRenderer.Callback {
         override fun notifyReady() = this@PopupView.notifyReady()
@@ -53,6 +55,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             targetMediaHeight = height
         }
         override fun handleWhepRetry(error: String, retryCount: Int) = this@PopupView.handleWhepRetry(error, retryCount)
+        override fun onFirstFrameRendered(firstFrameMs: Long) {
+            onFirstFrame?.invoke(firstFrameMs)
+            revealLiveBadge()
+        }
     }
 
     private val mediaRendererCallback = MediaCallback()
@@ -67,9 +73,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var isReadyCalled = false
     private var isCleanedUp = false
     private var lastMediaError: String? = null
+    private var liveBadgeRevealed = false
 
     private fun handleWhepRetry(error: String, currentRetry: Int) {
         lastMediaError = error
+        onMediaError?.invoke(error)
         val maxRetries = settings.mediaRetries
         if (currentRetry < maxRetries && !isCleanedUp) {
             val nextRetry = currentRetry + 1
@@ -108,10 +116,12 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
      * @param errorMessage The error message to display.
      */
     fun showPlaceholder(errorMessage: String? = null) {
+        errorMessage?.let { onMediaError?.invoke(it) }
         // Stop any active media loading to prevent late success callbacks from overriding the placeholder.
         mediaRenderer.cleanup()
 
         val frame = binding.popupMediaFrame
+        val container = binding.popupMediaContainer
         frame.removeAllViews()
         val iv = ImageView(context).apply {
             setImageResource(R.drawable.ic_banner)
@@ -133,6 +143,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         frame.layoutParams.height = targetMediaHeight
         frame.addView(iv, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT, Gravity.CENTER))
         frame.isVisible = true
+        container.isVisible = true
+        binding.popupLiveBadge.isVisible = false
 
         errorMessage?.let { rawMsg ->
             val prettyError = beautifyErrorMessage(rawMsg)
@@ -199,6 +211,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
      * @return The initialized [PopupView] instance.
      */
     fun create(): PopupView {
+        val initialMedia = props.media ?: props.image?.let { PopupProps.Media.Image(it, props.imageWidth ?: 480) }
+        calculateTargetDimensions(initialMedia, props)
         updateVisuals()
         setupMediaContent()
         return this
@@ -229,12 +243,16 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         if (contentChanged || newMedia is PopupProps.Media.Bitmap) {
             setupMediaContent()
         } else {
-            // Handle property-only updates (e.g. WHEP videoFit) without full reload
+            // Handle property-only updates (e.g. WHEP videoFit or liveBadge config) without full reload
             if (oldMedia is PopupProps.Media.Whep && newMedia is PopupProps.Media.Whep) {
                 if (oldMedia.videoFit != newMedia.videoFit) {
                     Log.d("PopupView", "Updating WHEP videoFit dynamically to ${newMedia.videoFit}")
                     mediaRenderer.updateWhepVideoFit(newMedia.videoFit)
                 }
+            }
+            configureLiveBadgeAppearance()
+            if (liveBadgeRevealed) {
+                revealLiveBadge()
             }
             adjustHeights()
         }
@@ -245,7 +263,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         targetMediaWidth = props.scaleValue(context, width)
 
         targetMediaHeight = when (media) {
-            is PopupProps.Media.Video -> (targetMediaWidth * 9) / 16
+            is PopupProps.Media.Video -> media.height?.let { props.scaleValue(context, it) } ?: ((targetMediaWidth * 9) / 16)
             is PopupProps.Media.Web -> props.scaleValue(context, media.height)
             is PopupProps.Media.Whep -> media.height?.let { props.scaleValue(context, it) } ?: ((targetMediaWidth * 9) / 16)
             is PopupProps.Media.Bitmap -> (targetMediaWidth * media.bitmap.height) / media.bitmap.width
@@ -268,6 +286,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
+    private fun isFullBleedActive(): Boolean {
+        val hasMedia = props.media != null || !props.image.isNullOrEmpty()
+        return (props.mediaFullBleed ?: settings.mediaFullBleed) && hasMedia
+    }
+
     private fun updateVisuals() {
         if (layoutParams == null) {
             layoutParams = ViewGroup.LayoutParams(
@@ -279,21 +302,49 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         if (background != null) background = null
         setPadding(0, 0, 0, 0)
 
-        // 1. Padding
+        // 1. Padding & Full-Bleed Layout
+        val fullBleed = isFullBleedActive()
+        val hasAnyText = !props.title.isNullOrBlank() || !props.message.isNullOrBlank()
+        val hasButtons = props.buttons.isNotEmpty()
         val paddingVal = props.contentPadding ?: settings.contentPadding
         val scaledPadding = if (props.scale) context.getScaledPixels(paddingVal) else paddingVal
-        binding.popupContainer.setPadding(scaledPadding, scaledPadding, scaledPadding, scaledPadding)
+        val borderPx = if (props.borderWidth > 0) {
+            if (props.scale) context.getScaledPixels(props.borderWidth) else props.borderWidth
+        } else {
+            0
+        }
+        val radiusPx = if (props.scale) context.getScaledPixels(props.borderRadius).toFloat() else props.borderRadius.toFloat()
+
+        if (fullBleed) {
+            val gap = (scaledPadding * 2) / 3
+            val pos = props.mediaPosition ?: 0
+            val bottomContainerPad = if ((pos == 0) && (hasAnyText || hasButtons)) gap else borderPx
+            val topContainerPad = if (pos == 1 && hasAnyText) gap else borderPx
+            binding.popupContainer.setPadding(borderPx, topContainerPad, borderPx, bottomContainerPad)
+            if (hasAnyText || (props.buttonsInline && hasButtons)) {
+                val textTop = if (pos == 0) gap else scaledPadding
+                val textBottom = if (pos == 1) gap else 0
+                binding.textContainer.setPadding(scaledPadding, textTop, scaledPadding, textBottom)
+            } else {
+                binding.textContainer.setPadding(0, 0, 0, 0)
+            }
+            applyFullBleedOutline(pos, radiusPx, borderPx, hasAnyText || hasButtons)
+        } else {
+            binding.popupContainer.setPadding(scaledPadding, scaledPadding, scaledPadding, scaledPadding)
+            binding.textContainer.setPadding(0, 0, 0, 0)
+            binding.popupMediaContainer.clipToOutline = false
+            binding.popupMediaContainer.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+        }
+
         binding.popupMessage.maxLines = Integer.MAX_VALUE
         binding.popupMessage.ellipsize = null
 
         // 2. Background
-        val radiusPx = if (props.scale) context.getScaledPixels(props.borderRadius).toFloat() else props.borderRadius.toFloat()
         binding.popupContainer.background = GradientDrawable().apply {
             setColor(props.getBackgroundColorInt())
             cornerRadius = radiusPx
-            if (props.borderWidth > 0) {
-                val bw = if (props.scale) context.getScaledPixels(props.borderWidth) else props.borderWidth
-                setStroke(bw, props.getBorderColorInt())
+            if (borderPx > 0) {
+                setStroke(borderPx, props.getBorderColorInt())
             }
         }
 
@@ -337,19 +388,53 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         updateButtons()
     }
 
+    private fun applyFullBleedOutline(mediaPos: Int, radiusPx: Float, borderPx: Int, hasOtherContent: Boolean) {
+        val clip = (radiusPx - borderPx).coerceAtLeast(0f)
+        val extra = clip.toInt()
+        val mediaContainer = binding.popupMediaContainer
+        if (clip <= 0f) {
+            mediaContainer.clipToOutline = false
+            return
+        }
+        mediaContainer.outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: android.graphics.Outline) {
+                if (!hasOtherContent) {
+                    outline.setRoundRect(0, 0, view.width, view.height, clip)
+                    return
+                }
+                when (mediaPos) {
+                    1 -> outline.setRoundRect(0, -extra, view.width, view.height, clip) // Bottom corners rounded
+                    2 -> outline.setRoundRect(0, 0, view.width + extra, view.height, clip) // Left corners rounded
+                    3 -> outline.setRoundRect(-extra, 0, view.width, view.height, clip) // Right corners rounded
+                    else -> outline.setRoundRect(0, 0, view.width, view.height + extra, clip) // Top corners rounded
+                }
+            }
+        }
+        mediaContainer.clipToOutline = true
+    }
+
     private fun reorderViews() {
         val container = binding.contentLayout
         val textContainer = binding.textContainer
-        val mediaFrame = binding.popupMediaFrame
+        val mediaFrame = binding.popupMediaContainer
 
         val pos = props.mediaPosition ?: 0
+        val fullBleed = isFullBleedActive()
+        val marginV = if (fullBleed) 0 else context.dpToPx(8)
+        val marginH = if (fullBleed) 0 else context.dpToPx(12)
+
         if (container.tag == pos && textContainer.parent == container && mediaFrame.parent == container) {
-            // Already in correct order. However, since props might have changed,
-            // update existing layout params to keep them in sync with targetMediaWidth/Height.
-            mediaFrame.layoutParams?.let { lp ->
+            // Already in correct order. Update existing layout params & margins.
+            (mediaFrame.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
                 if (targetMediaWidth > 0 && targetMediaHeight > 0) {
                     lp.width = targetMediaWidth
                     lp.height = targetMediaHeight
+                }
+                when (pos) {
+                    0 -> lp.setMargins(0, 0, 0, marginV)
+                    1 -> lp.setMargins(0, marginV, 0, 0)
+                    2 -> lp.setMargins(0, 0, marginH, 0)
+                    3 -> lp.setMargins(marginH, 0, 0, 0)
                 }
             }
             return
@@ -378,18 +463,18 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     private fun setupVertical(container: LinearLayout, first: View, second: View, mediaFirst: Boolean) {
         container.orientation = LinearLayout.VERTICAL
-        val margin = context.dpToPx(8)
+        val margin = if (isFullBleedActive()) 0 else context.dpToPx(8)
 
-        val firstWidth = if (first == binding.popupMediaFrame && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
-        val firstHeight = if (first == binding.popupMediaFrame && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+        val firstWidth = if (first == binding.popupMediaContainer && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val firstHeight = if (first == binding.popupMediaContainer && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
 
         val firstParams = LinearLayout.LayoutParams(firstWidth, firstHeight).apply {
             if (first != binding.textContainer && mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
             setMargins(0, 0, 0, if (mediaFirst) margin else 0)
         }
 
-        val secondWidth = if (second == binding.popupMediaFrame && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
-        val secondHeight = if (second == binding.popupMediaFrame && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+        val secondWidth = if (second == binding.popupMediaContainer && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val secondHeight = if (second == binding.popupMediaContainer && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
 
         val secondParams = LinearLayout.LayoutParams(secondWidth, secondHeight).apply {
             if (second != binding.textContainer && !mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
@@ -402,18 +487,18 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     private fun setupHorizontal(container: LinearLayout, first: View, second: View, mediaFirst: Boolean) {
         container.orientation = LinearLayout.HORIZONTAL
-        val margin = context.dpToPx(12)
+        val margin = if (isFullBleedActive()) 0 else context.dpToPx(12)
 
-        val firstWidth = if (first == binding.popupMediaFrame && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
-        val firstHeight = if (first == binding.popupMediaFrame && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+        val firstWidth = if (first == binding.popupMediaContainer && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val firstHeight = if (first == binding.popupMediaContainer && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
 
         val firstParams = LinearLayout.LayoutParams(firstWidth, firstHeight).apply {
             gravity = Gravity.CENTER_VERTICAL
             setMargins(0, 0, if (mediaFirst) margin else 0, 0)
         }
 
-        val secondWidth = if (second == binding.popupMediaFrame && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
-        val secondHeight = if (second == binding.popupMediaFrame && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+        val secondWidth = if (second == binding.popupMediaContainer && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val secondHeight = if (second == binding.popupMediaContainer && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
 
         val secondParams = LinearLayout.LayoutParams(secondWidth, secondHeight).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -445,6 +530,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                 binding.popupMediaFrame.layoutParams.width = targetMediaWidth
                 binding.popupMediaFrame.layoutParams.height = targetMediaHeight
                 binding.popupMediaFrame.requestLayout()
+            }
+            if (binding.popupMediaContainer.layoutParams.width != targetMediaWidth || binding.popupMediaContainer.layoutParams.height != targetMediaHeight) {
+                binding.popupMediaContainer.layoutParams.width = targetMediaWidth
+                binding.popupMediaContainer.layoutParams.height = targetMediaHeight
+                binding.popupMediaContainer.requestLayout()
             }
         }
 
@@ -527,15 +617,79 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         binding.popupScrollView.postDelayed(runnable, 2000)
     }
 
+    private fun isStreamMedia(): Boolean {
+        return props.media is PopupProps.Media.Video ||
+            props.media is PopupProps.Media.Whep ||
+            props.media is PopupProps.Media.Web
+    }
+
+    private fun configureLiveBadgeAppearance() {
+        val badge = binding.popupLiveBadge
+        val defaultBadgeColor = androidx.core.content.ContextCompat.getColor(context, R.color.live_badge_background)
+        val badgeColor = props.liveBadgeColor?.let { colorStr ->
+            try {
+                val clean = if (colorStr.startsWith("#")) colorStr else "#$colorStr"
+                clean.toColorInt()
+            } catch (_: Exception) {
+                defaultBadgeColor
+            }
+        } ?: defaultBadgeColor
+        (badge.background?.mutate() as? GradientDrawable)?.setColor(badgeColor)
+
+        val pos = props.liveBadgePosition ?: settings.liveBadgePosition
+        val gravity = when (pos.lowercase()) {
+            "top_left", "0" -> Gravity.TOP or Gravity.START
+            "top_right", "1" -> Gravity.TOP or Gravity.END
+            "bottom_left", "2" -> Gravity.BOTTOM or Gravity.START
+            "bottom_right", "3" -> Gravity.BOTTOM or Gravity.END
+            else -> Gravity.BOTTOM or Gravity.END
+        }
+        (badge.layoutParams as? LayoutParams)?.let { lp ->
+            lp.gravity = gravity
+            badge.layoutParams = lp
+        }
+    }
+
+    private fun revealLiveBadge() {
+        liveBadgeRevealed = true
+        val showLiveBadge = props.liveBadge ?: settings.liveBadge
+        val badge = binding.popupLiveBadge
+        if (!showLiveBadge || (!isStreamMedia() && !props.isPreview)) {
+            badge.isVisible = false
+            return
+        }
+        configureLiveBadgeAppearance()
+        if (!badge.isVisible) {
+            badge.alpha = 0f
+            badge.isVisible = true
+            badge.bringToFront()
+            badge.animate().alpha(1f).setDuration(150L).start()
+        }
+    }
+
     private fun setupMediaContent() {
         val frame = binding.popupMediaFrame
+        val container = binding.popupMediaContainer
         isReadyCalled = false
+        liveBadgeRevealed = false
         mainHandler.removeCallbacks(timeoutRunnable)
 
         val timeoutSec = settings.mediaTimeout
         if (timeoutSec > 0) {
             mainHandler.postDelayed(timeoutRunnable, timeoutSec * 1000L)
         }
+
+        // Live badge remains hidden until the stream's first frame renders (never shown on poster/placeholder).
+        // In settings preview mode (Bitmap placeholder), show it immediately when enabled.
+        binding.popupLiveBadge.animate().cancel()
+        binding.popupLiveBadge.isVisible = false
+        configureLiveBadgeAppearance()
+        if (props.isPreview && (props.liveBadge ?: settings.liveBadge)) {
+            revealLiveBadge()
+        }
+
+        val hasMedia = props.media != null || !props.image.isNullOrEmpty()
+        container.isVisible = hasMedia
         mediaRenderer.setup(context, frame, props)
     }
 
@@ -593,6 +747,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             tag = "popup_button_row"
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
+            if (isFullBleedActive() && !props.buttonsInline) {
+                val contentPadding = (props.contentPadding ?: settings.contentPadding).coerceAtLeast(0)
+                val scaledPadding = if (props.scale) {
+                    context.getScaledPixels(contentPadding)
+                } else {
+                    contentPadding
+                }
+                setPadding(scaledPadding, 0, scaledPadding, 0)
+            }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT

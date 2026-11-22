@@ -58,7 +58,7 @@ api_request() {
 #######################################
 set_media_mode() {
   local mode="${1}"
-  api_request "POST" "/settings" "{\"moduleModes\":{\"media\":${mode}}}" >/dev/null
+  update_app_settings "http://${TARGET_IP}:${PORT}" "{\"moduleModes\":{\"media\":${mode}}}"
 }
 
 #######################################
@@ -75,10 +75,7 @@ cleanup() {
 
   if [[ -n "${ORIGINAL_MODE:-}" && ${ORIGINAL_MODE} != 2 ]]; then
     printf "Restoring original media mode (%s)...\n" "${ORIGINAL_MODE}" >&2
-    curl -s --max-time 1 --connect-timeout 1 -X POST \
-      -H "Content-Type: application/json" \
-      -d "{\"moduleModes\":{\"media\":${ORIGINAL_MODE}}}" \
-      "http://${TARGET_IP}:${PORT}/settings" >/dev/null 2>&1 || true
+    update_app_settings "http://${TARGET_IP}:${PORT}" "{\"moduleModes\":{\"media\":${ORIGINAL_MODE}}}"
   fi
 
   [[ -f "${TMP_LOG}" ]] && rm -f "${TMP_LOG}"

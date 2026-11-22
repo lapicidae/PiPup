@@ -14,18 +14,24 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 
 **JSON Payload Properties:**
 
-| Field                  | Type   | Default | Description                                                                                                                      |
-| :--------------------- | :----- | :------ | :------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                   | String | null    | Unique identifier for popup stacking and in-place updates.                                                                       |
-| `duration`             | Int    | 10      | Seconds to display.                                                                                                              |
-| `position`             | Int    | 0       | 0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center, 5: TopCenter, 6: BottomCenter, 7: CenterLeft, 8: CenterRight. |
-| `stack`                | String | null    | Stacking axis direction: `"vertical"` or `"horizontal"`.                                                                         |
-| `title`                | String | null    | Heading text.                                                                                                                    |
-| `message`              | String | null    | Main body text.                                                                                                                  |
-| `media`                | Object | null    | Media configuration (see below).                                                                                                 |
-| `animationType`        | Int    | 0       | 0..10 (Fade, Slide, Scale, etc.).                                                                                                |
-| `overwrite`            | Bool   | false   | If true and max concurrency is reached, evicts oldest ID-less popup                                                              |
-| `popupLoadingBehavior` | Int    | 0       | 0: Strict Sequential (Default), 1: Parallel Fast-Track                                                                           |
+| Field                     | Type       | Default          | Description                                                                                                                                      |
+| :------------------------ | :--------- | :--------------- | :----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                      | String     | null             | Unique identifier for popup stacking and in-place updates.                                                                                       |
+| `duration`                | Int        | 10               | Seconds to display (`0` or negative for indefinite).                                                                                             |
+| `position`                | Int/String | 0                | `0..8` or name (`"TopRight"`, `"TopLeft"`, `"BottomRight"`, `"BottomLeft"`, `"Center"`, `"TopCenter"`, `"BottomCenter"`, `"CenterLeft"`, `"CenterRight"`). |
+| `stack`                   | String     | null             | Stacking axis direction: `"vertical"` or `"horizontal"`.                                                                                         |
+| `title`                   | String     | null             | Heading text.                                                                                                                                    |
+| `message`                 | String     | null             | Main body text.                                                                                                                                  |
+| `borderRadius`            | Int        | null             | Corner radius in pixels (alias: `cornerRadius`).                                                                                                 |
+| `contentPadding`          | Int        | null             | Content padding in pixels (alias: `padding`).                                                                                                    |
+| `media`                   | Object     | null             | Media configuration (see below).                                                                                                                 |
+| `mediaFullBleed`          | Bool       | null             | If true, stretches media edge-to-edge to the popup border while keeping text/buttons padded inside.                                              |
+| `liveBadge`               | Bool       | null             | If true, renders a LIVE badge overlay once the stream's first frame is rendered (`video`, `web`, `whep`).                                        |
+| `liveBadgeColor`          | String     | null             | Hex color code for the live badge background (e.g. `"#B3261E"`).                                                                                 |
+| `liveBadgePosition`       | String     | `"bottom_right"` | Position of the live badge inside media: `"top_left"`, `"top_right"`, `"bottom_left"`, `"bottom_right"` (or `0..3`).                             |
+| `animationType`           | Int        | 0                | 0..10 (Fade, Slide, Scale, etc.).                                                                                                                |
+| `overwrite`               | Bool       | false            | If true and max concurrency or geometry limit is reached, evicts conflicting or oldest popups.                                                   |
+| `popupLoadingBehavior`    | Int        | 0                | 0: Strict Sequential (Default), 1: Parallel Fast-Track                                                                                           |
 
 **Popup Stacking & ID Behavior:**
 
@@ -36,9 +42,9 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 **Media Object Types:**
 
 - **Image:** `{"image": {"uri": "url", "width": 480, "cache": true}}`
-- **Video:** `{"video": {"uri": "url", "width": 480, "muted": true, "udp": false}}`
-- **Web:** `{"web": {"uri": "url", "width": 640, "height": 480}}` (height is optional, defaults to 16:9 ratio `width * 9 / 16`)
-- **WHEP:** `{"whep": {"uri": "url", "width": 640, "height": 360, "videoFit": "cover"}}` (height is optional, defaults to source video aspect ratio)
+- **Video:** `{"video": {"uri": "url", "width": 480, "height": 270, "muted": true, "udp": false, "poster": "url", "posterMode": "fit", "bufferMs": 500}}` (`height` is optional; `bufferMs` is clamped to `100..10000`; `posterMode` accepts `"fit"`, `"fill"`, `"stretch"`, `"center"`)
+- **Web:** `{"web": {"uri": "url", "width": 640, "height": 480, "muted": true, "poster": "url", "posterMode": "fit"}}` (`height` is optional, defaults to 16:9 ratio `width * 9 / 16`)
+- **WHEP:** `{"whep": {"uri": "url", "width": 640, "height": 360, "muted": true, "videoFit": "cover", "poster": "url", "posterMode": "fit"}}` (`height` is optional, defaults to source video aspect ratio)
 
 **Multipart Form Fields:**
 Supports all top-level JSON keys as form fields. Local image upload uses the `image` field.

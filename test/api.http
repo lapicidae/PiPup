@@ -96,7 +96,40 @@ Content-Type: application/json
   "pendingUpdateDigest": "abcdef",
   "pendingUpdateTagName": "v9.9.9",
   "language": "en",
+  "defaultBufferMs": 500,
+  "mediaLoadingPlaceholder": true,
+  "mediaFullBleed": false,
+  "liveBadge": false,
+  "liveBadgePosition": "bottom_right",
   "unknown_future_setting": "This unknown field should be ignored by the app without crashing"
+}
+
+### Send a Video/Stream notification with Poster, Buffer, Full-Bleed & LIVE Badge
+POST {{baseUrl}}/notify
+Content-Type: application/json
+
+{
+  "id": "cam_front",
+  "duration": 15,
+  "position": "TopRight",
+  "title": "Front Door",
+  "message": "Motion detected",
+  "cornerRadius": 24,
+  "padding": 16,
+  "mediaFullBleed": true,
+  "liveBadge": true,
+  "liveBadgeColor": "#B3261E",
+  "liveBadgePosition": "bottom_right",
+  "media": {
+    "video": {
+      "uri": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
+      "width": 480,
+      "muted": true,
+      "poster": "https://dummyimage.com/480x270/1a1c1e/ffffff.png&text=Camera+Snapshot",
+      "posterMode": "fill",
+      "bufferMs": 500
+    }
+  }
 }
 
 ### Pull Current Settings

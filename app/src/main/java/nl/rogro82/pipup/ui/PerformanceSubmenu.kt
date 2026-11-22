@@ -4,7 +4,6 @@ import android.content.Context
 import android.view.View
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import androidx.appcompat.widget.SwitchCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.R
@@ -32,15 +31,37 @@ class PerformanceSubmenu(
         }
 
         // Loading Behavior Toggle
-        root.findViewById<View>(R.id.container_loading_behavior)?.apply {
-            val sw = findViewById<SwitchCompat>(R.id.switch_loading_behavior)
-            sw.isChecked = settings.popupLoadingBehavior == 1
-            setOnClickListener { sw.toggle() }
-            sw.setOnCheckedChangeListener { _, isChecked ->
-                settings.popupLoadingBehavior = if (isChecked) 1 else 0
-                onSettingsChanged(false)
+        setupSwitch(root, R.id.container_loading_behavior, R.id.switch_loading_behavior, settings.popupLoadingBehavior == 1) {
+            settings.popupLoadingBehavior = if (it) 1 else 0
+        }
+
+        // Buffer Ms (SeekBar 0..30 maps to 0..3000ms in 100ms steps)
+        val bufferDescText = root.findViewById<android.widget.TextView>(R.id.text_buffer_ms_desc)
+
+        fun updateBufferDesc(ms: Int) {
+            bufferDescText?.text = if (ms == 0) {
+                context.getString(R.string.settings_buffer_ms_default)
+            } else {
+                when {
+                    ms <= 400 -> context.getString(R.string.settings_buffer_ms_low, ms)
+                    ms <= 1200 -> context.getString(R.string.settings_buffer_ms_medium, ms)
+                    else -> context.getString(R.string.settings_buffer_ms_high, ms)
+                }
             }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+
+        val initialBufferProgress = (settings.defaultBufferMs / 100).coerceIn(0, 30)
+        updateBufferDesc(initialBufferProgress * 100)
+
+        setupSeekBar(root, R.id.seekbar_buffer_ms, R.id.text_buffer_ms_value, initialBufferProgress) { progress ->
+            val ms = progress * 100
+            settings.defaultBufferMs = ms
+            updateBufferDesc(ms)
+        }
+
+        // Media Loading Placeholder Toggle
+        setupSwitch(root, R.id.container_media_placeholder, R.id.switch_media_placeholder, settings.mediaLoadingPlaceholder) {
+            settings.mediaLoadingPlaceholder = it
         }
 
         render()

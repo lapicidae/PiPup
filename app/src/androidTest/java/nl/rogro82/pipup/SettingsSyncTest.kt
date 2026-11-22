@@ -50,7 +50,12 @@ class SettingsSyncTest {
         val newSettings = originalSettings.copy(
             positionIndex = 4,
             backgroundColor = "#FF00FF",
-            backgroundAlpha = 100
+            backgroundAlpha = 100,
+            defaultBufferMs = 750,
+            mediaLoadingPlaceholder = true,
+            mediaFullBleed = true,
+            liveBadge = true,
+            liveBadgePosition = "top_left"
         )
 
         val url = URL("http://localhost:7979/settings")
@@ -71,6 +76,11 @@ class SettingsSyncTest {
             assertEquals(4, currentSettings.positionIndex)
             assertEquals("#FF00FF", currentSettings.backgroundColor)
             assertEquals(100, currentSettings.backgroundAlpha)
+            assertEquals(750, currentSettings.defaultBufferMs)
+            assertTrue(currentSettings.mediaLoadingPlaceholder)
+            assertTrue(currentSettings.mediaFullBleed)
+            assertTrue(currentSettings.liveBadge)
+            assertEquals("top_left", currentSettings.liveBadgePosition)
 
         } finally {
             PiPupApp.settings.apply(originalSettings)
@@ -86,14 +96,26 @@ class SettingsSyncTest {
             PiPupApp.settings.backgroundColor = "#112233"
             PiPupApp.settings.backgroundAlpha = 200
             PiPupApp.settings.borderRadius = 50
+            PiPupApp.settings.defaultBufferMs = 800
+            PiPupApp.settings.mediaFullBleed = true
+            PiPupApp.settings.liveBadge = true
+            PiPupApp.settings.liveBadgePosition = "top_right"
 
             // Test the logic verification via AppSettings
-            val inputProps = PopupProps(title = "Default", message = "Test")
+            val inputProps = PopupProps(
+                title = "Default",
+                message = "Test",
+                media = PopupProps.Media.Video(uri = "rtsp://test/stream")
+            )
             val enqueuedProps = PiPupApp.settings.applyDefaults(inputProps)
 
             // Verify injection (Alpha is prepended in getFullBackgroundColor)
             assertEquals("#C8112233", enqueuedProps.backgroundColor)
             assertEquals(50, enqueuedProps.borderRadius)
+            assertEquals(true, enqueuedProps.mediaFullBleed)
+            assertEquals(true, enqueuedProps.liveBadge)
+            assertEquals("top_right", enqueuedProps.liveBadgePosition)
+            assertEquals(800, (enqueuedProps.media as PopupProps.Media.Video).bufferMs)
 
         } finally {
             PiPupApp.settings.apply(originalSettings)

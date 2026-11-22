@@ -77,9 +77,107 @@ send_api_request() {
 }
 
 #######################################
-# Fetches current /settings and warns if maxPopups is set to 1 for multi-popup tests.
+# Cancels all active and queued popups via POST /cancel?all=true.
 # Arguments:
 #   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+# Outputs:
+#   Writes status to stdout.
+# Returns:
+#   0 on HTTP 200, 1 on failure.
+#######################################
+cancel_all_popups() {
+  local endpoint_base="${1}"
+  local response body code
+
+  printf "%b[*] Cancelling all active popups...%b\n" "${CLR_HEADER}" "${CLR_RESET}"
+  response=$(curl -s --connect-timeout 3 --max-time 5 -w "|%{http_code}" -X POST "${endpoint_base}/cancel?all=true" || printf "Error|000")
+  body="${response%|*}"
+  code="${response##*|}"
+
+  if [[ "${code}" == "200" ]]; then
+    printf "%b  [OK] All popups cancelled (%s).%b\n" "${CLR_SUCCESS}" "${body}" "${CLR_RESET}"
+    sleep 1
+    return 0
+  else
+    printf "%b  [ERROR] Cancel all failed (HTTP %s): %s%b\n" "${CLR_ERROR}" "${code}" "${body}" "${CLR_RESET}"
+    return 1
+  fi
+}
+
+#######################################
+# Cancels a specific popup by ID via POST /cancel?id=<id>.
+# Arguments:
+#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+#   $2: Popup ID to cancel
+# Outputs:
+#   Writes status to stdout.
+# Returns:
+#   0 on HTTP 200, 1 on failure.
+#######################################
+cancel_popup_by_id() {
+  local endpoint_base="${1}"
+  local cancel_id="${2}"
+  local response body code
+
+  printf "%b[*] Cancelling popup with ID '%s'...%b\n" "${CLR_HEADER}" "${cancel_id}" "${CLR_RESET}"
+  response=$(curl -s --connect-timeout 3 --max-time 5 -w "|%{http_code}" -X POST "${endpoint_base}/cancel?id=${cancel_id}" || printf "Error|000")
+  body="${response%|*}"
+  code="${response##*|}"
+
+  if [[ "${code}" == "200" ]]; then
+    printf "%b  [OK] Cancel request for ID '%s' succeeded (%s).%b\n" "${CLR_SUCCESS}" "${cancel_id}" "${body}" "${CLR_RESET}"
+    return 0
+  else
+    printf "%b  [ERROR] Cancel by ID failed (HTTP %s): %s%b\n" "${CLR_ERROR}" "${code}" "${body}" "${CLR_RESET}"
+    return 1
+  fi
+}
+
+#######################################
+# Reads the current maxPopups value from /settings.
+# Arguments:
+#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+# Outputs:
+#   Writes the integer maxPopups value (defaults to 1) to stdout.
+#######################################
+get_max_popups() {
+  local endpoint_base="${1}"
+  curl -s --connect-timeout 3 --max-time 5 "${endpoint_base}/settings" \
+    | grep -o '"maxPopups":[0-9]*' | cut -d':' -f2 || printf "1"
+}
+
+#######################################
+# Reads the current mediaLoadingPlaceholder value from /settings.
+# Arguments:
+#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+# Outputs:
+#   Writes the boolean string ("true" or "false", defaults to "false") to stdout.
+#######################################
+get_media_placeholder() {
+  local endpoint_base="${1}" val
+  val=$(curl -s --connect-timeout 3 --max-time 5 "${endpoint_base}/settings" \
+    | grep -o '"mediaLoadingPlaceholder":[a-z]*' | cut -d':' -f2 || printf "false")
+  printf "%s" "${val:-false}"
+}
+
+#######################################
+# Updates /settings with a partial JSON payload.
+# Arguments:
+#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+#   $2: JSON object string (e.g. '{"maxPopups": 5}')
+#######################################
+update_app_settings() {
+  local endpoint_base="${1}"
+  local json_payload="${2}"
+  curl -s --connect-timeout 3 --max-time 5 -X POST -H "Content-Type: application/json" \
+    -d "${json_payload}" "${endpoint_base}/settings" >/dev/null 2>&1 || true
+}
+
+#######################################
+# Fetches current /settings and warns if maxPopups is less than required.
+# Arguments:
+#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+#   $2: Required minimum maxPopups (default: 2)
 # Outputs:
 #   Writes warning to stdout if maxPopups is less than required.
 #######################################
@@ -88,7 +186,7 @@ check_max_popups() {
   local required_max="${2:-2}"
   local current_max
 
-  current_max=$(curl -s --connect-timeout 3 --max-time 5 "${endpoint_base}/settings" | grep -o '"maxPopups":[0-9]*' | cut -d':' -f2 || printf "1")
+  current_max=$(get_max_popups "${endpoint_base}")
   if (( current_max < required_max )); then
     printf "%b[WARNING] maxPopups is currently set to %s in app settings. Multiple popups will queue rather than display simultaneously.%b\n" \
       "${CLR_WARNING}" "${current_max}" "${CLR_RESET}"

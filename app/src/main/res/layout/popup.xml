@@ -52,12 +52,33 @@
             </LinearLayout>
 
             <FrameLayout
-                android:id="@+id/popup_media_frame"
+                android:id="@+id/popup_media_container"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center_horizontal"
                 android:visibility="gone"
-                android:layout_marginTop="8dp"/>
+                android:layout_marginTop="8dp">
+
+                <FrameLayout
+                    android:id="@+id/popup_media_frame"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="center"/>
+
+                <TextView
+                    android:id="@+id/popup_live_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="8dp"
+                    android:background="@drawable/live_badge_background"
+                    android:text="@string/live_badge_text_label"
+                    android:textColor="@color/live_badge_text"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.05"
+                    android:visibility="gone"/>
+            </FrameLayout>
 
         </LinearLayout>
 

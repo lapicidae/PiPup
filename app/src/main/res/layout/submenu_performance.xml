@@ -100,6 +100,93 @@
             android:clickable="false"/>
     </LinearLayout>
 
+    <!-- Stream Buffer (SeekBar 0..30 maps to 0..3000ms in 100ms steps) -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="8dp">
+
+        <TextView
+            android:id="@+id/text_buffer_ms"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_buffer_ms"
+            android:textColor="@color/colorOnSurface"
+            android:textSize="16sp"
+            android:layout_marginStart="12dp" />
+
+        <TextView
+            android:id="@+id/text_buffer_ms_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            tools:text="Default" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/text_buffer_ms_desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_buffer_ms_desc"
+        android:textColor="@color/colorOnSurfaceVariant"
+        android:textSize="12sp"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="8dp" />
+
+    <SeekBar
+        android:id="@+id/seekbar_buffer_ms"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="30"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:thumbTint="@color/tv_thumb_selector"
+        android:progressTint="@color/tv_thumb_selector"
+        android:progressBackgroundTint="@color/tv_track_selector"
+        android:layout_marginBottom="24dp" />
+
+    <!-- Media Loading Placeholder Toggle -->
+    <LinearLayout
+        android:id="@+id/container_media_placeholder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:layout_marginBottom="24dp"
+        android:gravity="center_vertical">
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_weight="1"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_media_loading_placeholder"
+                android:textColor="@color/colorOnSurface"
+                android:textSize="16sp"/>
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_media_loading_placeholder_desc"
+                android:textColor="@color/colorOnSurfaceVariant"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
+        <androidx.appcompat.widget.SwitchCompat
+            android:id="@+id/switch_media_placeholder"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:focusable="false"
+            android:clickable="false"/>
+    </LinearLayout>
+
     <LinearLayout
         android:id="@+id/performance_settings_container"
         android:layout_width="match_parent"

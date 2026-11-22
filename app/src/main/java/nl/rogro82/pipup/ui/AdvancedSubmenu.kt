@@ -96,7 +96,7 @@ class AdvancedSubmenu(
                 // Use "reset" origin so MainActivity doesn't trigger a redundant recreate()
                 // while we are already performing a full task restart.
                 val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
-                    setPackage(context.packageName)
+                    setPackage(PiPupApp.APP_PACKAGE)
                     putExtra("origin", "reset")
                 }
                 context.sendBroadcast(intent)
@@ -233,7 +233,7 @@ class AdvancedSubmenu(
                         settings.apply(data)
                         // Notify system about settings change
                         val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
-                            setPackage(context.packageName)
+                            setPackage(PiPupApp.APP_PACKAGE)
                             putExtra("origin", "remote")
                         }
                         context.sendBroadcast(intent)

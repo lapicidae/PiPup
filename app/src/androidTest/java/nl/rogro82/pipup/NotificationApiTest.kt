@@ -174,22 +174,21 @@ class NotificationApiTest {
 
     @Test
     fun testAllScreenPositions() {
-        // Test all 5 screen positions defined in readme.md
-        val positions = listOf(0, 1, 2, 3, 4)
-        val posNames = listOf("TopRight", "TopLeft", "BottomRight", "BottomLeft", "Center")
-
-        for (i in positions.indices) {
+        // Test all 9 screen positions (0..8) defined in PopupProps.Position
+        for (pos in PopupProps.Position.entries) {
             val json = """{
-                "title": "Position Test: ${posNames[i]}",
-                "message": "Screen position index: ${positions[i]}",
-                "position": ${positions[i]},
+                "id": "pos_test_${pos.index}",
+                "title": "Position: ${pos.name}",
+                "message": "Screen position index: ${pos.index} (${pos.name})",
+                "position": ${pos.index},
                 "duration": 2,
                 "backgroundColor": "#AA1A237E"
             }"""
             val code = sendPost("$baseUrl/notify", json.toByteArray())
             assertEquals(200, code)
-            Thread.sleep(2500)
+            Thread.sleep(1200)
         }
+        sendPost("$baseUrl/cancel", ByteArray(0))
     }
 
     @Test
@@ -496,6 +495,65 @@ class NotificationApiTest {
                     """{"maxPopups": $origMax, "popupLoadingBehavior": $origBehavior}""".toByteArray()
                 )
             } catch (_: Exception) {}
+        }
+    }
+
+    @Test
+    fun testStreamFeaturesAndApiParityInState() {
+        sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+        try {
+            val payload = """{
+                "id": "cam_parity_1",
+                "title": "Front Door",
+                "message": "Motion detected",
+                "position": "BottomLeft",
+                "stack": "horizontal",
+                "cornerRadius": 24,
+                "padding": 16,
+                "mediaFullBleed": true,
+                "liveBadge": true,
+                "liveBadgeColor": "#B3261E",
+                "liveBadgePosition": "top_left",
+                "duration": 15,
+                "buttons": [
+                    { "id": "unlock", "label": "Unlock" },
+                    { "id": "ignore", "label": "Ignore" }
+                ],
+                "media": {
+                    "video": {
+                        "uri": "http://127.0.0.1:65534/nonexistent.mp4",
+                        "width": 480,
+                        "height": 270,
+                        "muted": false,
+                        "poster": "https://dummyimage.com/480x270/222222/ffffff.png&text=Poster",
+                        "posterMode": "fill",
+                        "bufferMs": 350
+                    }
+                }
+            }"""
+            val res = sendPostWithResponse("$baseUrl/notify", payload.toByteArray())
+            assertEquals(200, res.code)
+            assertEquals("OK: Enqueued", res.body)
+
+            Thread.sleep(400)
+            val stateRes = sendGetWithResponse("$baseUrl/state")
+            assertEquals(200, stateRes.code)
+
+            val stateJson = org.json.JSONObject(stateRes.body)
+            val lastPopup = stateJson.getJSONObject("lastPopup")
+            assertEquals("cam_parity_1", lastPopup.getString("id"))
+            assertEquals("BottomLeft", lastPopup.getString("position"))
+            assertEquals("horizontal", lastPopup.getString("stack"))
+            assertEquals(false, lastPopup.getBoolean("muted"))
+            assertEquals(2, lastPopup.getInt("buttons"))
+
+            val mediaObj = lastPopup.getJSONObject("media")
+            assertEquals("video", mediaObj.getString("type"))
+            assertEquals(480, mediaObj.getInt("width"))
+            assertEquals(true, mediaObj.getBoolean("poster"))
+            assertEquals(350, mediaObj.getInt("bufferMs"))
+        } finally {
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
         }
     }
 

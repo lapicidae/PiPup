@@ -24,10 +24,17 @@ class SettingsUiTest {
     @Test
     fun testInitialState() {
         ActivityScenario.launch(SettingsActivity::class.java).use {
-            // Verify General submenu is loaded by default
+            // Verify General submenu is loaded by default, including Full-Bleed and LIVE Badge controls
             onView(withId(R.id.text_position)).check(matches(isDisplayed()))
             onView(withId(R.id.spinner_position)).check(matches(isDisplayed()))
-            onView(withId(R.id.spinner_language)).check(matches(isDisplayed()))
+            onView(withId(R.id.switch_media_full_bleed)).check(matches(isDisplayed()))
+            onView(withId(R.id.switch_live_badge)).check(matches(isDisplayed()))
+            onView(withId(R.id.spinner_live_badge_position))
+                .perform(androidx.test.espresso.action.ViewActions.scrollTo())
+                .check(matches(isDisplayed()))
+            onView(withId(R.id.spinner_language))
+                .perform(androidx.test.espresso.action.ViewActions.scrollTo())
+                .check(matches(isDisplayed()))
         }
     }
 

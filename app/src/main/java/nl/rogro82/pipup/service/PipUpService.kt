@@ -400,6 +400,7 @@ class PipUpService : Service() {
             state["lastPopup"] = mapOf(
                 "id" to last.id,
                 "position" to last.getPositionEnum().name,
+                "stack" to last.stack,
                 "duration" to last.duration,
                 "indefinite" to (last.duration <= 0),
                 "muted" to mediaMuted(last),
@@ -407,9 +408,9 @@ class PipUpService : Service() {
                 "tts" to false,
                 "sound" to false,
                 "animation" to last.animationType,
-                "buttons" to 0,
-                "firstFrameMs" to null,
-                "mediaError" to null,
+                "buttons" to last.buttons.size,
+                "firstFrameMs" to notificationManager.lastFirstFrameMs,
+                "mediaError" to notificationManager.lastMediaError,
                 "secondsAgo" to ((now - notificationManager.lastPopupAt) / 1000)
             )
         }
@@ -436,8 +437,24 @@ class PipUpService : Service() {
     }
 
     private fun mediaInfo(p: PopupProps): Map<String, Any?>? = when (val m = p.media) {
-        is PopupProps.Media.Web -> mapOf("type" to "web", "width" to m.width, "height" to m.height)
-        is PopupProps.Media.Video -> mapOf("type" to "video", "width" to m.width)
+        is PopupProps.Media.Web -> mapOf(
+            "type" to "web",
+            "width" to m.width,
+            "height" to m.height,
+            "poster" to (m.poster != null)
+        )
+        is PopupProps.Media.Whep -> mapOf(
+            "type" to "whep",
+            "width" to m.width,
+            "height" to m.height,
+            "poster" to (m.poster != null)
+        )
+        is PopupProps.Media.Video -> mapOf(
+            "type" to "video",
+            "width" to m.width,
+            "poster" to (m.poster != null),
+            "bufferMs" to m.bufferMs
+        )
         is PopupProps.Media.Image -> mapOf("type" to "image", "width" to m.width)
         is PopupProps.Media.Bitmap -> mapOf("type" to "bitmap", "width" to m.width)
         else -> null
@@ -445,6 +462,7 @@ class PipUpService : Service() {
 
     private fun mediaMuted(p: PopupProps): Boolean? = when (val m = p.media) {
         is PopupProps.Media.Web -> m.muted
+        is PopupProps.Media.Whep -> m.muted
         is PopupProps.Media.Video -> m.muted
         else -> null
     }

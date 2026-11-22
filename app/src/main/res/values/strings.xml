@@ -77,6 +77,28 @@
     <string name="settings_title_alignment">Title Alignment</string>
     <string name="settings_message_alignment">Message Alignment</string>
 
+    <!-- Media Performance & Advanced Options -->
+    <string name="settings_buffer_ms">Stream Buffer</string>
+    <string name="settings_buffer_ms_desc">Initial buffering duration for live streams (ExoPlayer). Lower values reduce delay, higher values prevent stuttering.</string>
+    <string name="settings_buffer_ms_default">Default (~2500 ms) – Recommended for unstable Wi-Fi</string>
+    <string name="settings_buffer_ms_low">Low (%1$d ms) – Ultra-low latency (Doorbell / Intercom)</string>
+    <string name="settings_buffer_ms_medium">Balanced (%1$d ms) – Recommended for LAN &amp; fast Wi-Fi</string>
+    <string name="settings_buffer_ms_high">High (%1$d ms) – High stability against frame drops</string>
+    <!-- %1$d: Buffer duration in milliseconds -->
+    <string name="settings_buffer_ms_value">%1$d ms</string>
+    <string name="settings_media_loading_placeholder">Media Loading Placeholder</string>
+    <string name="settings_media_loading_placeholder_desc">Displays a placeholder preview while video or web streams are connecting.</string>
+    <string name="settings_media_full_bleed">Full-Bleed Media (Edge-to-Edge)</string>
+    <string name="settings_media_full_bleed_desc">Stretches media to the top corners of the popup without outer margins.</string>
+    <string name="settings_live_badge">Live Indicator Pill</string>
+    <string name="settings_live_badge_desc">Shows a red LIVE badge on streaming video and WHEP popups.</string>
+    <string name="settings_live_badge_position">Live Badge Position</string>
+    <string name="settings_live_badge_pos_bottom_right">Bottom Right</string>
+    <string name="settings_live_badge_pos_top_right">Top Right</string>
+    <string name="settings_live_badge_pos_top_left">Top Left</string>
+    <string name="settings_live_badge_pos_bottom_left">Bottom Left</string>
+    <string name="live_badge_text_label">LIVE</string>
+
     <!-- Border Appearance -->
     <string name="settings_border_radius">Corner Radius</string>
     <string name="settings_border_width">Border Width</string>

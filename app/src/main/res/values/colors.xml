@@ -31,6 +31,10 @@
     <color name="colorFocusStroke">#196584</color>
     <color name="colorFocusBackground">#D1E4FF</color>
 
+    <!-- Live Badge (Material 3 Error/Warning Semantic Palette) -->
+    <color name="live_badge_background">#B3261E</color> <!-- Material 3 Error Red Container tone -->
+    <color name="live_badge_text">#FFFFFF</color>       <!-- High-contrast On-Error white -->
+
     <!-- Material Design Tonal Presets for Color Selection -->
     <color name="preset_deep_slate">#0F1417</color> <!-- Deep Slate (base background) -->
     <color name="preset_midnight_violet">#312B3F</color> <!-- Midnight Violet (tonal tone 20) -->

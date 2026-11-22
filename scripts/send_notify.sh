@@ -77,7 +77,7 @@ THEMES=(
   ["glass_orchid"]="#CC25192B;#E9B9FB;#F8D8FF;#E9E0E7"
 )
 
-readonly POS_NAMES=("Top Right" "Top Left" "Bottom Right" "Bottom Left" "Center")
+readonly POS_NAMES=("Top Right" "Top Left" "Bottom Right" "Bottom Left" "Center" "Top Center" "Bottom Center" "Center Left" "Center Right")
 readonly ALIGN_NAMES=("Left" "Center" "Right")
 
 # Extract keys for random selection
@@ -608,10 +608,10 @@ get_random_theme_colors() {
 #   Writes the table header to STDOUT.
 #######################################
 print_table_header() {
-  printf "%b%-12s | %-15s | %-98s | %-15s | %-6s | %-20s%b\n" \
+  printf "%b%-12s | %-15s | %-106s | %-15s | %-6s | %-20s%b\n" \
     "${CLR_HEADER}" "TEST TYPE" "THEME" "STYLE PARAMETERS" "ENDPOINT" "HTTP" "JSON STATUS" "${CLR_RESET}"
   printf "%b%s%b\n" \
-    "${CLR_PARAM}" "------------------------------------------------------------------------------------------------------------------------------------------------------------------------------" "${CLR_RESET}"
+    "${CLR_PARAM}" "--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------" "${CLR_RESET}"
 }
 
 #######################################
@@ -659,8 +659,13 @@ get_random_style() {
     fit="${fits[$(( RANDOM % 3 ))]}"
   fi
 
-  printf '%s %s %s %s %s %s %s %s' "${rand_radius}" "${rand_border}" "${rand_padding}" \
-    "${rand_anim_type}" "${rand_anim_duration}" "${fit}" "${rand_title_size}" "${rand_msg_size}"
+  local rand_bleed="false"
+  if [[ "${type}" != "message" ]]; then
+    (( RANDOM % 2 == 1 )) && rand_bleed="true"
+  fi
+
+  printf '%s %s %s %s %s %s %s %s %s' "${rand_radius}" "${rand_border}" "${rand_padding}" \
+    "${rand_anim_type}" "${rand_anim_duration}" "${fit}" "${rand_title_size}" "${rand_msg_size}" "${rand_bleed}"
 }
 
 #######################################
@@ -710,7 +715,7 @@ print_result_row() {
     status_display=$(printf '%s' "${body}" | head -n 1 | cut -c 1-40)
   fi
 
-  printf "%b%-12s%b | %b%-15s%b | %b%-98s%b | %-15s | %b%-6s%b | %b%-20s%b\n" \
+  printf "%b%-12s%b | %b%-15s%b | %b%-106s%b | %-15s | %b%-6s%b | %b%-20s%b\n" \
     "${CLR_TEST}" "${type}" "${CLR_RESET}" \
     "${CLR_THEME}" "${theme}" "${CLR_RESET}" \
     "${CLR_PARAM}" "${style}" "${CLR_RESET}" \
@@ -1180,6 +1185,7 @@ send_json_notification() {
   local title_size="${19:-24}"
   local msg_size="${20:-14}"
   local popup_duration="${21:-${DURATION}}"
+  local full_bleed="${22:-false}"
 
   local endpoint="http://${target_ip}:${PORT}/notify"
 
@@ -1211,6 +1217,7 @@ send_json_notification() {
   "borderColor": "${border_color}",
   "contentPadding": ${padding},
   "mediaPosition": ${media_pos},
+  "mediaFullBleed": ${full_bleed},
   "animationType": ${anim_type},
   "animationDuration": ${anim_duration},
   "overwrite": ${overwrite},
@@ -1268,9 +1275,12 @@ send_multipart_test() {
   local media_w media_h media_label
   read -r media_w media_h media_label <<< "$(get_random_media_size "multipart")"
 
+  local full_bleed="false"
+  (( RANDOM % 2 == 1 )) && full_bleed="true"
+
   local full_msg
-  full_msg=$(printf "Mode: Form-Data (Source: %s)\nPos: %s | Duration: %ss\nMediaPos: %s | MediaSize: %s\nPadding: %s\nOverwrite: %s%b" \
-    "${img_ext^^}" "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${padding}" "${overwrite}" "${suffix}")
+  full_msg=$(printf "Mode: Form-Data (Source: %s)\nPos: %s | Duration: %ss\nMediaPos: %s | MediaSize: %s | FullBleed: %s\nPadding: %s\nOverwrite: %s%b" \
+    "${img_ext^^}" "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${full_bleed}" "${padding}" "${overwrite}" "${suffix}")
 
   local response
   response=$(curl -s --max-time 60 -w "\n%{http_code}" -X POST "${endpoint}" \
@@ -1281,6 +1291,7 @@ send_multipart_test() {
     -F "duration=${popup_duration}" \
     -F "position=${position}" \
     -F "mediaPosition=${media_pos}" \
+    -F "mediaFullBleed=${full_bleed}" \
     -F "contentPadding=${padding}" \
     -F "animationType=${anim_type}" \
     -F "animationDuration=${anim_duration}" \
@@ -1294,8 +1305,8 @@ send_multipart_test() {
   # rm -f "${temp_file}" # No longer needed with SHARED_MULTIPART_IMAGE
 
   local style_info
-  style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-    "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
+  style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+    "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${full_bleed}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
 
   print_result_row "MULTIPART" "N/A (Form-Data)" "${style_info}" "${target_ip}" "${code}|${body}"
 }
@@ -1636,10 +1647,10 @@ main() {
     local bg border title_c msg_c
     IFS=';' read -r bg border title_c msg_c <<< "${theme_str}"
 
-    local radius border_w padding anim_type anim_dur target_fit title_s msg_s
+    local radius border_w padding anim_type anim_dur target_fit title_s msg_s full_bleed
     local style_data
     style_data=$(get_random_style "${type}")
-    read -r radius border_w padding anim_type anim_dur target_fit title_s msg_s <<< "${style_data}"
+    read -r radius border_w padding anim_type anim_dur target_fit title_s msg_s full_bleed <<< "${style_data}"
     [[ -z "${fit}" ]] && fit="${target_fit}"
 
     local rand_media_pos=$(( RANDOM % 4 ))
@@ -1648,15 +1659,15 @@ main() {
 
     local info_msg fit_label=""
     [[ "${type}" == "whep" ]] && fit_label=" | Fit: ${fit}"
-    info_msg=$(printf "Position: %s | Duration: %ss\nType: %s%s\nRadius: %spx | Border: %spx\nMediaPos: %s | MediaSize: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
-      "${pos}" "${popup_duration}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${rand_media_pos}" "${media_size_label}" "${padding}" \
+    info_msg=$(printf "Position: %s | Duration: %ss\nType: %s%s\nRadius: %spx | Border: %spx | FullBleed: %s\nMediaPos: %s | MediaSize: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
+      "${pos}" "${popup_duration}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${full_bleed}" "${rand_media_pos}" "${media_size_label}" "${padding}" \
       "${anim_type}" "${anim_dur}" "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${overwrite}" "${suffix}")
 
     local response
     response=$(send_json_notification "${target_ip}" "${title}" "${info_msg}" "${media}" \
       "${pos}" "${bg}" "${border_w}" "${border}" "${title_c}" "${msg_c}" \
       "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}" \
-      "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${popup_duration}")
+      "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${popup_duration}" "${full_bleed}")
 
     local table_type="${type^^}"
     if [[ "${type}" == "whep" ]]; then
@@ -1671,8 +1682,8 @@ main() {
     fi
 
     local style_info
-    style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-      "${pos}" "${popup_duration}" "${rand_media_pos}" "${media_size_label}" "${radius}" "${border_w}" "${padding}" \
+    style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+      "${pos}" "${popup_duration}" "${rand_media_pos}" "${media_size_label}" "${full_bleed}" "${radius}" "${border_w}" "${padding}" \
       "${anim_type}" "${anim_dur}" "${overwrite}")
 
     print_result_row "${table_type}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
@@ -1716,10 +1727,10 @@ main() {
         send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}"
       fi
     else
-      local radius border_w padding anim_type anim_dur fit title_s msg_s
+      local radius border_w padding anim_type anim_dur fit title_s msg_s _
       local style_data
       style_data=$(get_random_style "${type}")
-      read -r radius border_w padding anim_type anim_dur fit title_s msg_s <<< "${style_data}"
+      read -r radius border_w padding anim_type anim_dur fit title_s msg_s _ <<< "${style_data}"
 
       local media_w media_h media_label
       read -r media_w media_h media_label <<< "$(get_random_media_size "${type}")"
@@ -1806,7 +1817,7 @@ main() {
       if [[ -n "${user_position:-}" ]]; then
         mapfile -t pos_list < <(for ((k=0; k<20; k++)); do echo "${user_position}"; done)
       else
-        mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 0 1 2 3 4 | shuf)
+        mapfile -t pos_list < <(printf "%s\n" 0 1 2 3 4 5 6 7 8 0 1 2 3 4 5 6 7 8 | shuf)
       fi
 
       local type

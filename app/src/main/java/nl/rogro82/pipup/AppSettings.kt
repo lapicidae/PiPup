@@ -182,7 +182,7 @@ class AppSettings(context: Context) {
     /** Whether to play an exit animation when the popup is dismissed. */
     var animationExit by BooleanPref("animation_exit", false)
 
-    // Default Button Styling (M3 Defaults)
+    // Default Button Styling
     var defaultButtonSize by FloatPref("default_button_size", 14f)
     var defaultButtonColor by StringPref("default_button_color", appContext.colorToHex(R.color.preset_gunmetal))
     var defaultButtonFocusColor by StringPref("default_button_focus_color", appContext.colorToHex(R.color.preset_sky_blue))
@@ -198,6 +198,18 @@ class AppSettings(context: Context) {
     var maxPopups by IntPref("max_popups", 1)
     /** The loading & stacking behavior mode (0: Strict Sequential, 1: Fast-Track Dynamic). */
     var popupLoadingBehavior by IntPref("popup_loading_behavior", 0)
+    /** Default buffer duration in ms for video playback (0 = ExoPlayer default ~2500ms). */
+    var defaultBufferMs by IntPref("default_buffer_ms", 0)
+    /** Whether to display a loading placeholder while streams are connecting. */
+    var mediaLoadingPlaceholder by BooleanPref("media_loading_placeholder", false)
+
+    // Media Display Defaults (General)
+    /** Whether media runs edge-to-edge across the top of the popup by default. */
+    var mediaFullBleed by BooleanPref("media_full_bleed", false)
+    /** Whether a Live indicator pill is shown on live streams by default. */
+    var liveBadge by BooleanPref("live_badge", false)
+    /** Default corner position for the Live indicator pill. */
+    var liveBadgePosition by StringPref("live_badge_position", "bottom_right")
 
     // System / App
     /** Enables additional technical settings and information. */
@@ -284,6 +296,11 @@ class AppSettings(context: Context) {
         val mediaRetries: Int,
         val maxPopups: Int,
         val popupLoadingBehavior: Int = 0,
+        val defaultBufferMs: Int = 0,
+        val mediaLoadingPlaceholder: Boolean = false,
+        val mediaFullBleed: Boolean = false,
+        val liveBadge: Boolean = false,
+        val liveBadgePosition: String = "bottom_right",
         val appTheme: Int,
         val advancedMode: Boolean,
         val moduleModes: Map<String, Int>,
@@ -323,6 +340,11 @@ class AppSettings(context: Context) {
                 put("mediaRetries", mediaRetries)
                 put("maxPopups", maxPopups)
                 put("popupLoadingBehavior", popupLoadingBehavior)
+                put("defaultBufferMs", defaultBufferMs)
+                put("mediaLoadingPlaceholder", mediaLoadingPlaceholder)
+                put("mediaFullBleed", mediaFullBleed)
+                put("liveBadge", liveBadge)
+                put("liveBadgePosition", liveBadgePosition)
                 put("appTheme", appTheme)
                 put("advancedMode", advancedMode)
                 put("moduleModes", JSONObject(moduleModes))
@@ -366,6 +388,11 @@ class AppSettings(context: Context) {
                     mediaRetries = j.optInt("mediaRetries", 3),
                     maxPopups = j.optInt("maxPopups", 1),
                     popupLoadingBehavior = j.optInt("popupLoadingBehavior", 0),
+                    defaultBufferMs = j.optInt("defaultBufferMs", 0),
+                    mediaLoadingPlaceholder = j.optBoolean("mediaLoadingPlaceholder", false),
+                    mediaFullBleed = j.optBoolean("mediaFullBleed", false),
+                    liveBadge = j.optBoolean("liveBadge", false),
+                    liveBadgePosition = j.optString("liveBadgePosition", "bottom_right"),
                     appTheme = j.optInt("appTheme", 0),
                     advancedMode = j.optBoolean("advancedMode", false),
                     moduleModes = j.optJSONObject("moduleModes")?.let { modes ->
@@ -419,6 +446,11 @@ class AppSettings(context: Context) {
             mediaRetries = mediaRetries,
             maxPopups = maxPopups,
             popupLoadingBehavior = popupLoadingBehavior,
+            defaultBufferMs = defaultBufferMs,
+            mediaLoadingPlaceholder = mediaLoadingPlaceholder,
+            mediaFullBleed = mediaFullBleed,
+            liveBadge = liveBadge,
+            liveBadgePosition = liveBadgePosition,
             appTheme = appTheme,
             advancedMode = advancedMode,
             moduleModes = modes,
@@ -461,6 +493,13 @@ class AppSettings(context: Context) {
         mediaRetries = data.mediaRetries.coerceIn(0, 10)
         maxPopups = data.maxPopups.coerceIn(1, 5)
         popupLoadingBehavior = data.popupLoadingBehavior.coerceIn(0, 1)
+        defaultBufferMs = data.defaultBufferMs.coerceIn(0, 10000)
+        mediaLoadingPlaceholder = data.mediaLoadingPlaceholder
+        mediaFullBleed = data.mediaFullBleed
+        liveBadge = data.liveBadge
+        liveBadgePosition = data.liveBadgePosition.takeIf {
+            it in listOf("top_left", "top_right", "bottom_left", "bottom_right")
+        } ?: "bottom_right"
         appTheme = data.appTheme.coerceIn(0, 1)
         advancedMode = data.advancedMode
 
@@ -540,21 +579,36 @@ class AppSettings(context: Context) {
      * Applies user-configured default settings to a PopupProps instance.
      */
     fun applyDefaults(props: PopupProps): PopupProps {
+        val updatedMedia = when (val m = props.media) {
+            is PopupProps.Media.Video -> {
+                if (m.bufferMs == null && defaultBufferMs > 0) {
+                    m.copy(bufferMs = defaultBufferMs.coerceIn(100, 10_000))
+                } else {
+                    m
+                }
+            }
+            else -> m
+        }
         return props.copy(
             backgroundColor = if (props.backgroundColor == "#CC000000") getFullBackgroundColor() else props.backgroundColor,
             borderColor = if (props.borderColor == "#00000000") borderColor else props.borderColor,
             borderRadius = if (props.borderRadius == 0) borderRadius else props.borderRadius,
             borderWidth = if (props.borderWidth == 0) borderWidth else props.borderWidth,
+            contentPadding = props.contentPadding ?: contentPadding,
             titleColor = if (props.titleColor == "#FFFFFF") titleColor else props.titleColor,
             titleSize = if (props.titleSize == 24f) titleSize else props.titleSize,
             messageColor = if (props.messageColor == "#FFFFFF") messageColor else props.messageColor,
             messageSize = if (props.messageSize == 16f) messageSize else props.messageSize,
             titleAlignment = if (props.titleAlignment == 0) titleAlignment else props.titleAlignment,
             messageAlignment = if (props.messageAlignment == 0) messageAlignment else props.messageAlignment,
+            media = updatedMedia,
             mediaPosition = props.mediaPosition ?: mediaPosition,
             animationType = if (props.animationType == 0) animationType else props.animationType,
             animationDuration = if (props.animationDuration == 500) animationDuration else props.animationDuration,
-            animationExit = props.animationExit || animationExit
+            animationExit = props.animationExit || animationExit,
+            mediaFullBleed = props.mediaFullBleed ?: mediaFullBleed,
+            liveBadge = props.liveBadge ?: liveBadge,
+            liveBadgePosition = props.liveBadgePosition ?: liveBadgePosition
         )
     }
 

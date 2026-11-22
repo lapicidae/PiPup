@@ -40,6 +40,13 @@ class PiPupTestRunner : AndroidJUnitRunner() {
             Log.e("PiPupTestRunner", "SYSTEM_ALERT_WINDOW NOT GRANTED BY SYSTEM")
         }
 
+        // Suppress Android 14+ 'serviceDiscovery' (MdnsAdvertiser) logcat tag during tests.
+        // Android's MdnsAdvertiser logs raw DNS-SD TXT record length prefix bytes (e.g., 0x13 = 19, 0x1c = 28)
+        // directly to logcat, which are illegal XML 1.0 control characters and break Android Studio's
+        // test result XML export ("Unicode character 0x13 was detected").
+        runBlockingShell("setprop log.tag.serviceDiscovery SUPPRESS")
+        runBlockingShell("logcat -c")
+
         super.onCreate(arguments)
     }
 

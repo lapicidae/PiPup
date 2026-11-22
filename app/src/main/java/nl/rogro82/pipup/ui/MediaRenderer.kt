@@ -2,6 +2,7 @@ package nl.rogro82.pipup.ui
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.Drawable
@@ -13,6 +14,7 @@ import android.view.Gravity
 import android.view.TextureView
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.LinearInterpolator
 import android.webkit.JavascriptInterface
 import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
@@ -23,11 +25,14 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.ProgressBar
+import androidx.core.content.ContextCompat
 import androidx.core.view.isNotEmpty
 import androidx.core.view.isVisible
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.VideoSize
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.common.util.UnstableApi
@@ -36,13 +41,16 @@ import com.bumptech.glide.load.DataSource
 import com.bumptech.glide.load.engine.DiskCacheStrategy
 import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
+import com.bumptech.glide.request.target.CustomTarget
 import com.bumptech.glide.request.target.Target
+import com.bumptech.glide.request.transition.Transition
 import com.bumptech.glide.signature.ObjectKey
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.*
 import nl.rogro82.pipup.core.PayloadParser
 import java.io.File
 import java.lang.ref.WeakReference
+import kotlin.math.roundToInt
 
 /**
  * Manages media rendering logic for PopupView.
@@ -58,6 +66,92 @@ class MediaRenderer(
     companion object {
         private val DUMMY_CLIENT = WebViewClient()
         private val DUMMY_CHROME = WebChromeClient()
+        private val CROSSFADE_INTERPOLATOR = LinearInterpolator()
+        private const val CROSSFADE_DURATION_MS = 350L
+        private const val POSTER_FADE_CAP_MS = 20_000L
+
+        private const val VIDEO_WATCH_JS = """
+            (function() {
+                if (window.__pipupWatch) return;
+                window.__pipupWatch = true;
+                var done = false;
+                function signal(what) {
+                    if (done) return;
+                    done = true;
+                    document.title = 'pipup:' + what;
+                }
+                function hook(v) {
+                    if (v.__pipupHooked) return;
+                    v.__pipupHooked = true;
+                    if (!done) document.title = 'pipup:videofound';
+                    if (!v.paused && v.currentTime > 0 && v.readyState >= 2) { signal('playing'); return; }
+                    ['playing', 'timeupdate', 'loadeddata'].forEach(function(ev) {
+                        v.addEventListener(ev, function() {
+                            if (v.currentTime > 0 || ev === 'playing') signal('playing');
+                        });
+                    });
+                }
+                function scan(root) {
+                    (root.querySelectorAll ? root.querySelectorAll('video') : []).forEach(hook);
+                    (root.querySelectorAll ? root.querySelectorAll('*') : []).forEach(function(el) {
+                        if (el.shadowRoot) scan(el.shadowRoot);
+                    });
+                }
+                scan(document);
+                new MutationObserver(function() { scan(document); }).observe(
+                    document.documentElement, { childList: true, subtree: true });
+                setTimeout(function() {
+                    if (!done && document.querySelectorAll('video').length === 0) {
+                        var shadowVideo = false;
+                        try {
+                            document.querySelectorAll('*').forEach(function(el) {
+                                if (el.shadowRoot && el.shadowRoot.querySelector('video')) shadowVideo = true;
+                            });
+                        } catch (e) {}
+                        if (!shadowVideo) signal('novideo');
+                    }
+                }, 400);
+            })();
+        """
+
+        private const val MUTE_JS = """
+            (function() {
+                function muteAll() {
+                    document.querySelectorAll('video,audio').forEach(function(m) {
+                        m.muted = true;
+                        m.volume = 0;
+                    });
+                }
+                muteAll();
+                new MutationObserver(muteAll).observe(document.documentElement, { childList: true, subtree: true });
+            })();
+        """
+
+        /**
+         * Computes ExoPlayer buffer durations for [bufferMs] as `(minMs, maxMs, startMs, rebufferMs)`,
+         * or null when absent/<=0 so defaults apply. Clamped to 100..10000 ms.
+         */
+        internal fun lowLatencyBufferDurations(bufferMs: Int?): List<Int>? {
+            val start = bufferMs?.takeIf { it > 0 }?.coerceIn(100, 10_000) ?: return null
+            val rebuffer = start * 2
+            val min = maxOf(rebuffer, 1_000)
+            return listOf(min, maxOf(min * 2, 5_000), start, rebuffer)
+        }
+
+        /**
+         * Computes display height for [targetWidth] preserving the stream's display aspect ratio
+         * including non-square [pixelWidthHeightRatio] on anamorphic streams.
+         */
+        internal fun heightForDisplayAspect(
+            targetWidth: Int,
+            width: Int,
+            height: Int,
+            pixelWidthHeightRatio: Float
+        ): Int {
+            val ratio = if (pixelWidthHeightRatio > 0f) pixelWidthHeightRatio else 1f
+            val displayWidth = width * ratio
+            return (targetWidth * height / displayWidth).roundToInt()
+        }
     }
 
     interface Callback {
@@ -68,6 +162,7 @@ class MediaRenderer(
         fun showPlaceholder(error: String?)
         fun onDimensionsUpdated(width: Int, height: Int)
         fun handleWhepRetry(error: String, retryCount: Int)
+        fun onFirstFrameRendered(firstFrameMs: Long)
     }
 
     private val appContext = context.applicationContext
@@ -80,8 +175,12 @@ class MediaRenderer(
     private var videoView: View? = null
     private var webView: WebView? = null
     private var lastMediaError: String? = null
+    private var mediaStarted: Boolean = false
 
     fun setup(uiContext: Context, frame: FrameLayout, props: PopupProps, retryCount: Int = 0) {
+        if (retryCount == 0) {
+            mediaStarted = false
+        }
         val media = props.media ?: props.image?.let { PopupProps.Media.Image(it, props.imageWidth ?: 480, cache = true, scale = true) }
 
         if (media == null) {
@@ -116,12 +215,38 @@ class MediaRenderer(
 
         when (media) {
             is PopupProps.Media.Image -> renderImage(uiContext, frame, media.uri, media.width, media.cache, media.scale, retryCount)
-            is PopupProps.Media.Video -> renderVideo(frame, media.uri, media.width, media.scale, media.udp, retryCount, uiContext)
-            is PopupProps.Media.Web -> renderWeb(uiContext, frame, media.uri, media.width, media.height, media.cache, media.scale, retryCount)
-            is PopupProps.Media.Whep -> renderWhep(frame, media.uri, media.width, media.height, media.scale, media.videoFit, retryCount)
+            is PopupProps.Media.Video -> renderVideo(frame, media, retryCount, uiContext)
+            is PopupProps.Media.Web -> renderWeb(uiContext, frame, media, retryCount)
+            is PopupProps.Media.Whep -> renderWhep(frame, media, retryCount)
             is PopupProps.Media.LocalFile -> renderLocalFile(uiContext, frame, media.path, media.width, media.scale)
             is PopupProps.Media.Bitmap -> renderBitmap(uiContext, frame, media.bitmap, media.width, media.scale)
         }
+    }
+
+    private fun createLoadingPlaceholder(context: Context): View {
+        val container = FrameLayout(context).apply {
+            tag = "pipup_loading_placeholder"
+            setBackgroundColor(Color.TRANSPARENT)
+        }
+
+        // Static watermark banner in the background
+        val iv = ImageView(context).apply {
+            setImageResource(R.drawable.ic_banner)
+            alpha = 0.20f
+            scaleType = ImageView.ScaleType.FIT_CENTER
+        }
+        container.addView(iv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+
+        // Circular loading indicator centered on top
+        val indicatorSize = (48 * context.resources.displayMetrics.density).toInt()
+        val primaryColor = ContextCompat.getColor(context, R.color.colorPrimary)
+        val progressBar = ProgressBar(context).apply {
+            isIndeterminate = true
+            indeterminateTintList = ColorStateList.valueOf(primaryColor)
+        }
+        container.addView(progressBar, FrameLayout.LayoutParams(indicatorSize, indicatorSize, Gravity.CENTER))
+
+        return container
     }
 
     private fun removeStaleViews(frame: FrameLayout, keepView: View) {
@@ -179,6 +304,7 @@ class MediaRenderer(
 
     fun fullCleanup(frame: FrameLayout, media: PopupProps.Media?) {
         val runnable = Runnable {
+            mediaStarted = false
             cleanup()
             try {
                 for (i in 0 until frame.childCount) {
@@ -210,9 +336,134 @@ class MediaRenderer(
         renderGlide(uiContext, frame, uri, width, scale, if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE, !cache, retryCount)
     }
 
-    private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean, udp: Boolean = false, retryCount: Int = 0, videoContext: Context) {
+    private fun resolvePosterScaleType(posterMode: String?): ImageView.ScaleType {
+        return when (PopupProps.parsePosterMode(posterMode)) {
+            PopupProps.PosterMode.FIT -> ImageView.ScaleType.FIT_CENTER
+            PopupProps.PosterMode.STRETCH -> ImageView.ScaleType.FIT_XY
+            PopupProps.PosterMode.CENTER -> ImageView.ScaleType.CENTER
+            PopupProps.PosterMode.FILL, null -> ImageView.ScaleType.CENTER_CROP
+        }
+    }
+
+    private fun attachPosterOrPlaceholder(
+        uiContext: Context,
+        frame: FrameLayout,
+        posterUrl: String?,
+        posterMode: String?
+    ) {
+        if (!posterUrl.isNullOrBlank()) {
+            val iv = ImageView(uiContext).apply {
+                scaleType = resolvePosterScaleType(posterMode)
+                setBackgroundColor(Color.TRANSPARENT)
+            }
+            frame.addView(
+                iv,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER
+                )
+            )
+            Log.d("PiPup-Media", "Starting poster load via Glide CustomTarget: $posterUrl")
+            Glide.with(appContext)
+                .asDrawable()
+                .load(posterUrl)
+                .diskCacheStrategy(DiskCacheStrategy.DATA)
+                .into(object : CustomTarget<Drawable>() {
+                    override fun onResourceReady(resource: Drawable, transition: Transition<in Drawable>?) {
+                        if (callback?.isCleanedUp() == true) return
+                        iv.setImageDrawable(resource)
+                        callback?.notifyReady()
+                        callback?.adjustHeights()
+                    }
+
+                    override fun onLoadCleared(placeholder: Drawable?) {
+                        iv.setImageDrawable(null)
+                    }
+
+                    override fun onLoadFailed(errorDrawable: Drawable?) {
+                        Log.w("PiPup-Media", "Poster load failed via CustomTarget: $posterUrl")
+                        if (appSettings.mediaLoadingPlaceholder && callback?.isCleanedUp() == false) {
+                            val placeholderView = createLoadingPlaceholder(uiContext)
+                            frame.addView(
+                                placeholderView,
+                                FrameLayout.LayoutParams(
+                                    FrameLayout.LayoutParams.MATCH_PARENT,
+                                    FrameLayout.LayoutParams.MATCH_PARENT,
+                                    Gravity.CENTER
+                                )
+                            )
+                            frame.removeView(iv)
+                            callback?.notifyReady()
+                            callback?.adjustHeights()
+                        }
+                    }
+                })
+        } else if (appSettings.mediaLoadingPlaceholder) {
+            val placeholderView = createLoadingPlaceholder(uiContext)
+            frame.addView(
+                placeholderView,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER
+                )
+            )
+            callback?.notifyReady()
+            callback?.adjustHeights()
+        }
+    }
+
+    internal fun crossfadeRevealStream(frame: FrameLayout, streamView: View, elapsedMs: Long) {
+        if (callback?.isCleanedUp() == true) return
+        streamView.isVisible = true
+        var hasOverlay = false
+        for (i in 0 until frame.childCount) {
+            val child = frame.getChildAt(i)
+            if (child != streamView) {
+                hasOverlay = true
+                child.animate()
+                    .alpha(0f)
+                    .setDuration(CROSSFADE_DURATION_MS)
+                    .setInterpolator(CROSSFADE_INTERPOLATOR)
+                    .withEndAction {
+                        if (child is ImageView) {
+                            try { Glide.with(appContext).clear(child) } catch (_: Exception) {}
+                        }
+                        frame.removeView(child)
+                    }
+                    .start()
+            }
+        }
+        if (hasOverlay) {
+            streamView.animate()
+                .alpha(1f)
+                .setDuration(CROSSFADE_DURATION_MS)
+                .setInterpolator(CROSSFADE_INTERPOLATOR)
+                .start()
+        } else {
+            streamView.alpha = 1f
+        }
+        callback?.onFirstFrameRendered(elapsedMs)
+        callback?.notifyReady()
+        callback?.adjustHeights()
+    }
+
+    private fun renderVideo(
+        frame: FrameLayout,
+        video: PopupProps.Media.Video,
+        retryCount: Int = 0,
+        videoContext: Context
+    ) {
+        val width = video.width
+        val scale = video.scale
+        val udp = video.udp
+        val uri = video.uri
+        val poster = video.poster
+        val bufferMs = video.bufferMs ?: appSettings.defaultBufferMs.takeIf { it > 0 }
+
         val tw = if (scale) appContext.getScaledPixels(width) else width
-        val th = (tw * 9) / 16
+        val th = video.height?.let { if (scale) appContext.getScaledPixels(it) else it } ?: ((tw * 9) / 16)
         callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
@@ -221,16 +472,41 @@ class MediaRenderer(
         player = null
         videoView?.let { (it.parent as? ViewGroup)?.removeView(it) }
 
+        val loadControl = lowLatencyBufferDurations(bufferMs)?.let { (minBuf, maxBuf, playbackBuf, rebufferBuf) ->
+            Log.d(
+                "PiPup-Media",
+                "Configuring ExoPlayer LoadControl with custom bufferMs=$bufferMs " +
+                    "(minBuf=$minBuf, maxBuf=$maxBuf, playbackBuf=$playbackBuf, rebufferBuf=$rebufferBuf)"
+            )
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(minBuf, maxBuf, playbackBuf, rebufferBuf)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+        } ?: run {
+            Log.d("PiPup-Media", "Configuring ExoPlayer LoadControl with defaults (500, 1000, 250, 500)")
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(500, 1000, 250, 500)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+        }
+
         val p = ExoPlayer.Builder(appContext)
-            .setLoadControl(DefaultLoadControl.Builder().setBufferDurationsMs(500, 1000, 250, 500).build())
+            .setLoadControl(loadControl)
             .build().also { player = it }
 
-        val tv = TextureView(videoContext).also { videoView = it; it.isVisible = false }
+        val tv = TextureView(videoContext).also {
+            videoView = it
+            // Use 0.01f (> 0f) so Android's RenderNode does not skip TextureView.draw(),
+            // ensuring SurfaceTexture is created while remaining invisible during buffering.
+            it.alpha = 0.01f
+            it.isVisible = false
+        }
+        p.volume = if (video.muted) 0f else 1f
         p.setVideoTextureView(tv)
         p.repeatMode = Player.REPEAT_MODE_ONE
 
         val mediaItem = MediaItem.fromUri(uri)
-        if (uri.startsWith("rtsp://", ignoreCase = true)) {
+        if (uri.startsWith("rtsp://", ignoreCase = true) || uri.startsWith("rtsps://", ignoreCase = true)) {
             val mediaSource = androidx.media3.exoplayer.rtsp.RtspMediaSource.Factory()
                 .setForceUseRtpTcp(!udp)
                 .createMediaSource(mediaItem)
@@ -240,12 +516,31 @@ class MediaRenderer(
         }
         p.prepare()
 
-        p.addListener(VideoPlayerListener(this, WeakReference(frame), tw, th, uri, width, scale, udp, retryCount, videoContext))
-        frame.addView(tv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        p.addListener(VideoPlayerListener(this, WeakReference(frame), tw, th, video, retryCount, videoContext))
+        attachPosterOrPlaceholder(videoContext, frame, poster, video.posterMode)
+        frame.addView(
+            tv,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER
+            )
+        )
+        if (mediaStarted) {
+            tv.isVisible = true
+            p.play()
+        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun renderWeb(uiContext: Context, frame: FrameLayout, uri: String, width: Int, height: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0) {
+    private fun renderWeb(uiContext: Context, frame: FrameLayout, web: PopupProps.Media.Web, retryCount: Int = 0) {
+        val uri = web.uri
+        val width = web.width
+        val height = web.height
+        val cache = web.cache
+        val scale = web.scale
+        val poster = web.poster
+
         val tw = if (scale) appContext.getScaledPixels(width) else width
         val th = if (scale) appContext.getScaledPixels(height) else height
         callback?.onDimensionsUpdated(tw, th)
@@ -254,13 +549,20 @@ class MediaRenderer(
 
         cleanupWebView()
 
+        val hasOverlay = !poster.isNullOrBlank() || appSettings.mediaLoadingPlaceholder
+        attachPosterOrPlaceholder(uiContext, frame, poster, web.posterMode)
+
+        val startTimeMs = SystemClock.elapsedRealtime()
+        val client = WebRendererClient(this, WeakReference(frame), web, retryCount, uiContext, startTimeMs)
+
         Log.d("MediaRenderer", "Creating fresh WebView for Web content: $uri")
         val wv = WebView(uiContext).apply {
             visibility = View.VISIBLE
+            alpha = if (hasOverlay) 0.01f else 1f
             setBackgroundColor(Color.TRANSPARENT)
             webView = this
-            webViewClient = WebRendererClient(this@MediaRenderer, WeakReference(frame), uri, width, height, cache, scale, retryCount, uiContext)
-            webChromeClient = AppWebChromeClient()
+            webViewClient = client
+            webChromeClient = WebStreamChromeClient(client)
             settings.apply {
                 javaScriptEnabled = true
                 domStorageEnabled = true
@@ -273,14 +575,32 @@ class MediaRenderer(
                 cacheMode = if (cache) WebSettings.LOAD_DEFAULT else WebSettings.LOAD_NO_CACHE
             }
         }
-        frame.addView(wv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        frame.addView(
+            wv,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER
+            )
+        )
         wv.onResume()
         wv.loadUrl(uri)
     }
 
     @SuppressLint("SetJavaScriptEnabled")
-    private fun renderWhep(frame: FrameLayout, uri: String, width: Int, height: Int?, scale: Boolean, videoFit: String, retryCount: Int = 0) {
-        val finalUri = if (isEmulator()) uri.replace("127.0.0.1", "10.0.2.2").replace("localhost", "10.0.2.2") else uri
+    private fun renderWhep(frame: FrameLayout, whep: PopupProps.Media.Whep, retryCount: Int = 0) {
+        val uri = whep.uri
+        val width = whep.width
+        val height = whep.height
+        val scale = whep.scale
+        val videoFit = whep.videoFit
+        val poster = whep.poster
+
+        val finalUri = if (isEmulator()) {
+            uri.replace("127.0.0.1", "10.0.2.2").replace("localhost", "10.0.2.2")
+        } else {
+            uri
+        }
 
         try {
             val html = appContext.assets.open("whep.html").bufferedReader().use { it.readText() }
@@ -295,12 +615,27 @@ class MediaRenderer(
 
             cleanupWebView()
 
+            val hasOverlay = !poster.isNullOrBlank() || appSettings.mediaLoadingPlaceholder
+            attachPosterOrPlaceholder(frame.context, frame, poster, whep.posterMode)
+
+            val startTimeMs = SystemClock.elapsedRealtime()
             Log.d("MediaRenderer", "Creating fresh WebView for WHEP: $finalUri")
             val wv = WebView(frame.context).apply {
-                visibility = View.INVISIBLE
+                visibility = View.VISIBLE
+                alpha = if (hasOverlay) 0.01f else 1f
                 setBackgroundColor(Color.TRANSPARENT)
                 webView = this
-                addJavascriptInterface(WhepJsBridge(WeakReference(this@MediaRenderer), WeakReference(frame), tw, height != null, retryCount), "PiPup")
+                addJavascriptInterface(
+                    WhepJsBridge(
+                        WeakReference(this@MediaRenderer),
+                        WeakReference(frame),
+                        tw,
+                        height != null,
+                        retryCount,
+                        startTimeMs
+                    ),
+                    "PiPup"
+                )
                 webViewClient = WhepWebViewClient(this@MediaRenderer, retryCount)
                 webChromeClient = AppWebChromeClient()
                 settings.apply {
@@ -314,7 +649,14 @@ class MediaRenderer(
                     mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                 }
             }
-            frame.addView(wv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+            frame.addView(
+                wv,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER
+                )
+            )
             wv.onResume()
             wv.loadDataWithBaseURL(finalUri, injectedHtml, "text/html", "UTF-8", null)
         } catch (e: Exception) {
@@ -327,7 +669,16 @@ class MediaRenderer(
         renderGlide(uiContext, frame, File(path), width, scale, DiskCacheStrategy.NONE, true, 0)
     }
 
-    private fun renderGlide(uiContext: Context, frame: FrameLayout, source: Any, width: Int, scale: Boolean, diskCache: DiskCacheStrategy, skipMemory: Boolean, retryCount: Int) {
+    private fun renderGlide(
+        uiContext: Context,
+        frame: FrameLayout,
+        source: Any,
+        width: Int,
+        scale: Boolean,
+        diskCache: DiskCacheStrategy,
+        skipMemory: Boolean,
+        retryCount: Int
+    ) {
         val maxDim = if (scale) appContext.getScaledPixels(1280) else 1280
         val tw = (if (scale) appContext.getScaledPixels(width) else width).coerceAtMost(maxDim)
         callback?.onDimensionsUpdated(tw, 0)
@@ -337,14 +688,31 @@ class MediaRenderer(
         val iv = (if (frame.isNotEmpty()) frame.getChildAt(0) else null) as? ImageView ?: ImageView(uiContext).apply {
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
-            frame.addView(this, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            frame.addView(
+                this,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            )
         }
 
         // Ensure any previous load on this view is cancelled before starting a new one
         Glide.with(appContext).clear(iv)
 
         val requestListener = GlideRequestListener(
-            this, WeakReference(frame), WeakReference(iv), source, width, scale, diskCache, skipMemory, retryCount, tw, uiContext
+            this,
+            WeakReference(frame),
+            WeakReference(iv),
+            source,
+            width,
+            scale,
+            diskCache,
+            skipMemory,
+            retryCount,
+            tw,
+            uiContext
         )
 
         // Standard Glide "no-cache" behavior:
@@ -379,7 +747,14 @@ class MediaRenderer(
         val iv = (if (frame.isNotEmpty()) frame.getChildAt(0) else null) as? ImageView ?: ImageView(uiContext).apply {
             adjustViewBounds = true
             scaleType = ImageView.ScaleType.FIT_CENTER
-            frame.addView(this, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            frame.addView(
+                this,
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            )
         }
 
         iv.setImageBitmap(bitmap)
@@ -388,6 +763,7 @@ class MediaRenderer(
     }
 
     fun startMedia() {
+        mediaStarted = true
         videoView?.isVisible = true
         player?.play()
     }
@@ -396,12 +772,11 @@ class MediaRenderer(
         webView?.evaluateJavascript("document.getElementById('v').style.objectFit = '$videoFit';", null)
     }
 
-    fun onWhepReady() {
+    fun onWhepReady(elapsedMs: Long) {
         webView?.let { wv ->
-            wv.visibility = View.VISIBLE
-            (wv.parent as? FrameLayout)?.let { parent -> removeStaleViews(parent, wv) }
-            callback?.notifyReady()
-            callback?.adjustHeights()
+            (wv.parent as? FrameLayout)?.let { parent ->
+                crossfadeRevealStream(parent, wv, elapsedMs)
+            }
         }
     }
 
@@ -414,33 +789,87 @@ class MediaRenderer(
         private val frame: WeakReference<FrameLayout>,
         private val tw: Int,
         private val th: Int,
-        private val uri: String,
-        private val width: Int,
-        private val scale: Boolean,
-        private val udp: Boolean,
+        private val video: PopupProps.Media.Video,
         private val retryCount: Int,
         uiContext: Context
     ) : Player.Listener {
         private val rendererRef = WeakReference(renderer)
         private val uiContextRef = WeakReference(uiContext)
         private var ready = false
+        private var hasRenderedFirstFrame = false
+        private var isPlayerReady = false
+        private val startTimeMs = SystemClock.elapsedRealtime()
+
+        override fun onVideoSizeChanged(videoSize: VideoSize) {
+            val renderer = rendererRef.get() ?: return
+            val f = frame.get() ?: return
+            if (videoSize.width > 0 && videoSize.height > 0) {
+                val finalHeight = heightForDisplayAspect(
+                    tw,
+                    videoSize.width,
+                    videoSize.height,
+                    videoSize.pixelWidthHeightRatio
+                )
+                if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
+                    f.layoutParams.height = finalHeight
+                    f.requestLayout()
+                    renderer.callback?.onDimensionsUpdated(tw, finalHeight)
+                    renderer.callback?.adjustHeights()
+                }
+            }
+        }
+
+        private fun revealVideo(renderer: MediaRenderer, f: FrameLayout) {
+            if (ready || renderer.callback?.isCleanedUp() == true) return
+            ready = true
+            val revealStartElapsed = SystemClock.elapsedRealtime() - startTimeMs
+            var finalHeight = f.layoutParams.height.takeIf { it > 0 } ?: th
+            renderer.player?.videoSize?.let { vs ->
+                if (vs.width > 0 && vs.height > 0) {
+                    finalHeight = heightForDisplayAspect(tw, vs.width, vs.height, vs.pixelWidthHeightRatio)
+                }
+            }
+            if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
+                f.layoutParams.height = finalHeight
+                f.requestLayout()
+                renderer.callback?.onDimensionsUpdated(tw, finalHeight)
+            }
+            renderer.videoView?.let { keepView ->
+                renderer.crossfadeRevealStream(f, keepView, revealStartElapsed)
+            } ?: run {
+                renderer.callback?.onFirstFrameRendered(revealStartElapsed)
+                renderer.callback?.notifyReady()
+                renderer.callback?.adjustHeights()
+            }
+        }
+
+        override fun onRenderedFirstFrame() {
+            val renderer = rendererRef.get() ?: return
+            val f = frame.get() ?: return
+            hasRenderedFirstFrame = true
+            val elapsed = SystemClock.elapsedRealtime() - startTimeMs
+            val playerReady = isPlayerReady || renderer.player?.playbackState == Player.STATE_READY
+            Log.d("PiPup-Media", "onRenderedFirstFrame after $elapsed ms (isPlayerReady=$playerReady)")
+            if (playerReady) {
+                revealVideo(renderer, f)
+            }
+        }
 
         override fun onPlaybackStateChanged(state: Int) {
             val renderer = rendererRef.get() ?: return
             val f = frame.get() ?: return
-            if (!ready && state == Player.STATE_READY) {
-                ready = true
-                if (renderer.callback?.isReadyCalled() == true || renderer.callback?.isCleanedUp() == true) return
-                var finalHeight = th
-                renderer.player?.videoFormat?.let { if (it.width > 0) finalHeight = (tw * it.height) / it.width }
-                if (finalHeight > 0 && finalHeight != th) {
-                    f.layoutParams.height = finalHeight
-                    f.requestLayout()
-                    renderer.callback?.onDimensionsUpdated(tw, finalHeight)
+            isPlayerReady = (state == Player.STATE_READY)
+            if (!ready && isPlayerReady) {
+                val elapsed = SystemClock.elapsedRealtime() - startTimeMs
+                val popupAlreadyVisible = renderer.callback?.isReadyCalled() == true
+                Log.d(
+                    "PiPup-Media",
+                    "ExoPlayer reached STATE_READY after $elapsed ms " +
+                        "(hasRenderedFirstFrame=$hasRenderedFirstFrame, popupAlreadyVisible=$popupAlreadyVisible)"
+                )
+                if (hasRenderedFirstFrame || !popupAlreadyVisible) {
+                    revealVideo(renderer, f)
                 }
-                renderer.videoView?.let { renderer.removeStaleViews(f, it) }
-                renderer.callback?.notifyReady()
-                renderer.callback?.adjustHeights()
             }
         }
 
@@ -454,7 +883,7 @@ class MediaRenderer(
                         val r = rendererRef.get() ?: return@postAtTime
                         if (r.callback?.isCleanedUp() == false) {
                             f.removeAllViews()
-                            r.renderVideo(f, uri, width, scale, udp, retryCount + 1, ui)
+                            r.renderVideo(f, video, retryCount + 1, ui)
                         }
                     }, renderer.rendererToken, SystemClock.uptimeMillis() + 1000L * (retryCount + 1))
                     return
@@ -469,27 +898,47 @@ class MediaRenderer(
     internal class WebRendererClient(
         renderer: MediaRenderer,
         private val frame: WeakReference<FrameLayout>,
-        private val uri: String,
-        private val width: Int,
-        private val height: Int,
-        private val cache: Boolean,
-        private val scale: Boolean,
+        private val web: PopupProps.Media.Web,
         private val retryCount: Int,
-        uiContext: Context
+        uiContext: Context,
+        private val startTimeMs: Long
     ) : WebViewClient() {
         private val rendererRef = WeakReference(renderer)
         private val uiContextRef = WeakReference(uiContext)
+        @Volatile private var videoElementFound = false
+        private var revealed = false
+
+        fun onVideoFound() {
+            videoElementFound = true
+        }
+
+        fun revealWeb() {
+            if (revealed) return
+            val renderer = rendererRef.get() ?: return
+            val f = frame.get() ?: return
+            val wv = renderer.webView ?: return
+            if (renderer.callback?.isCleanedUp() == true) return
+            revealed = true
+            val elapsed = SystemClock.elapsedRealtime() - startTimeMs
+            renderer.crossfadeRevealStream(f, wv, elapsed)
+        }
+
+        override fun onPageCommitVisible(view: WebView?, url: String?) {
+            view?.evaluateJavascript(VIDEO_WATCH_JS, null)
+            val renderer = rendererRef.get() ?: return
+            renderer.mainHandler.postAtTime({
+                if (!videoElementFound) {
+                    revealWeb()
+                }
+            }, renderer.rendererToken, SystemClock.uptimeMillis() + POSTER_FADE_CAP_MS)
+        }
 
         override fun onPageFinished(v: WebView?, u: String?) {
             Log.d("MediaRenderer", "onPageFinished: $u")
-            val renderer = rendererRef.get() ?: return
-            val f = frame.get() ?: return
-            if (renderer.callback?.isReadyCalled() == false && renderer.callback?.isCleanedUp() == false) {
-                v?.visibility = View.VISIBLE
-                renderer.webView?.let { renderer.removeStaleViews(f, it) }
-                renderer.callback?.notifyReady()
-                renderer.callback?.adjustHeights()
+            if (web.muted) {
+                v?.evaluateJavascript(MUTE_JS, null)
             }
+            v?.evaluateJavascript(VIDEO_WATCH_JS, null)
         }
 
         override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
@@ -509,12 +958,27 @@ class MediaRenderer(
             if (retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
                 renderer.mainHandler.postAtTime({
                     val r = rendererRef.get() ?: return@postAtTime
-                    if (r.callback?.isCleanedUp() == false) r.renderWeb(ui, f, uri, width, height, cache, scale, retryCount + 1)
+                    if (r.callback?.isCleanedUp() == false) r.renderWeb(ui, f, web, retryCount + 1)
                 }, renderer.rendererToken, SystemClock.uptimeMillis() + 1000L * (retryCount + 1))
             } else {
                 renderer.callback?.showPlaceholder(description)
                 renderer.callback?.notifyReady()
                 renderer.callback?.adjustHeights()
+            }
+        }
+    }
+
+    internal class WebStreamChromeClient(
+        private val client: WebRendererClient
+    ) : WebChromeClient() {
+        override fun onPermissionRequest(request: PermissionRequest) {
+            request.grant(request.resources)
+        }
+
+        override fun onReceivedTitle(view: WebView?, title: String?) {
+            when (title) {
+                "pipup:videofound" -> client.onVideoFound()
+                "pipup:playing", "pipup:novideo" -> client.revealWeb()
             }
         }
     }
@@ -562,7 +1026,12 @@ class MediaRenderer(
         private val rendererRef = WeakReference(renderer)
         private val uiContextRef = WeakReference(uiContext)
 
-        override fun onLoadFailed(e: GlideException?, model: Any?, target: Target<Drawable>, isFirstResource: Boolean): Boolean {
+        override fun onLoadFailed(
+            e: GlideException?,
+            model: Any?,
+            target: Target<Drawable>,
+            isFirstResource: Boolean
+        ): Boolean {
             Log.w("MediaRenderer", "Glide load failed: ${e?.message}, model: $model")
             e?.logRootCauses("MediaRenderer")
 
@@ -583,7 +1052,13 @@ class MediaRenderer(
             return false
         }
 
-        override fun onResourceReady(resource: Drawable, model: Any, target: Target<Drawable>?, dataSource: DataSource, isFirstResource: Boolean): Boolean {
+        override fun onResourceReady(
+            resource: Drawable,
+            model: Any,
+            target: Target<Drawable>?,
+            dataSource: DataSource,
+            isFirstResource: Boolean
+        ): Boolean {
             val renderer = rendererRef.get() ?: return false
             val f = frame.get() ?: return false
             val imageView = iv.get() ?: return false
@@ -620,7 +1095,8 @@ class MediaRenderer(
         private val frameRef: WeakReference<FrameLayout>,
         private val tw: Int,
         private val hasExplicitHeight: Boolean,
-        private val retryCount: Int
+        private val retryCount: Int,
+        private val startTimeMs: Long
     ) {
         @JavascriptInterface
         fun onSourceDimensions(sourceWidth: Int, sourceHeight: Int) {
@@ -637,12 +1113,22 @@ class MediaRenderer(
         @JavascriptInterface
         fun onMediaPlaying() {
             val renderer = rendererRef.get() ?: return
-            renderer.mainHandler.postAtTime({ if (renderer.callback?.isCleanedUp() == false) renderer.onWhepReady() }, renderer.rendererToken, SystemClock.uptimeMillis())
+            val elapsed = SystemClock.elapsedRealtime() - startTimeMs
+            renderer.mainHandler.postAtTime({
+                if (renderer.callback?.isCleanedUp() == false) {
+                    renderer.onWhepReady(elapsed)
+                }
+            }, renderer.rendererToken, SystemClock.uptimeMillis())
         }
+
         @JavascriptInterface
         fun onMediaError(error: String) {
             val renderer = rendererRef.get() ?: return
-            renderer.mainHandler.postAtTime({ if (renderer.callback?.isCleanedUp() == false) renderer.onWhepError(error, retryCount) }, renderer.rendererToken, SystemClock.uptimeMillis())
+            renderer.mainHandler.postAtTime({
+                if (renderer.callback?.isCleanedUp() == false) {
+                    renderer.onWhepError(error, retryCount)
+                }
+            }, renderer.rendererToken, SystemClock.uptimeMillis())
         }
     }
 }

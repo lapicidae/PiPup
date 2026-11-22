@@ -167,7 +167,10 @@ abstract class SubmenuBase(
         }
         updateSeekBarAppearance(seekBar, false)
 
-        val isAlwaysVisible = seekBar.id == R.id.seekbar_media_timeout || seekBar.id == R.id.seekbar_media_retries || seekBar.id == R.id.seekbar_max_popups
+        val isAlwaysVisible = seekBar.id == R.id.seekbar_media_timeout ||
+                seekBar.id == R.id.seekbar_media_retries ||
+                seekBar.id == R.id.seekbar_max_popups ||
+                seekBar.id == R.id.seekbar_buffer_ms
         textView?.visibility = if (settings.advancedMode || isAlwaysVisible) View.VISIBLE else View.GONE
     }
 
@@ -177,12 +180,14 @@ abstract class SubmenuBase(
             R.id.seekbar_media_timeout -> context.resources.getQuantityString(R.plurals.settings_media_timeout_seconds, bar.progress, bar.progress)
             R.id.seekbar_media_retries -> context.resources.getQuantityString(R.plurals.settings_media_retries_count, bar.progress, bar.progress)
             R.id.seekbar_max_popups -> "%d"
+            R.id.seekbar_buffer_ms -> if (bar.progress == 0) context.getString(R.string.language_default) else "%d ms"
             R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -> "%d sp"
             else -> context.getString(R.string.settings_slider_value_format, bar.progress, bar.max)
         }
         textView?.text = when (bar.id) {
             R.id.seekbar_animation_duration -> String.format(format, bar.progress)
             R.id.seekbar_max_popups -> String.format(format, bar.progress + 1)
+            R.id.seekbar_buffer_ms -> if (bar.progress == 0) format else String.format(format, bar.progress * 100)
             R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -> String.format(format, bar.progress + 10)
             else -> format
         }
@@ -249,6 +254,25 @@ abstract class SubmenuBase(
             text = currentColor
             visibility = if (settings.advancedMode) View.VISIBLE else View.GONE
             setOnClickListener { handleHexInput(this, currentColor) { onColorSet(it) } }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+    }
+
+    protected fun setupSwitch(
+        root: View,
+        containerId: Int,
+        switchId: Int,
+        initialChecked: Boolean,
+        onChanged: (Boolean) -> Unit
+    ) {
+        root.findViewById<View>(containerId)?.apply {
+            val sw = findViewById<SwitchCompat>(switchId) ?: return@apply
+            sw.isChecked = initialChecked
+            setOnClickListener { sw.toggle() }
+            sw.setOnCheckedChangeListener { _, isChecked ->
+                onChanged(isChecked)
+                onSettingsChanged(false)
+            }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
         }
     }
@@ -368,7 +392,7 @@ abstract class SubmenuBase(
 
     protected fun notifySettingsChanged() {
         val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
-            setPackage(context.packageName)
+            setPackage(PiPupApp.APP_PACKAGE)
         }
         context.sendBroadcast(intent)
     }

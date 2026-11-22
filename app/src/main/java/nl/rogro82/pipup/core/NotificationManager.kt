@@ -82,6 +82,10 @@ class NotificationManager(
         private set
     @Volatile var lastPopupAt: Long = 0L
         private set
+    @Volatile var lastFirstFrameMs: Long? = null
+        private set
+    @Volatile var lastMediaError: String? = null
+        private set
 
     var onPopupShown: ((PopupProps) -> Unit)? = null
     var onPopupRemoved: ((String, String) -> Unit)? = null
@@ -197,6 +201,8 @@ class NotificationManager(
             popupsShown.incrementAndGet()
             lastPopup = props
             lastPopupAt = SystemClock.elapsedRealtime()
+            lastFirstFrameMs = null
+            lastMediaError = null
 
             val id = props.id
 
@@ -966,6 +972,12 @@ class NotificationManager(
         val view = PopupView(localizedContext, props).apply {
             onButton = { btn ->
                 PipUpService.getInstance()?.handleButtonClick(this.props, btn, slotKey)
+            }
+            onFirstFrame = { ms ->
+                lastFirstFrameMs = ms
+            }
+            onMediaError = { err ->
+                lastMediaError = err
             }
             onLayoutAdjusted = {
                 synchronized(this@NotificationManager) {
