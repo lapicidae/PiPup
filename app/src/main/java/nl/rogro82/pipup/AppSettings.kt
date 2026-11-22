@@ -200,12 +200,14 @@ class AppSettings(context: Context) {
     var popupLoadingBehavior by IntPref("popup_loading_behavior", 0)
     /** Default buffer duration in ms for video playback (0 = ExoPlayer default ~2500ms). */
     var defaultBufferMs by IntPref("default_buffer_ms", 0)
+
+    // Media Display Defaults
     /** Whether to display a loading placeholder while streams are connecting. */
     var mediaLoadingPlaceholder by BooleanPref("media_loading_placeholder", false)
-
-    // Media Display Defaults (General)
     /** Whether media runs edge-to-edge across the top of the popup by default. */
     var mediaFullBleed by BooleanPref("media_full_bleed", false)
+    /** Whether smaller media is upscaled to fill the available area in fullscreen popups by default. */
+    var fullscreenUpscale by BooleanPref("fullscreen_upscale", false)
     /** Whether a Live indicator pill is shown on live streams by default. */
     var liveBadge by BooleanPref("live_badge", false)
     /** Default corner position for the Live indicator pill. */
@@ -299,6 +301,7 @@ class AppSettings(context: Context) {
         val defaultBufferMs: Int = 0,
         val mediaLoadingPlaceholder: Boolean = false,
         val mediaFullBleed: Boolean = false,
+        val fullscreenUpscale: Boolean = false,
         val liveBadge: Boolean = false,
         val liveBadgePosition: String = "bottom_right",
         val appTheme: Int,
@@ -343,6 +346,7 @@ class AppSettings(context: Context) {
                 put("defaultBufferMs", defaultBufferMs)
                 put("mediaLoadingPlaceholder", mediaLoadingPlaceholder)
                 put("mediaFullBleed", mediaFullBleed)
+                put("fullscreenUpscale", fullscreenUpscale)
                 put("liveBadge", liveBadge)
                 put("liveBadgePosition", liveBadgePosition)
                 put("appTheme", appTheme)
@@ -391,6 +395,7 @@ class AppSettings(context: Context) {
                     defaultBufferMs = j.optInt("defaultBufferMs", 0),
                     mediaLoadingPlaceholder = j.optBoolean("mediaLoadingPlaceholder", false),
                     mediaFullBleed = j.optBoolean("mediaFullBleed", false),
+                    fullscreenUpscale = j.optBoolean("fullscreenUpscale", false),
                     liveBadge = j.optBoolean("liveBadge", false),
                     liveBadgePosition = j.optString("liveBadgePosition", "bottom_right"),
                     appTheme = j.optInt("appTheme", 0),
@@ -449,6 +454,7 @@ class AppSettings(context: Context) {
             defaultBufferMs = defaultBufferMs,
             mediaLoadingPlaceholder = mediaLoadingPlaceholder,
             mediaFullBleed = mediaFullBleed,
+            fullscreenUpscale = fullscreenUpscale,
             liveBadge = liveBadge,
             liveBadgePosition = liveBadgePosition,
             appTheme = appTheme,
@@ -496,6 +502,7 @@ class AppSettings(context: Context) {
         defaultBufferMs = data.defaultBufferMs.coerceIn(0, 10000)
         mediaLoadingPlaceholder = data.mediaLoadingPlaceholder
         mediaFullBleed = data.mediaFullBleed
+        fullscreenUpscale = data.fullscreenUpscale
         liveBadge = data.liveBadge
         liveBadgePosition = data.liveBadgePosition.takeIf {
             it in listOf("top_left", "top_right", "bottom_left", "bottom_right")
@@ -607,6 +614,7 @@ class AppSettings(context: Context) {
             animationDuration = if (props.animationDuration == 500) animationDuration else props.animationDuration,
             animationExit = props.animationExit || animationExit,
             mediaFullBleed = props.mediaFullBleed ?: mediaFullBleed,
+            fullscreenUpscale = props.fullscreenUpscale ?: fullscreenUpscale,
             liveBadge = props.liveBadge ?: liveBadge,
             liveBadgePosition = props.liveBadgePosition ?: liveBadgePosition
         )

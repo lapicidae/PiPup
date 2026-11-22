@@ -3,12 +3,14 @@ package nl.rogro82.pipup.core
 import android.content.Context
 import android.graphics.PixelFormat
 import android.graphics.Rect
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.LinearLayout
@@ -70,7 +72,8 @@ class NotificationManager(
     private var reprocessQueueRequested = false
     private data class ContainerKey(
         val position: PopupProps.Position,
-        val direction: PopupProps.StackDirection
+        val direction: PopupProps.StackDirection,
+        val fullscreen: Boolean = false
     )
 
     private val containers = mutableMapOf<ContainerKey, LinearLayout>()
@@ -270,7 +273,7 @@ class NotificationManager(
         val current = mShown[id] ?: return
         val oldPos = current.props.getPositionEnum()
         val newPos = props.getPositionEnum()
-        val positionChanged = oldPos != newPos
+        val positionChanged = oldPos != newPos || current.props.coversScreen != props.coversScreen
 
         current.expire?.let { handler.removeCallbacks(it) }
         handler.removeCallbacksAndMessages(current)
@@ -278,7 +281,7 @@ class NotificationManager(
         if (positionChanged) {
             val oldContainer = current.container
             oldContainer?.removeView(current.view)
-            val newContainer = ensurePositionContainer(newPos, props.stack)
+            val newContainer = ensurePositionContainer(newPos, props.effectiveStack, props.coversScreen)
 
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -373,10 +376,17 @@ class NotificationManager(
         val baseMargin = context.dpToPx(20)
         val gapPx = context.dpToPx(STACK_GAP_DP)
 
-        val grouped = items.groupBy {
+        val (fullscreenItems, normalItems) = items.partition { it.props.coversScreen }
+        val grouped = normalItems.groupBy {
             ContainerKey(it.props.getPositionEnum(), it.props.getStackDirectionEnum())
         }
         val result = LinkedHashMap<String, Rect>(items.size)
+
+        for ((key, _, width, height) in fullscreenItems) {
+            val left = (screenWidth - width) / 2
+            val top = (screenHeight - height) / 2
+            result[key] = Rect(left, top, left + width, top + height)
+        }
 
         for (pos in PopupProps.Position.entries) {
             val vItems = grouped[ContainerKey(pos, PopupProps.StackDirection.VERTICAL)].orEmpty()
@@ -570,12 +580,28 @@ class NotificationManager(
 
         val conflictingKeys = LinkedHashSet<String>()
 
+        fun sharesContainer(a: PopupProps, b: PopupProps): Boolean {
+            return !a.coversScreen && !b.coversScreen &&
+                a.getPositionEnum() == b.getPositionEnum() &&
+                a.getStackDirectionEnum() == b.getStackDirectionEnum()
+        }
+
+        fun isOutOfBounds(rect: Rect, coversScreen: Boolean): Boolean {
+            val margin = if (coversScreen) 0 else baseMargin
+            return rect.left < margin || rect.right > screenWidth - margin ||
+                rect.top < margin || rect.bottom > screenHeight - margin
+        }
+
+        if (props.coversScreen) {
+            existingItems.forEach { conflictingKeys.add(it.key) }
+        } else {
+            existingItems.filter { it.props.coversScreen }.forEach { conflictingKeys.add(it.key) }
+        }
+
         // 1. Pairwise overlap check between candidate and all existing slots in other containers
         for ((otherKey, otherProps) in existingItems) {
-            val sameContainer = otherProps.getPositionEnum() == candidatePos &&
-                otherProps.getStackDirectionEnum() == candidateDir
             val otherRect = simulatedRects[otherKey]
-            if (!sameContainer && otherRect != null &&
+            if (!sharesContainer(props, otherProps) && otherRect != null &&
                 rectsOverlapWithGap(candidateRect, otherRect)
             ) {
                 conflictingKeys.add(otherKey)
@@ -583,15 +609,15 @@ class NotificationManager(
         }
 
         // 2. Induced overlap check: adding candidate may shift existing slots at candidatePos
-        val shiftedExisting = existingItems.filter { it.props.getPositionEnum() == candidatePos }
+        val shiftedExisting = existingItems.filter {
+            !it.props.coversScreen && it.props.getPositionEnum() == candidatePos
+        }
         for ((keyA, propsA) in shiftedExisting) {
             val rectA = simulatedRects[keyA]
             if (rectA != null) {
                 for ((keyB, propsB) in existingItems) {
-                    val sameContainer = propsA.getPositionEnum() == propsB.getPositionEnum() &&
-                        propsA.getStackDirectionEnum() == propsB.getStackDirectionEnum()
                     val rectB = simulatedRects[keyB]
-                    if (keyA != keyB && !sameContainer && rectB != null &&
+                    if (keyA != keyB && !sharesContainer(propsA, propsB) && rectB != null &&
                         rectsOverlapWithGap(rectA, rectB)
                     ) {
                         conflictingKeys.add(keyB)
@@ -604,21 +630,13 @@ class NotificationManager(
         // 3. Screen bounds & stack overflow check when at least one active slot exists
         var isBoundsOverflow = false
         if (existingItems.isNotEmpty()) {
-            val candidateOutOfBounds = candidateRect.left < baseMargin ||
-                candidateRect.right > screenWidth - baseMargin ||
-                candidateRect.top < baseMargin ||
-                candidateRect.bottom > screenHeight - baseMargin
-
+            val candidateOutOfBounds = isOutOfBounds(candidateRect, props.coversScreen)
             val shiftedOutOfBounds = shiftedExisting.any { item ->
                 val r = simulatedRects[item.key] ?: return@any false
-                r.left < baseMargin || r.right > screenWidth - baseMargin ||
-                    r.top < baseMargin || r.bottom > screenHeight - baseMargin
+                isOutOfBounds(r, item.props.coversScreen)
             }
 
-            val sameContainerItems = existingItems.filter {
-                it.props.getPositionEnum() == candidatePos &&
-                    it.props.getStackDirectionEnum() == candidateDir
-            }
+            val sameContainerItems = existingItems.filter { sharesContainer(props, it.props) }
 
             val isVerticalStack = candidateDir == PopupProps.StackDirection.VERTICAL &&
                 sameContainerItems.isNotEmpty()
@@ -864,6 +882,11 @@ class NotificationManager(
     }
 
     private fun applyStackingMargins(lp: LinearLayout.LayoutParams, props: PopupProps) {
+        if (props.coversScreen) {
+            lp.setMargins(0, 0, 0, 0)
+            lp.gravity = Gravity.CENTER
+            return
+        }
         val gapPx = context.dpToPx(STACK_GAP_DP)
         val pos = props.getPositionEnum()
         val side = pos.getScreenSide()
@@ -892,8 +915,12 @@ class NotificationManager(
         }
     }
 
-    private fun applyPositionToLayoutParams(params: FrameLayout.LayoutParams, position: PopupProps.Position) {
-        val margin = context.dpToPx(20)
+    private fun applyPositionToLayoutParams(
+        params: FrameLayout.LayoutParams,
+        position: PopupProps.Position,
+        fullscreen: Boolean = false
+    ) {
+        val margin = if (fullscreen) 0 else context.dpToPx(20)
         params.gravity = when (position) {
             PopupProps.Position.TopRight -> Gravity.TOP or Gravity.END
             PopupProps.Position.TopLeft -> Gravity.TOP or Gravity.START
@@ -925,10 +952,14 @@ class NotificationManager(
         }
     }
 
-    private fun ensurePositionContainer(position: PopupProps.Position, stack: String? = null): LinearLayout {
+    private fun ensurePositionContainer(
+        position: PopupProps.Position,
+        stack: String? = null,
+        fullscreen: Boolean = false
+    ): LinearLayout {
         val overlayView = ensureOverlay()!!
-        val direction = PopupProps.parseStackDirection(stack)
-        val key = ContainerKey(position, direction)
+        val direction = PopupProps.parseStackDirection(if (fullscreen) null else stack)
+        val key = ContainerKey(position, direction, fullscreen)
 
         return containers.getOrPut(key) {
             PositionContainer(context).apply {
@@ -952,7 +983,7 @@ class NotificationManager(
                     FrameLayout.LayoutParams.WRAP_CONTENT,
                     FrameLayout.LayoutParams.WRAP_CONTENT
                 ).apply {
-                    applyPositionToLayoutParams(this, position)
+                    applyPositionToLayoutParams(this, position, fullscreen)
                 }
                 overlayView.addView(this, params)
             }
@@ -1087,7 +1118,7 @@ class NotificationManager(
         val slotKey = shown.key
         val props = shown.props
         val view = shown.view
-        val container = ensurePositionContainer(props.getPositionEnum(), props.stack)
+        val container = ensurePositionContainer(props.getPositionEnum(), props.effectiveStack, props.coversScreen)
         shown.container = container
 
         if (!props.id.isNullOrEmpty()) {
@@ -1323,8 +1354,9 @@ class NotificationManager(
 
     private fun canUpdateInPlace(oldProps: PopupProps, newProps: PopupProps): Boolean {
         return oldProps.id == newProps.id &&
+               oldProps.coversScreen == newProps.coversScreen &&
                oldProps.getPositionEnum() == newProps.getPositionEnum() &&
-               oldProps.stack == newProps.stack
+               oldProps.effectiveStack == newProps.effectiveStack
     }
 
     /**
@@ -1487,19 +1519,49 @@ class NotificationManager(
         }
     }
 
-    private fun updateOverlayFocusability() {
-        val overlayView = overlay ?: return
-        val hasButtons = mShown.values.any { it.props.buttons.isNotEmpty() } || mExiting.values.any { it.props.buttons.isNotEmpty() }
-        val params = overlayView.layoutParams as? WindowManager.LayoutParams ?: return
+    private fun hasActiveFullscreen(): Boolean {
+        return mShown.values.any { it.props.coversScreen } ||
+            mExiting.values.any { it.props.coversScreen }
+    }
 
-        val targetFlags = if (hasButtons) {
+    private fun computeOverlayFlags(): Int {
+        val hasButtons = mShown.values.any { it.props.buttons.isNotEmpty() } ||
+            mExiting.values.any { it.props.buttons.isNotEmpty() }
+        var flags = if (hasButtons) {
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
         } else {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         }
+        if (hasActiveFullscreen()) {
+            flags = flags or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+        }
+        return flags
+    }
+
+    private fun applyFullscreenWindowAttributes(params: WindowManager.LayoutParams) {
+        val hasFullscreen = hasActiveFullscreen()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            params.layoutInDisplayCutoutMode = if (hasFullscreen) {
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            } else {
+                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+            }
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            params.fitInsetsTypes = if (hasFullscreen) 0 else WindowInsets.Type.systemBars()
+        }
+    }
+
+    private fun updateOverlayFocusability() {
+        val overlayView = overlay ?: return
+        val params = overlayView.layoutParams as? WindowManager.LayoutParams ?: return
+        val targetFlags = computeOverlayFlags()
 
         if (params.flags != targetFlags) {
             params.flags = targetFlags
+            applyFullscreenWindowAttributes(params)
             try {
                 windowManager.updateViewLayout(overlayView, params)
             } catch (e: Exception) {
@@ -1514,18 +1576,14 @@ class NotificationManager(
             clipChildren = false
             clipToPadding = false
         }
-        val hasButtons = mShown.values.any { it.props.buttons.isNotEmpty() } || mExiting.values.any { it.props.buttons.isNotEmpty() }
-        val initialFlags = if (hasButtons) {
-            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-        } else {
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-        }
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            initialFlags,
+            computeOverlayFlags(),
             PixelFormat.TRANSLUCENT
-        )
+        ).apply {
+            applyFullscreenWindowAttributes(this)
+        }
         return try {
             windowManager.addView(view, params)
             overlay = view

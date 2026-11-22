@@ -34,33 +34,8 @@ class GeneralSubmenu(
             settings.positionIndex = it
         }
 
-        val mediaPosItems = context.resources.getStringArray(R.array.media_position_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_media_position, ArrayAdapter(context, android.R.layout.simple_spinner_item, mediaPosItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.mediaPosition) {
-            settings.mediaPosition = it
-        }
-
         setupSeekBar(root, R.id.seekbar_padding, R.id.text_padding_value, settings.contentPadding) {
             settings.contentPadding = it
-        }
-
-        // Media Full Bleed Toggle
-        setupSwitch(root, R.id.container_media_full_bleed, R.id.switch_media_full_bleed, settings.mediaFullBleed) {
-            settings.mediaFullBleed = it
-        }
-
-        // Live Badge Toggle & Position
-        val liveBadgePosItems = context.resources.getStringArray(R.array.live_badge_position_options)
-        val liveBadgePosKeys = listOf("bottom_right", "top_right", "top_left", "bottom_left")
-        val currentLiveBadgePosIndex = liveBadgePosKeys.indexOf(settings.liveBadgePosition).coerceAtLeast(0)
-
-        setupSwitch(root, R.id.container_live_badge, R.id.switch_live_badge, settings.liveBadge) {
-            settings.liveBadge = it
-        }
-
-        setupSpinner(root, R.id.spinner_live_badge_position, ArrayAdapter(context, android.R.layout.simple_spinner_item, liveBadgePosItems).apply {
-            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-        }, currentLiveBadgePosIndex) {
-            settings.liveBadgePosition = liveBadgePosKeys.getOrElse(it) { "bottom_right" }
         }
 
         val langCodes = context.resources.getStringArray(R.array.language_codes)

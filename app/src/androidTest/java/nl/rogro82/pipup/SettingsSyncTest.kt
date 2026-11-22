@@ -54,6 +54,7 @@ class SettingsSyncTest {
             defaultBufferMs = 750,
             mediaLoadingPlaceholder = true,
             mediaFullBleed = true,
+            fullscreenUpscale = true,
             liveBadge = true,
             liveBadgePosition = "top_left"
         )
@@ -79,6 +80,7 @@ class SettingsSyncTest {
             assertEquals(750, currentSettings.defaultBufferMs)
             assertTrue(currentSettings.mediaLoadingPlaceholder)
             assertTrue(currentSettings.mediaFullBleed)
+            assertTrue(currentSettings.fullscreenUpscale)
             assertTrue(currentSettings.liveBadge)
             assertEquals("top_left", currentSettings.liveBadgePosition)
 
@@ -98,6 +100,7 @@ class SettingsSyncTest {
             PiPupApp.settings.borderRadius = 50
             PiPupApp.settings.defaultBufferMs = 800
             PiPupApp.settings.mediaFullBleed = true
+            PiPupApp.settings.fullscreenUpscale = true
             PiPupApp.settings.liveBadge = true
             PiPupApp.settings.liveBadgePosition = "top_right"
 
@@ -113,6 +116,7 @@ class SettingsSyncTest {
             assertEquals("#C8112233", enqueuedProps.backgroundColor)
             assertEquals(50, enqueuedProps.borderRadius)
             assertEquals(true, enqueuedProps.mediaFullBleed)
+            assertEquals(true, enqueuedProps.fullscreenUpscale)
             assertEquals(true, enqueuedProps.liveBadge)
             assertEquals("top_right", enqueuedProps.liveBadgePosition)
             assertEquals(800, (enqueuedProps.media as PopupProps.Media.Video).bufferMs)

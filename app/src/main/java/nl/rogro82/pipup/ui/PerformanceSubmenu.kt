@@ -59,11 +59,6 @@ class PerformanceSubmenu(
             updateBufferDesc(ms)
         }
 
-        // Media Loading Placeholder Toggle
-        setupSwitch(root, R.id.container_media_placeholder, R.id.switch_media_placeholder, settings.mediaLoadingPlaceholder) {
-            settings.mediaLoadingPlaceholder = it
-        }
-
         render()
     }
 

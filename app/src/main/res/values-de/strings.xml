@@ -18,6 +18,7 @@
     <string name="settings_nav_text">Textstil</string>
     <string name="settings_nav_border">Rahmen</string>
     <string name="settings_nav_button">Buttons</string>
+    <string name="settings_nav_media">Medien</string>
     <string name="settings_nav_animation">Animation</string>
     <string name="settings_nav_updates">Updates</string>
     <string name="settings_nav_modules">Module</string>
@@ -31,22 +32,53 @@
     <string name="settings_theme_dark">Dunkel</string>
     <string name="settings_theme_light">Hell</string>
 
-    <!-- Allgemeine Einstellungen: Layout & Medien -->
+    <!-- Allgemeine Einstellungen -->
     <string name="settings_position">Popup-Position</string>
     <string name="settings_padding">Inhaltspolsterung</string>
+
+    <!-- Hintergrund-Optik -->
+    <string name="settings_bg_color">Hintergrundfarbe</string>
+    <string name="settings_opacity">Hintergrund-Deckkraft</string>
+
+    <!-- Text-Optik -->
+    <string name="settings_title_color">Titelfarbe</string>
+    <string name="settings_title_size">Titel-Schriftgröße</string>
+    <string name="settings_message_color">Nachrichtenfarbe</string>
+    <string name="settings_message_size">Nachrichten-Schriftgröße</string>
+    <string name="settings_title_alignment">Titel-Ausrichtung</string>
+    <string name="settings_message_alignment">Nachrichten-Ausrichtung</string>
+
+    <!-- Rahmen-Optik -->
+    <string name="settings_border_radius">Eckenradius</string>
+    <string name="settings_border_width">Rahmenbreite</string>
+    <string name="settings_border_color">Rahmenfarbe</string>
+
+    <!-- Button-Optik & Styling -->
+    <string name="settings_button_style">Button-Stil</string>
+    <string name="settings_button_text_size">Button-Schriftgröße (sp)</string>
+    <string name="settings_button_radius">Eckenradius (px)</string>
+    <string name="settings_button_fill_color">Button-Füllfarbe</string>
+    <string name="settings_button_focus_color">Button-Fokusfarbe</string>
+    <string name="settings_button_text_color">Button-Textfarbe</string>
+    <string name="settings_button_focus_text_color">Button-Fokustextfarbe</string>
+    <string name="settings_button_border_color">Button-Rahmenfarbe</string>
+
+    <!-- Medien-Darstellung -->
     <string name="settings_media_position">Medienposition</string>
-    <string name="settings_media_timeout">Medien-Timeout</string>
-    <string name="settings_media_retries">Medien-Ladeversuche</string>
-    <!-- %1$d: Anzahl der Versuche -->
-    <plurals name="settings_media_retries_count">
-        <item quantity="one">%1$d Versuch</item>
-        <item quantity="other">%1$d Versuche</item>
-    </plurals>
-    <!-- %1$d: Sekunden -->
-    <plurals name="settings_media_timeout_seconds">
-        <item quantity="one">%1$d Sekunde</item>
-        <item quantity="other">%1$d Sekunden</item>
-    </plurals>
+    <string name="settings_media_full_bleed">Vollflächen-Medien (Edge-to-Edge)</string>
+    <string name="settings_media_full_bleed_desc">Streckt Medien nahtlos an die oberen Ränder des Popups ohne Außenabstand.</string>
+    <string name="settings_fullscreen_upscale">Vollbild-Medien hochskalieren</string>
+    <string name="settings_fullscreen_upscale_desc">Vergrößert Medien mit geringerer Originalauflösung in Vollbild-Popups auf den verfügbaren Platz (sofern keine feste Breite angegeben wurde).</string>
+    <string name="settings_live_badge">\"Live\"-Indikator anzeigen</string>
+    <string name="settings_live_badge_desc">Blendet eine rote LIVE-Pille bei laufenden Video- und WHEP-Streams ein.</string>
+    <string name="settings_live_badge_position">Standard-Position der Live-Pille</string>
+    <string name="settings_live_badge_pos_bottom_right">Unten Rechts</string>
+    <string name="settings_live_badge_pos_top_right">Oben Rechts</string>
+    <string name="settings_live_badge_pos_top_left">Oben Links</string>
+    <string name="settings_live_badge_pos_bottom_left">Unten Links</string>
+    <string name="live_badge_text_label">LIVE</string>
+    <string name="settings_media_loading_placeholder">Lade-Vorschau anzeigen</string>
+    <string name="settings_media_loading_placeholder_desc">Zeigt eine dezente Kachel an, während Video- oder Web-Streams die Verbindung aufbauen.</string>
 
     <!-- Animations-Einstellungen -->
     <string name="settings_animation_type">Animations-Typ</string>
@@ -65,64 +97,35 @@
     <string name="settings_exit_animation">Beendigungs-Animation</string>
     <string name="settings_exit_animation_desc">Invertiert die Eingangs-Animation beim Schließen des Popups.</string>
 
-    <!-- Hintergrund-Optik -->
-    <string name="settings_bg_color">Hintergrundfarbe</string>
-    <string name="settings_opacity">Hintergrund-Deckkraft</string>
-
-    <!-- Text-Optik -->
-    <string name="settings_title_color">Titelfarbe</string>
-    <string name="settings_title_size">Titel-Schriftgröße</string>
-    <string name="settings_message_color">Nachrichtenfarbe</string>
-    <string name="settings_message_size">Nachrichten-Schriftgröße</string>
-    <string name="settings_title_alignment">Titel-Ausrichtung</string>
-    <string name="settings_message_alignment">Nachrichten-Ausrichtung</string>
-
-    <!-- Medien-Performance & Erweiterte Optionen -->
+    <!-- Leistung & Stream-Puffer -->
+    <string name="settings_loading_behavior">Schnelles paralleles Laden</string>
+    <string name="settings_loading_behavior_desc">Weicht von der Eingangsreihenfolge ab, wenn andere Popups im Hintergrund bereits fertig geladen sind.</string>
     <string name="settings_buffer_ms">Stream-Puffer</string>
     <string name="settings_buffer_ms_desc">Initiale Pufferzeit für Video-Streams (ExoPlayer). Niedrige Werte reduzieren Verzögerung, höhere Werte verhindern Ruckler.</string>
     <string name="settings_buffer_ms_default">Standard (~2500 ms) – Empfohlen bei schwachem WLAN</string>
     <string name="settings_buffer_ms_low">Niedrig (%1$d ms) – Ultra-Echtzeit (Türklingel / Sprechanlage)</string>
     <string name="settings_buffer_ms_medium">Ausgewogen (%1$d ms) – Empfohlen für LAN &amp; stabiles WLAN</string>
     <string name="settings_buffer_ms_high">Hoch (%1$d ms) – Hoher Puffer gegen Bildstottern</string>
-    <!-- %1$d: Pufferzeit in Millisekunden -->
-    <string name="settings_buffer_ms_value">%1$d ms</string>
-    <string name="settings_media_loading_placeholder">Lade-Vorschau anzeigen</string>
-    <string name="settings_media_loading_placeholder_desc">Zeigt eine dezente Kachel an, während Video- oder Web-Streams die Verbindung aufbauen.</string>
-    <string name="settings_media_full_bleed">Vollflächen-Medien (Edge-to-Edge)</string>
-    <string name="settings_media_full_bleed_desc">Streckt Medien nahtlos an die oberen Ränder des Popups ohne Außenabstand.</string>
-    <string name="settings_live_badge">\"Live\"-Indikator anzeigen</string>
-    <string name="settings_live_badge_desc">Blendet eine rote LIVE-Pille bei laufenden Video- und WHEP-Streams ein.</string>
-    <string name="settings_live_badge_position">Position der Live-Pille</string>
-    <string name="settings_live_badge_pos_bottom_right">Unten Rechts</string>
-    <string name="settings_live_badge_pos_top_right">Oben Rechts</string>
-    <string name="settings_live_badge_pos_top_left">Oben Links</string>
-    <string name="settings_live_badge_pos_bottom_left">Unten Links</string>
-    <string name="live_badge_text_label">LIVE</string>
 
-    <!-- Rahmen-Optik -->
-    <string name="settings_border_radius">Eckenradius</string>
-    <string name="settings_border_width">Rahmenbreite</string>
-    <string name="settings_border_color">Rahmenfarbe</string>
-
-    <!-- Button Appearance & Styling -->
-    <string name="settings_button_style">Button-Stil</string>
-    <string name="settings_button_text_size">Button-Schriftgröße (sp)</string>
-    <string name="settings_button_radius">Eckenradius (px)</string>
-    <string name="settings_button_fill_color">Button-Füllfarbe</string>
-    <string name="settings_button_focus_color">Button-Fokusfarbe</string>
-    <string name="settings_button_text_color">Button-Textfarbe</string>
-    <string name="settings_button_focus_text_color">Button-Fokustextfarbe</string>
-    <string name="settings_button_border_color">Button-Rahmenfarbe</string>
-
-    <!-- Experten-Tools & Migration -->
+    <!-- Experten-Tools, Medien-Ladeverhalten & Migration -->
     <string name="settings_migration">Migration &amp; Synchronisation</string>
     <string name="settings_tools">Experten-Tools</string>
     <string name="settings_media_loading">Medien-Ladeverhalten</string>
     <string name="settings_danger_zone">Gefahrenzone</string>
     <string name="settings_advanced_mode">Erweiterter Modus</string>
     <string name="settings_advanced_mode_desc">Aktiviert die manuelle HEX-Code Eingabe und zeigt präzise numerische Schieberegler-Werte an.</string>
-    <string name="settings_loading_behavior">Schnelles paralleles Laden</string>
-    <string name="settings_loading_behavior_desc">Weicht von der Eingangsreihenfolge ab, wenn andere Popups im Hintergrund bereits fertig geladen sind.</string>
+    <string name="settings_media_timeout">Medien-Timeout</string>
+    <string name="settings_media_retries">Medien-Ladeversuche</string>
+    <!-- %1$d: Anzahl der Versuche -->
+    <plurals name="settings_media_retries_count">
+        <item quantity="one">%1$d Versuch</item>
+        <item quantity="other">%1$d Versuche</item>
+    </plurals>
+    <!-- %1$d: Sekunden -->
+    <plurals name="settings_media_timeout_seconds">
+        <item quantity="one">%1$d Sekunde</item>
+        <item quantity="other">%1$d Sekunden</item>
+    </plurals>
     <!-- %1$s: App-Name -->
     <string name="settings_import_network">Von anderem %1$s importieren</string>
     <string name="settings_import_discover">Suche nach Geräten…</string>

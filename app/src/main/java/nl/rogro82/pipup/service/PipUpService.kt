@@ -400,7 +400,8 @@ class PipUpService : Service() {
             state["lastPopup"] = mapOf(
                 "id" to last.id,
                 "position" to last.getPositionEnum().name,
-                "stack" to last.stack,
+                "stack" to last.effectiveStack,
+                "fullscreen" to last.coversScreen,
                 "duration" to last.duration,
                 "indefinite" to (last.duration <= 0),
                 "muted" to mediaMuted(last),

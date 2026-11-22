@@ -552,6 +552,40 @@ class NotificationApiTest {
             assertEquals(480, mediaObj.getInt("width"))
             assertEquals(true, mediaObj.getBoolean("poster"))
             assertEquals(350, mediaObj.getInt("bufferMs"))
+            assertEquals(false, lastPopup.getBoolean("fullscreen"))
+
+            // Verify fullscreen popup contract: fullscreen=true forces effectiveStack=null in /state
+            val fsPayload = """{
+                "id": "fs_parity_1",
+                "title": "Fullscreen Canvas",
+                "position": "TopRight",
+                "stack": "horizontal",
+                "fullscreen": true,
+                "overwrite": true,
+                "duration": 15
+            }"""
+            val fsRes = sendPostWithResponse("$baseUrl/notify", fsPayload.toByteArray())
+            assertEquals(200, fsRes.code)
+
+            Thread.sleep(400)
+            val fsStateJson = org.json.JSONObject(sendGetWithResponse("$baseUrl/state").body)
+            val fsLastPopup = fsStateJson.getJSONObject("lastPopup")
+            assertEquals("fs_parity_1", fsLastPopup.getString("id"))
+            assertEquals(true, fsLastPopup.getBoolean("fullscreen"))
+            assertTrue("Fullscreen popup never stacks", fsLastPopup.isNull("stack"))
+
+            val dm = context.resources.displayMetrics
+            val fsMetricsProps = PopupProps.fromJson(
+                """{
+                    "fullscreen": true,
+                    "title": "Dashboard",
+                    "message": "Auto-sized fullscreen layout",
+                    "media": { "web": { "uri": "http://127.0.0.1" } }
+                }"""
+            )
+            val fsMetrics = fsMetricsProps.calculateMetrics(context)
+            assertEquals(dm.widthPixels, fsMetrics.width)
+            assertEquals(dm.heightPixels, fsMetrics.height)
         } finally {
             sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
         }

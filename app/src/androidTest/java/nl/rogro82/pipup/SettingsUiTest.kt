@@ -24,15 +24,34 @@ class SettingsUiTest {
     @Test
     fun testInitialState() {
         ActivityScenario.launch(SettingsActivity::class.java).use {
-            // Verify General submenu is loaded by default, including Full-Bleed and LIVE Badge controls
+            // Verify General submenu is loaded by default with core layout and app controls
             onView(withId(R.id.text_position)).check(matches(isDisplayed()))
             onView(withId(R.id.spinner_position)).check(matches(isDisplayed()))
+            onView(withId(R.id.seekbar_padding)).check(matches(isDisplayed()))
+            onView(withId(R.id.spinner_language))
+                .perform(androidx.test.espresso.action.ViewActions.scrollTo())
+                .check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun testMediaSubmenu() {
+        ActivityScenario.launch(SettingsActivity::class.java).use {
+            it.onActivity { activity ->
+                activity.findViewById<View>(R.id.nav_item_media).requestFocus()
+            }
+            Thread.sleep(1000)
+
+            onView(withId(R.id.spinner_media_position)).check(matches(isDisplayed()))
             onView(withId(R.id.switch_media_full_bleed)).check(matches(isDisplayed()))
-            onView(withId(R.id.switch_live_badge)).check(matches(isDisplayed()))
+            onView(withId(R.id.switch_fullscreen_upscale)).check(matches(isDisplayed()))
+            onView(withId(R.id.switch_live_badge))
+                .perform(androidx.test.espresso.action.ViewActions.scrollTo())
+                .check(matches(isDisplayed()))
             onView(withId(R.id.spinner_live_badge_position))
                 .perform(androidx.test.espresso.action.ViewActions.scrollTo())
                 .check(matches(isDisplayed()))
-            onView(withId(R.id.spinner_language))
+            onView(withId(R.id.switch_media_placeholder))
                 .perform(androidx.test.espresso.action.ViewActions.scrollTo())
                 .check(matches(isDisplayed()))
         }

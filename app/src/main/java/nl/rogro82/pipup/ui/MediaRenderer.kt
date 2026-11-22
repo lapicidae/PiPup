@@ -152,6 +152,53 @@ class MediaRenderer(
             val displayWidth = width * ratio
             return (targetWidth * height / displayWidth).roundToInt()
         }
+
+        /**
+         * Computes target dimensions `(width, height)` for a media source of `[sourceW] x [sourceH]`
+         * inside a fullscreen available box `[availW] x [availH]`, optionally bounded by explicit
+         * payload dimensions `[requestedW]` and `[requestedH]`, preserving display aspect ratio
+         * (including `[pixelWidthHeightRatio]`). When `[upscale]` is false, dimensions are never scaled
+         * beyond the native display size (`scale <= 1.0f`).
+         */
+        internal fun fitInFullscreenBox(
+            availW: Int,
+            availH: Int,
+            sourceW: Int,
+            sourceH: Int,
+            pixelWidthHeightRatio: Float = 1f,
+            upscale: Boolean = false,
+            requestedW: Int? = null,
+            requestedH: Int? = null
+        ): Pair<Int, Int> {
+            val safeAvailW = availW.coerceAtLeast(1)
+            val safeAvailH = availH.coerceAtLeast(1)
+            val boxW = requestedW?.takeIf { it > 0 }?.let { minOf(safeAvailW, it) } ?: safeAvailW
+            val boxH = requestedH?.takeIf { it > 0 }?.let { minOf(safeAvailH, it) } ?: safeAvailH
+            if (sourceW <= 0 || sourceH <= 0) {
+                return when {
+                    requestedW != null && requestedH != null -> boxW to boxH
+                    requestedW != null -> {
+                        val h = ((boxW * 9) / 16).coerceIn(1, boxH)
+                        val w = if (h < (boxW * 9) / 16) ((h * 16) / 9).coerceIn(1, boxW) else boxW
+                        w to h
+                    }
+                    requestedH != null -> {
+                        val w = ((boxH * 16) / 9).coerceIn(1, boxW)
+                        val h = if (w < (boxH * 16) / 9) ((w * 9) / 16).coerceIn(1, boxH) else boxH
+                        w to h
+                    }
+                    else -> boxW to boxH
+                }
+            }
+            val ratio = if (pixelWidthHeightRatio > 0f) pixelWidthHeightRatio else 1f
+            val nativeW = (sourceW * ratio).roundToInt().coerceAtLeast(1)
+            val nativeH = sourceH.coerceAtLeast(1)
+            val rawScale = minOf(boxW.toFloat() / nativeW, boxH.toFloat() / nativeH)
+            val effectiveScale = if (upscale) rawScale else minOf(1f, rawScale)
+            val fittedW = (nativeW * effectiveScale).roundToInt().coerceIn(1, boxW)
+            val fittedH = (nativeH * effectiveScale).roundToInt().coerceIn(1, boxH)
+            return fittedW to fittedH
+        }
     }
 
     interface Callback {
@@ -176,12 +223,125 @@ class MediaRenderer(
     private var webView: WebView? = null
     private var lastMediaError: String? = null
     private var mediaStarted: Boolean = false
+    internal var currentCoversScreen: Boolean = false
+        private set
+    internal var currentFullscreenUpscale: Boolean = false
+        private set
+    internal var currentRequestedMaxWidth: Int? = null
+        private set
+    internal var currentRequestedMaxHeight: Int? = null
+        private set
+    private var currentTargetWidth: Int = 0
+    private var currentTargetHeight: Int = 0
+    internal var lastSourceWidth: Int = 0
+    internal var lastSourceHeight: Int = 0
+    internal var lastSourcePixelRatio: Float = 1f
 
-    fun setup(uiContext: Context, frame: FrameLayout, props: PopupProps, retryCount: Int = 0) {
+    private val isFullscreenActive: Boolean
+        get() = currentCoversScreen && currentTargetWidth > 0 && currentTargetHeight > 0
+
+    private fun updateSourceDimensions(width: Int, height: Int, pixelRatio: Float = 1f) {
+        lastSourceWidth = width
+        lastSourceHeight = height
+        lastSourcePixelRatio = pixelRatio
+    }
+
+    private fun resetSourceDimensions() {
+        updateSourceDimensions(0, 0, 1f)
+    }
+
+    private fun resolveRequestedCaps(media: PopupProps.Media?) {
+        if (media == null) {
+            currentRequestedMaxWidth = null
+            currentRequestedMaxHeight = null
+            return
+        }
+        val (scale, rawW, rawH) = when (media) {
+            is PopupProps.Media.Video -> Triple(
+                media.scale,
+                media.width.takeIf { media.explicitWidth },
+                media.height
+            )
+            is PopupProps.Media.Image -> Triple(
+                media.scale,
+                media.width.takeIf { media.explicitWidth },
+                null
+            )
+            is PopupProps.Media.Web -> Triple(
+                media.scale,
+                media.width.takeIf { media.explicitWidth },
+                media.height.takeIf { media.explicitHeight }
+            )
+            is PopupProps.Media.Whep -> Triple(
+                media.scale,
+                media.width.takeIf { media.explicitWidth },
+                media.height
+            )
+            is PopupProps.Media.LocalFile -> Triple(
+                media.scale,
+                media.width.takeIf { media.explicitWidth },
+                null
+            )
+            is PopupProps.Media.Bitmap -> Triple(media.scale, null, null)
+        }
+        currentRequestedMaxWidth = rawW?.let { if (scale) appContext.getScaledPixels(it) else it }
+        currentRequestedMaxHeight = rawH?.let { if (scale) appContext.getScaledPixels(it) else it }
+    }
+
+    private fun fullscreenBoundingBox(): Pair<Int, Int> {
+        val boxW = currentRequestedMaxWidth?.takeIf { it > 0 }
+            ?.let { minOf(currentTargetWidth, it) }
+            ?: currentTargetWidth
+        val boxH = currentRequestedMaxHeight?.takeIf { it > 0 }
+            ?.let { minOf(currentTargetHeight, it) }
+            ?: currentTargetHeight
+        return boxW to boxH
+    }
+
+    private fun resolveFullscreenFrameSize(): Pair<Int, Int> {
+        return fitInFullscreenBox(
+            availW = currentTargetWidth,
+            availH = currentTargetHeight,
+            sourceW = lastSourceWidth,
+            sourceH = lastSourceHeight,
+            pixelWidthHeightRatio = lastSourcePixelRatio,
+            upscale = currentFullscreenUpscale,
+            requestedW = currentRequestedMaxWidth,
+            requestedH = currentRequestedMaxHeight
+        )
+    }
+
+    private fun configureImageView(uiContext: Context, frame: FrameLayout, isFullscreen: Boolean): ImageView {
+        val iv = (if (frame.isNotEmpty()) frame.getChildAt(0) else null) as? ImageView
+            ?: ImageView(uiContext).apply { frame.addView(this) }
+        iv.adjustViewBounds = !isFullscreen
+        iv.scaleType = ImageView.ScaleType.FIT_CENTER
+        iv.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.MATCH_PARENT,
+            if (isFullscreen) FrameLayout.LayoutParams.MATCH_PARENT else FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER
+        )
+        return iv
+    }
+
+    fun setup(
+        uiContext: Context,
+        frame: FrameLayout,
+        props: PopupProps,
+        retryCount: Int = 0,
+        targetWidth: Int = 0,
+        targetHeight: Int = 0
+    ) {
         if (retryCount == 0) {
             mediaStarted = false
+            resetSourceDimensions()
         }
-        val media = props.media ?: props.image?.let { PopupProps.Media.Image(it, props.imageWidth ?: 480, cache = true, scale = true) }
+        val media = props.resolveEffectiveMedia()
+        currentCoversScreen = props.coversScreen
+        currentFullscreenUpscale = props.fullscreenUpscale ?: appSettings.fullscreenUpscale
+        resolveRequestedCaps(media)
+        if (targetWidth > 0) currentTargetWidth = targetWidth
+        if (targetHeight > 0) currentTargetHeight = targetHeight
 
         if (media == null) {
             frame.isVisible = false
@@ -220,6 +380,47 @@ class MediaRenderer(
             is PopupProps.Media.Whep -> renderWhep(frame, media, retryCount)
             is PopupProps.Media.LocalFile -> renderLocalFile(uiContext, frame, media.path, media.width, media.scale)
             is PopupProps.Media.Bitmap -> renderBitmap(uiContext, frame, media.bitmap, media.width, media.scale)
+        }
+    }
+
+    /**
+     * Synchronizes fullscreen and upscaling flags from updated [props] without reloading media.
+     */
+    fun updateFullscreenProps(props: PopupProps) {
+        currentCoversScreen = props.coversScreen
+        currentFullscreenUpscale = props.fullscreenUpscale ?: appSettings.fullscreenUpscale
+        resolveRequestedCaps(props.resolveEffectiveMedia())
+    }
+
+    /**
+     * Updates the available fullscreen media bounds and resizes [frame] accordingly.
+     */
+    fun updateFullscreenBounds(frame: FrameLayout, width: Int, height: Int) {
+        if (width <= 0 || height <= 0) return
+        currentTargetWidth = width
+        currentTargetHeight = height
+        applyFullscreenMediaFrameSize(frame)
+    }
+
+    internal fun applyFullscreenMediaFrameSize(frame: FrameLayout) {
+        val availW = currentTargetWidth
+        val availH = currentTargetHeight
+        if (availW <= 0 || availH <= 0) return
+        val (fittedW, fittedH) = resolveFullscreenFrameSize()
+        if (frame.layoutParams.width != fittedW || frame.layoutParams.height != fittedH) {
+            frame.layoutParams.width = fittedW
+            frame.layoutParams.height = fittedH
+            frame.requestLayout()
+            callback?.onDimensionsUpdated(fittedW, fittedH)
+        }
+        videoView?.let { tv ->
+            val lp = tv.layoutParams as? FrameLayout.LayoutParams
+            if (lp != null && (lp.width != FrameLayout.LayoutParams.MATCH_PARENT || lp.height != FrameLayout.LayoutParams.MATCH_PARENT)) {
+                lp.width = FrameLayout.LayoutParams.MATCH_PARENT
+                lp.height = FrameLayout.LayoutParams.MATCH_PARENT
+                lp.gravity = Gravity.CENTER
+                tv.requestLayout()
+            }
         }
     }
 
@@ -299,6 +500,7 @@ class MediaRenderer(
         player?.let { it.stop(); it.release() }
         player = null
         videoView = null
+        resetSourceDimensions()
         cleanupWebView()
     }
 
@@ -462,8 +664,13 @@ class MediaRenderer(
         val poster = video.poster
         val bufferMs = video.bufferMs ?: appSettings.defaultBufferMs.takeIf { it > 0 }
 
-        val tw = if (scale) appContext.getScaledPixels(width) else width
-        val th = video.height?.let { if (scale) appContext.getScaledPixels(it) else it } ?: ((tw * 9) / 16)
+        val (tw, th) = if (isFullscreenActive) {
+            resolveFullscreenFrameSize()
+        } else {
+            val w = if (scale) appContext.getScaledPixels(width) else width
+            val h = video.height?.let { if (scale) appContext.getScaledPixels(it) else it } ?: ((w * 9) / 16)
+            w to h
+        }
         callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
@@ -541,8 +748,13 @@ class MediaRenderer(
         val scale = web.scale
         val poster = web.poster
 
-        val tw = if (scale) appContext.getScaledPixels(width) else width
-        val th = if (scale) appContext.getScaledPixels(height) else height
+        val (tw, th) = if (isFullscreenActive) {
+            resolveFullscreenFrameSize()
+        } else {
+            val w = if (scale) appContext.getScaledPixels(width) else width
+            val h = if (scale) appContext.getScaledPixels(height) else height
+            w to h
+        }
         callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
@@ -607,8 +819,13 @@ class MediaRenderer(
             val injectedHtml = html.replace("'{{STREAM_URL}}'", "'$finalUri'")
                 .replace("object-fit: cover;", "object-fit: $videoFit !important;")
 
-            val tw = if (scale) appContext.getScaledPixels(width) else width
-            val th = height?.let { if (scale) appContext.getScaledPixels(it) else it } ?: ((tw * 9) / 16)
+            val (tw, th) = if (isFullscreenActive) {
+                resolveFullscreenFrameSize()
+            } else {
+                val w = if (scale) appContext.getScaledPixels(width) else width
+                val h = height?.let { if (scale) appContext.getScaledPixels(it) else it } ?: ((w * 9) / 16)
+                w to h
+            }
             callback?.onDimensionsUpdated(tw, th)
             frame.layoutParams.width = tw
             frame.layoutParams.height = th
@@ -679,24 +896,21 @@ class MediaRenderer(
         skipMemory: Boolean,
         retryCount: Int
     ) {
+        val isFullscreen = isFullscreenActive
         val maxDim = if (scale) appContext.getScaledPixels(1280) else 1280
-        val tw = (if (scale) appContext.getScaledPixels(width) else width).coerceAtMost(maxDim)
-        callback?.onDimensionsUpdated(tw, 0)
+        val (tw, th) = if (isFullscreen) {
+            fullscreenBoundingBox()
+        } else {
+            (if (scale) appContext.getScaledPixels(width) else width).coerceAtMost(maxDim) to 0
+        }
+        callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
+        if (isFullscreen) {
+            frame.layoutParams.height = th
+        }
         frame.requestLayout()
 
-        val iv = (if (frame.isNotEmpty()) frame.getChildAt(0) else null) as? ImageView ?: ImageView(uiContext).apply {
-            adjustViewBounds = true
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            frame.addView(
-                this,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    Gravity.CENTER
-                )
-            )
-        }
+        val iv = configureImageView(uiContext, frame, isFullscreen)
 
         // Ensure any previous load on this view is cancelled before starting a new one
         Glide.with(appContext).clear(iv)
@@ -723,7 +937,8 @@ class MediaRenderer(
             .load(source)
             .diskCacheStrategy(effectiveStrategy)
             .skipMemoryCache(skipMemory)
-            .override(tw, Target.SIZE_ORIGINAL)
+            .override(tw, if (isFullscreen) th else Target.SIZE_ORIGINAL)
+            .let { if (isFullscreen) (if (currentFullscreenUpscale) it.fitCenter() else it.centerInside()) else it }
             .dontAnimate()
             .listener(requestListener)
 
@@ -737,25 +952,20 @@ class MediaRenderer(
 
     private fun renderBitmap(uiContext: Context, frame: FrameLayout, bitmap: Bitmap, width: Int, scale: Boolean) {
         if (bitmap.isRecycled) { callback?.notifyReady(); return }
-        val tw = if (scale) appContext.getScaledPixels(width) else width
-        val th = (tw * bitmap.height) / bitmap.width
-        callback?.onDimensionsUpdated(tw, th)
-        frame.layoutParams.width = tw
-        frame.layoutParams.height = th
-        frame.requestLayout()
-
-        val iv = (if (frame.isNotEmpty()) frame.getChildAt(0) else null) as? ImageView ?: ImageView(uiContext).apply {
-            adjustViewBounds = true
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            frame.addView(
-                this,
-                FrameLayout.LayoutParams(
-                    FrameLayout.LayoutParams.MATCH_PARENT,
-                    FrameLayout.LayoutParams.WRAP_CONTENT,
-                    Gravity.CENTER
-                )
-            )
+        updateSourceDimensions(bitmap.width, bitmap.height)
+        val isFullscreen = isFullscreenActive
+        if (isFullscreen) {
+            applyFullscreenMediaFrameSize(frame)
+        } else {
+            val tw = if (scale) appContext.getScaledPixels(width) else width
+            val th = (tw * bitmap.height) / bitmap.width
+            callback?.onDimensionsUpdated(tw, th)
+            frame.layoutParams.width = tw
+            frame.layoutParams.height = th
+            frame.requestLayout()
         }
+
+        val iv = configureImageView(uiContext, frame, isFullscreen)
 
         iv.setImageBitmap(bitmap)
         removeStaleViews(frame, iv)
@@ -804,6 +1014,12 @@ class MediaRenderer(
             val renderer = rendererRef.get() ?: return
             val f = frame.get() ?: return
             if (videoSize.width > 0 && videoSize.height > 0) {
+                renderer.updateSourceDimensions(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio)
+                if (renderer.currentCoversScreen) {
+                    renderer.applyFullscreenMediaFrameSize(f)
+                    renderer.callback?.adjustHeights()
+                    return
+                }
                 val finalHeight = heightForDisplayAspect(
                     tw,
                     videoSize.width,
@@ -823,16 +1039,25 @@ class MediaRenderer(
             if (ready || renderer.callback?.isCleanedUp() == true) return
             ready = true
             val revealStartElapsed = SystemClock.elapsedRealtime() - startTimeMs
-            var finalHeight = f.layoutParams.height.takeIf { it > 0 } ?: th
-            renderer.player?.videoSize?.let { vs ->
-                if (vs.width > 0 && vs.height > 0) {
-                    finalHeight = heightForDisplayAspect(tw, vs.width, vs.height, vs.pixelWidthHeightRatio)
+            if (renderer.currentCoversScreen) {
+                renderer.player?.videoSize?.let { vs ->
+                    if (vs.width > 0 && vs.height > 0) {
+                        renderer.updateSourceDimensions(vs.width, vs.height, vs.pixelWidthHeightRatio)
+                    }
                 }
-            }
-            if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
-                f.layoutParams.height = finalHeight
-                f.requestLayout()
-                renderer.callback?.onDimensionsUpdated(tw, finalHeight)
+                renderer.applyFullscreenMediaFrameSize(f)
+            } else {
+                var finalHeight = f.layoutParams.height.takeIf { it > 0 } ?: th
+                renderer.player?.videoSize?.let { vs ->
+                    if (vs.width > 0 && vs.height > 0) {
+                        finalHeight = heightForDisplayAspect(tw, vs.width, vs.height, vs.pixelWidthHeightRatio)
+                    }
+                }
+                if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
+                    f.layoutParams.height = finalHeight
+                    f.requestLayout()
+                    renderer.callback?.onDimensionsUpdated(tw, finalHeight)
+                }
             }
             renderer.videoView?.let { keepView ->
                 renderer.crossfadeRevealStream(f, keepView, revealStartElapsed)
@@ -1064,13 +1289,18 @@ class MediaRenderer(
             val imageView = iv.get() ?: return false
             if (renderer.callback?.isReadyCalled() == true || renderer.callback?.isCleanedUp() == true) return false
             if (resource.intrinsicWidth > 0 && resource.intrinsicHeight > 0) {
-                val maxH = (renderer.appContext.resources.displayMetrics.heightPixels * 0.40).toInt()
-                val targetH = ((tw * resource.intrinsicHeight) / resource.intrinsicWidth).coerceAtMost(maxH)
-                val fittedW = (targetH * resource.intrinsicWidth) / resource.intrinsicHeight
-                f.layoutParams.width = fittedW
-                f.layoutParams.height = targetH
-                f.requestLayout()
-                renderer.callback?.onDimensionsUpdated(fittedW, targetH)
+                renderer.updateSourceDimensions(resource.intrinsicWidth, resource.intrinsicHeight)
+                if (renderer.currentCoversScreen) {
+                    renderer.applyFullscreenMediaFrameSize(f)
+                } else {
+                    val maxH = (renderer.appContext.resources.displayMetrics.heightPixels * 0.40).toInt()
+                    val targetH = ((tw * resource.intrinsicHeight) / resource.intrinsicWidth).coerceAtMost(maxH)
+                    val fittedW = (targetH * resource.intrinsicWidth) / resource.intrinsicHeight
+                    f.layoutParams.width = fittedW
+                    f.layoutParams.height = targetH
+                    f.requestLayout()
+                    renderer.callback?.onDimensionsUpdated(fittedW, targetH)
+                }
             }
             renderer.removeStaleViews(f, imageView)
             renderer.callback?.notifyReady()
@@ -1081,6 +1311,12 @@ class MediaRenderer(
 
     fun onWhepSourceDimensions(frame: FrameLayout?, tw: Int, srcWidth: Int, srcHeight: Int) {
         if (srcWidth <= 0 || srcHeight <= 0 || frame == null) return
+        updateSourceDimensions(srcWidth, srcHeight)
+        if (currentCoversScreen) {
+            applyFullscreenMediaFrameSize(frame)
+            callback?.adjustHeights()
+            return
+        }
         val calculatedHeight = (tw * srcHeight) / srcWidth
         if (calculatedHeight > 0 && frame.layoutParams.height != calculatedHeight) {
             frame.layoutParams.height = calculatedHeight

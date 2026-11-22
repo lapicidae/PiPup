@@ -266,4 +266,140 @@ class PayloadParserTest {
         val h = nl.rogro82.pipup.ui.MediaRenderer.heightForDisplayAspect(640, 704, 576, par)
         assertEquals(360, h)
     }
+
+    @Test
+    fun testFullscreenParsingAndLayoutMetrics() {
+        val json = """
+        {
+          "id": "fs_popup",
+          "position": "TopRight",
+          "stack": "horizontal",
+          "fullscreen": true,
+          "borderWidth": 0,
+          "contentPadding": 0,
+          "mediaFullBleed": true,
+          "media": {
+            "web": {
+              "uri": "http://127.0.0.1:8123",
+              "width": 1920,
+              "height": 1080
+            }
+          }
+        }
+        """.trimIndent()
+
+        val props = PopupProps.fromJson(json)
+        assertTrue(props.fullscreen)
+        assertTrue(props.coversScreen)
+        org.junit.Assert.assertNull(props.effectiveStack)
+        assertEquals(PopupProps.Position.Center, props.getPositionEnum())
+        assertEquals(PopupProps.StackDirection.VERTICAL, props.getStackDirectionEnum())
+
+        val roundTrip = PopupProps.fromJson(props.toJson())
+        assertTrue(roundTrip.fullscreen)
+        assertTrue(roundTrip.coversScreen)
+        org.junit.Assert.assertNull(roundTrip.fullscreenUpscale)
+
+        val upscaleJson = """{"fullscreen": true, "fullscreenUpscale": true}"""
+        val upscaleProps = PopupProps.fromJson(upscaleJson)
+        assertEquals(true, upscaleProps.fullscreenUpscale)
+        assertEquals(true, PopupProps.fromJson(upscaleProps.toJson()).fullscreenUpscale)
+
+        val aliasJson = """{"fullscreen": true, "upscale": false}"""
+        assertEquals(false, PopupProps.fromJson(aliasJson).fullscreenUpscale)
+
+        fun assertBox(expectedW: Int, expectedH: Int, actual: Pair<Int, Int>) {
+            assertEquals(expectedW, actual.first)
+            assertEquals(expectedH, actual.second)
+        }
+
+        // 480p (640x360) inside 1864x900 available fullscreen box:
+        // - without upscale: stays at native 640x360
+        // - with upscale: fills up to 1600x900 (16:9 fit in 1864x900)
+        assertBox(
+            640,
+            360,
+            nl.rogro82.pipup.ui.MediaRenderer.fitInFullscreenBox(1864, 900, 640, 360, upscale = false)
+        )
+        assertBox(
+            1600,
+            900,
+            nl.rogro82.pipup.ui.MediaRenderer.fitInFullscreenBox(1864, 900, 640, 360, upscale = true)
+        )
+
+        // 1080p (1920x1080) inside 1864x900 available fullscreen box:
+        // - always clamped/downscaled to 1600x900 regardless of upscale flag
+        assertBox(
+            1600,
+            900,
+            nl.rogro82.pipup.ui.MediaRenderer.fitInFullscreenBox(1864, 900, 1920, 1080, upscale = false)
+        )
+        assertBox(
+            1600,
+            900,
+            nl.rogro82.pipup.ui.MediaRenderer.fitInFullscreenBox(1864, 900, 1920, 1080, upscale = true)
+        )
+
+        // Explicit width in payload (e.g. width=400) bounds the fullscreen media width even when upscale=true:
+        assertBox(
+            400,
+            225,
+            nl.rogro82.pipup.ui.MediaRenderer.fitInFullscreenBox(
+                1864,
+                900,
+                640,
+                360,
+                upscale = true,
+                requestedW = 400
+            )
+        )
+        assertBox(
+            400,
+            225,
+            nl.rogro82.pipup.ui.MediaRenderer.fitInFullscreenBox(
+                1864,
+                900,
+                1920,
+                1080,
+                upscale = false,
+                requestedW = 400
+            )
+        )
+        // Web (sourceW=0, sourceH=0) with explicit width+height vs omitted width+height:
+        assertBox(
+            1864,
+            900,
+            nl.rogro82.pipup.ui.MediaRenderer.fitInFullscreenBox(1864, 900, 0, 0)
+        )
+        assertBox(
+            500,
+            300,
+            nl.rogro82.pipup.ui.MediaRenderer.fitInFullscreenBox(
+                1864,
+                900,
+                0,
+                0,
+                requestedW = 500,
+                requestedH = 300
+            )
+        )
+
+        // Verify explicitWidth / explicitHeight tracking in JSON parsing and round-trip serialization:
+        val autoVideoJson = """{"fullscreen": true, "media": {"video": {"uri": "rtsp://cam/1"}}}"""
+        val autoVideoProps = PopupProps.fromJson(autoVideoJson)
+        val autoVideo = autoVideoProps.media as PopupProps.Media.Video
+        assertFalse(autoVideo.explicitWidth)
+        org.junit.Assert.assertNull(autoVideo.height)
+        val autoRoundTrip = PopupProps.fromJson(autoVideoProps.toJson()).media as PopupProps.Media.Video
+        assertFalse(autoRoundTrip.explicitWidth)
+
+        val explicitVideoJson = """{"fullscreen": true, "media": {"video": {"uri": "rtsp://cam/1", "width": 350}}}"""
+        val explicitVideoProps = PopupProps.fromJson(explicitVideoJson)
+        val explicitVideo = explicitVideoProps.media as PopupProps.Media.Video
+        assertTrue(explicitVideo.explicitWidth)
+        assertEquals(350, explicitVideo.width)
+        val explicitRoundTrip = PopupProps.fromJson(explicitVideoProps.toJson()).media as PopupProps.Media.Video
+        assertTrue(explicitRoundTrip.explicitWidth)
+        assertEquals(350, explicitRoundTrip.width)
+    }
 }

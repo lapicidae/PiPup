@@ -123,10 +123,13 @@ class PayloadParser(private val context: Context) {
         val liveBadge = getVal("liveBadge")?.toBooleanStrictOrNull()
         val liveBadgeColor = getVal("liveBadgeColor")
         val liveBadgePosition = getVal("liveBadgePosition")
+        val fullscreen = getVal("fullscreen")?.toBooleanStrictOrNull() ?: false
+        val fullscreenUpscale = (getVal("fullscreenUpscale") ?: getVal("upscale"))?.toBooleanStrictOrNull()
 
         var media: PopupProps.Media? = null
         files["image"]?.let { tempPath ->
-            val imageWidth = getVal("imageWidth")?.toIntOrNull() ?: 480
+            val rawImageWidth = getVal("imageWidth")?.toIntOrNull()?.takeIf { it > 0 }
+            val imageWidth = rawImageWidth ?: 480
             val srcFile = File(tempPath)
             val isReadable = srcFile.canRead()
             Log.d(TAG, "Multipart image received: path=$tempPath, size=${srcFile.length()}, readable=$isReadable")
@@ -144,7 +147,12 @@ class PayloadParser(private val context: Context) {
                         "Successfully persisted image to: ${persistentFile.absolutePath}, " +
                             "final size=${persistentFile.length()}"
                     )
-                    media = PopupProps.Media.LocalFile(persistentFile.absolutePath, imageWidth, scale = scale)
+                    media = PopupProps.Media.LocalFile(
+                        persistentFile.absolutePath,
+                        imageWidth,
+                        scale = scale,
+                        explicitWidth = rawImageWidth != null
+                    )
 
                     // Trigger async cache cleanup
                     triggerCacheCleanup()
@@ -166,7 +174,8 @@ class PayloadParser(private val context: Context) {
             animationDuration = animationDuration, animationExit = animationExit,
             overwrite = overwrite, scale = scale, media = media, stack = stack,
             mediaFullBleed = mediaFullBleed, liveBadge = liveBadge,
-            liveBadgeColor = liveBadgeColor, liveBadgePosition = liveBadgePosition
+            liveBadgeColor = liveBadgeColor, liveBadgePosition = liveBadgePosition,
+            fullscreen = fullscreen, fullscreenUpscale = fullscreenUpscale
         )
     } catch (e: Exception) {
         Log.e(TAG, "Multipart parsing error", e)

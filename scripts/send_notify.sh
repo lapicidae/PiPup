@@ -525,25 +525,31 @@ get_random_media_size() {
   local media_h=0
   local media_label="--"
 
-  case "${type}" in
-    png|jpg|webp|svg|multipart|cancel)
-      media_w=$(( 100 + (RANDOM % 541) ))
-      media_label="${media_w}px"
-      ;;
-    video)
-      media_w=$(( 200 + (RANDOM % 441) ))
-      media_label="${media_w}px"
-      ;;
-    whep)
-      media_w=$(( 240 + (RANDOM % 481) ))
-      media_label="${media_w}px"
-      ;;
-    web)
-      media_w=$(( 280 + (RANDOM % 441) ))
-      media_h=$(( 180 + (RANDOM % 321) ))
-      media_label="${media_w}x${media_h}px"
-      ;;
-  esac
+  if [[ "${type}" != "message" ]]; then
+    if (( RANDOM % 2 == 0 )); then
+      media_label="auto"
+    else
+      case "${type}" in
+        png|jpg|webp|svg|multipart|cancel)
+          media_w=$(( 100 + (RANDOM % 541) ))
+          media_label="${media_w}px"
+          ;;
+        video)
+          media_w=$(( 200 + (RANDOM % 441) ))
+          media_label="${media_w}px"
+          ;;
+        whep)
+          media_w=$(( 240 + (RANDOM % 481) ))
+          media_label="${media_w}px"
+          ;;
+        web)
+          media_w=$(( 280 + (RANDOM % 441) ))
+          media_h=$(( 180 + (RANDOM % 321) ))
+          media_label="${media_w}x${media_h}px"
+          ;;
+      esac
+    fi
+  fi
 
   printf '%s %s %s' "${media_w}" "${media_h}" "${media_label}"
 }
@@ -554,8 +560,8 @@ get_random_media_size() {
 #   type: String category identifier (e.g., "png", "video").
 #   url: Optional string custom URL.
 #   fit: Optional string video fit mode (default: "cover").
-#   media_w: Optional integer media width in pixels.
-#   media_h: Optional integer media height in pixels.
+#   media_w: Optional integer media width in pixels (0 or empty omits field).
+#   media_h: Optional integer media height in pixels (0 or empty omits field).
 # Outputs:
 #   Writes the JSON formatted string or "null" to STDOUT.
 #######################################
@@ -563,19 +569,23 @@ get_media_payload() {
   local type="${1}"
   local url="${2:-}"
   local fit="${3:-cover}"
-  local media_w="${4:-}"
-  local media_h="${5:-}"
+  local media_w="${4:-0}"
+  local media_h="${5:-0}"
+  local width_field=""
+  local height_field=""
   local cache_field=""
+  [[ -n "${media_w}" && "${media_w}" -gt 0 ]] && width_field=", \"width\": ${media_w}"
+  [[ -n "${media_h}" && "${media_h}" -gt 0 ]] && height_field=", \"height\": ${media_h}"
   [[ "${USE_CACHE}" == "false" ]] && cache_field=", \"cache\": false"
 
   case "${type}" in
-    png)   printf '%s' "{\"image\": {\"uri\": \"${url:-$PNG_URL}\", \"width\": ${media_w:-480}${cache_field}}}" ;;
-    jpg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$JPG_URL}\", \"width\": ${media_w:-480}${cache_field}}}" ;;
-    webp)  printf '%s' "{\"image\": {\"uri\": \"${url:-$WEBP_URL}\", \"width\": ${media_w:-480}${cache_field}}}" ;;
-    svg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$SVG_URL}\", \"width\": ${media_w:-480}${cache_field}}}" ;;
-    video) printf '%s' "{\"video\": {\"uri\": \"${url:-$VIDEO_URL}\", \"width\": ${media_w:-480}}}" ;;
-    whep)  printf '%s' "{\"whep\": {\"uri\": \"${url:-$WHEP_URL}\", \"width\": ${media_w:-640}, \"videoFit\": \"${fit}\"}}" ;;
-    web)   printf '%s' "{\"web\": {\"uri\": \"${url:-$WEB_URL}\", \"width\": ${media_w:-640}, \"height\": ${media_h:-480}${cache_field}}}" ;;
+    png)   printf '%s' "{\"image\": {\"uri\": \"${url:-$PNG_URL}\"${width_field}${cache_field}}}" ;;
+    jpg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$JPG_URL}\"${width_field}${cache_field}}}" ;;
+    webp)  printf '%s' "{\"image\": {\"uri\": \"${url:-$WEBP_URL}\"${width_field}${cache_field}}}" ;;
+    svg)   printf '%s' "{\"image\": {\"uri\": \"${url:-$SVG_URL}\"${width_field}${cache_field}}}" ;;
+    video) printf '%s' "{\"video\": {\"uri\": \"${url:-$VIDEO_URL}\"${width_field}}}" ;;
+    whep)  printf '%s' "{\"whep\": {\"uri\": \"${url:-$WHEP_URL}\"${width_field}, \"videoFit\": \"${fit}\"}}" ;;
+    web)   printf '%s' "{\"web\": {\"uri\": \"${url:-$WEB_URL}\"${width_field}${height_field}${cache_field}}}" ;;
     *)     printf 'null' ;;
   esac
 }
@@ -1186,6 +1196,7 @@ send_json_notification() {
   local msg_size="${20:-14}"
   local popup_duration="${21:-${DURATION}}"
   local full_bleed="${22:-false}"
+  local is_fullscreen="${23:-false}"
 
   local endpoint="http://${target_ip}:${PORT}/notify"
 
@@ -1218,6 +1229,7 @@ send_json_notification() {
   "contentPadding": ${padding},
   "mediaPosition": ${media_pos},
   "mediaFullBleed": ${full_bleed},
+  "fullscreen": ${is_fullscreen},
   "animationType": ${anim_type},
   "animationDuration": ${anim_duration},
   "overwrite": ${overwrite},
@@ -1267,6 +1279,7 @@ send_multipart_test() {
   local anim_duration="${7:-500}"
   local overwrite="${8:-false}"
   local popup_duration="${9:-${DURATION}}"
+  local is_fullscreen="${10:-false}"
   local endpoint="http://${target_ip}:${PORT}/notify"
 
   local rand_idx=$(( RANDOM % ${#MULTIPART_IMAGES[@]} ))
@@ -1279,19 +1292,23 @@ send_multipart_test() {
   (( RANDOM % 2 == 1 )) && full_bleed="true"
 
   local full_msg
-  full_msg=$(printf "Mode: Form-Data (Source: %s)\nPos: %s | Duration: %ss\nMediaPos: %s | MediaSize: %s | FullBleed: %s\nPadding: %s\nOverwrite: %s%b" \
-    "${img_ext^^}" "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${full_bleed}" "${padding}" "${overwrite}" "${suffix}")
+  full_msg=$(printf "Mode: Form-Data (Source: %s)\nPos: %s | Duration: %ss | Fullscreen: %s\nMediaPos: %s | MediaSize: %s | FullBleed: %s\nPadding: %s\nOverwrite: %s%b" \
+    "${img_ext^^}" "${position}" "${popup_duration}" "${is_fullscreen}" "${media_pos}" "${media_label}" "${full_bleed}" "${padding}" "${overwrite}" "${suffix}")
+
+  local width_args=()
+  [[ -n "${media_w}" && "${media_w}" -gt 0 ]] && width_args=(-F "imageWidth=${media_w}")
 
   local response
   response=$(curl -s --max-time 60 -w "\n%{http_code}" -X POST "${endpoint}" \
     -F "title=Multipart Test" \
     -F "message=${full_msg}" \
     -F "image=@${img_file}" \
-    -F "imageWidth=${media_w}" \
+    "${width_args[@]}" \
     -F "duration=${popup_duration}" \
     -F "position=${position}" \
     -F "mediaPosition=${media_pos}" \
     -F "mediaFullBleed=${full_bleed}" \
+    -F "fullscreen=${is_fullscreen}" \
     -F "contentPadding=${padding}" \
     -F "animationType=${anim_type}" \
     -F "animationDuration=${anim_duration}" \
@@ -1305,8 +1322,8 @@ send_multipart_test() {
   # rm -f "${temp_file}" # No longer needed with SHARED_MULTIPART_IMAGE
 
   local style_info
-  style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-    "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${full_bleed}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
+  style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Full:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+    "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${full_bleed}" "${is_fullscreen}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
 
   print_result_row "MULTIPART" "N/A (Form-Data)" "${style_info}" "${target_ip}" "${code}|${body}"
 }
@@ -1320,10 +1337,10 @@ send_multipart_test() {
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]] [-a] [-l] [-o] [-C] [-c] [-s] [-k] [-h]
+Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]] [-a] [-l] [-o] [-F] [-C] [-c] [-s] [-k] [-h]
 Options:
   -d    Target IP (default: ${DEFAULT_IP})
-  -p    Screen position index (0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center)
+  -p    Screen position index (0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center, 5: TopCenter, 6: BottomCenter, 7: CenterLeft, 8: CenterRight)
   -w    Start WebRTC server only. Optional: minutes (0 = infinite/24h)
   -t    Test type: ${TEST_TYPES[*]}
   -u    Custom media URL (overrides default assets)
@@ -1331,6 +1348,7 @@ Options:
   -a    Run all standard tests in sequence
   -l    Add long text to messages
   -o    Overwrite the current notification
+  -F    Enable fullscreen mode (covers entire display)
   -C    Disable media caching (for URL-based media)
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
@@ -1381,6 +1399,7 @@ main() {
   local force_start_webrtc="false"
   local server_only="false"
   local overwrite="false"
+  local fullscreen="false"
   local monitor_mem="false"
   local trigger_unload="false"
   local USE_CACHE="true"
@@ -1388,7 +1407,7 @@ main() {
   local repeat_count=1
   local repeat_explicit="false"
 
-  while getopts "d:t:u:p:alockswmghrCM?" opt; do
+  while getopts "d:t:u:p:alFockswmghrCM?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       C) USE_CACHE="false" ;;
@@ -1398,6 +1417,7 @@ main() {
       a) run_all="true" ;;
       l) use_long_text="true" ;;
       o) overwrite="true" ;;
+      F) fullscreen="true" ;;
       c) immediate_cancel="true" ;;
       k) kill_whep_pipeline="true" ;;
       s) run_stress="true" ;;
@@ -1659,15 +1679,15 @@ main() {
 
     local info_msg fit_label=""
     [[ "${type}" == "whep" ]] && fit_label=" | Fit: ${fit}"
-    info_msg=$(printf "Position: %s | Duration: %ss\nType: %s%s\nRadius: %spx | Border: %spx | FullBleed: %s\nMediaPos: %s | MediaSize: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
-      "${pos}" "${popup_duration}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${full_bleed}" "${rand_media_pos}" "${media_size_label}" "${padding}" \
+    info_msg=$(printf "Position: %s | Duration: %ss | Fullscreen: %s\nType: %s%s\nRadius: %spx | Border: %spx | FullBleed: %s\nMediaPos: %s | MediaSize: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
+      "${pos}" "${popup_duration}" "${fullscreen}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${full_bleed}" "${rand_media_pos}" "${media_size_label}" "${padding}" \
       "${anim_type}" "${anim_dur}" "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${overwrite}" "${suffix}")
 
     local response
     response=$(send_json_notification "${target_ip}" "${title}" "${info_msg}" "${media}" \
       "${pos}" "${bg}" "${border_w}" "${border}" "${title_c}" "${msg_c}" \
       "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}" \
-      "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${popup_duration}" "${full_bleed}")
+      "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${popup_duration}" "${full_bleed}" "${fullscreen}")
 
     local table_type="${type^^}"
     if [[ "${type}" == "whep" ]]; then
@@ -1682,8 +1702,8 @@ main() {
     fi
 
     local style_info
-    style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-      "${pos}" "${popup_duration}" "${rand_media_pos}" "${media_size_label}" "${full_bleed}" "${radius}" "${border_w}" "${padding}" \
+    style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Full:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+      "${pos}" "${popup_duration}" "${rand_media_pos}" "${media_size_label}" "${full_bleed}" "${fullscreen}" "${radius}" "${border_w}" "${padding}" \
       "${anim_type}" "${anim_dur}" "${overwrite}")
 
     print_result_row "${table_type}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
@@ -1722,9 +1742,9 @@ main() {
 
     if [[ "${type}" == "multipart" ]]; then
       if [[ "${is_async}" == "true" ]]; then
-        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" &
+        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" "${fullscreen}" &
       else
-        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}"
+        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" "${fullscreen}"
       fi
     else
       local radius border_w padding anim_type anim_dur fit title_s msg_s _

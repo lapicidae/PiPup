@@ -90,6 +90,7 @@ class SettingsActivity : AppCompatActivity() {
         NavItem(R.id.nav_item_text_style, R.string.settings_nav_text, R.drawable.ic_text_style, 30, R.layout.submenu_text),
         NavItem(R.id.nav_item_border, R.string.settings_nav_border, R.drawable.ic_border_style, 40, R.layout.submenu_border),
         NavItem(R.id.nav_item_button, R.string.settings_nav_button, R.drawable.ic_button_style, 45, R.layout.submenu_button),
+        NavItem(R.id.nav_item_media, R.string.settings_nav_media, R.drawable.ic_media, 47, R.layout.submenu_media),
         NavItem(R.id.nav_item_animation, R.string.settings_nav_animation, R.drawable.ic_animation, 50, R.layout.submenu_animation),
         NavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, 60, R.layout.submenu_updates),
         NavItem(R.id.nav_item_modules, R.string.settings_nav_modules, R.drawable.ic_modules, 70, R.layout.submenu_modules),
@@ -417,6 +418,7 @@ class SettingsActivity : AppCompatActivity() {
             R.id.nav_item_text_style -> R.id.stub_text
             R.id.nav_item_border -> R.id.stub_border
             R.id.nav_item_button -> R.id.stub_button
+            R.id.nav_item_media -> R.id.stub_media
             R.id.nav_item_animation -> R.id.stub_animation
             R.id.nav_item_updates -> R.id.stub_updates
             R.id.nav_item_modules -> R.id.stub_modules
@@ -470,6 +472,7 @@ class SettingsActivity : AppCompatActivity() {
                 R.layout.submenu_text -> TextSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_border -> BorderSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_button -> ButtonSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_media -> MediaSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_animation -> AnimationSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_advanced -> AdvancedSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_performance -> PerformanceSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)

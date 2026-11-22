@@ -99,6 +99,7 @@ Content-Type: application/json
   "defaultBufferMs": 500,
   "mediaLoadingPlaceholder": true,
   "mediaFullBleed": false,
+  "fullscreenUpscale": false,
   "liveBadge": false,
   "liveBadgePosition": "bottom_right",
   "unknown_future_setting": "This unknown field should be ignored by the app without crashing"
@@ -128,6 +129,26 @@ Content-Type: application/json
       "poster": "https://dummyimage.com/480x270/1a1c1e/ffffff.png&text=Camera+Snapshot",
       "posterMode": "fill",
       "bufferMs": 500
+    }
+  }
+}
+
+### Send a Full-Screen Canvas Notification (Web Dashboard)
+POST {{baseUrl}}/notify
+Content-Type: application/json
+
+{
+  "id": "dashboard_fullscreen",
+  "duration": 20,
+  "fullscreen": true,
+  "borderWidth": 0,
+  "borderRadius": 0,
+  "contentPadding": 0,
+  "mediaFullBleed": true,
+  "overwrite": true,
+  "media": {
+    "web": {
+      "uri": "https://www.wikipedia.org"
     }
   }
 }

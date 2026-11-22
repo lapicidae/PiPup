@@ -58,8 +58,44 @@ data class PopupProps(
     val liveBadge: Boolean? = null,
     val liveBadgeColor: String? = null,
     val liveBadgePosition: String? = null,
-    val mediaFullBleed: Boolean? = null
+    val mediaFullBleed: Boolean? = null,
+    val fullscreen: Boolean = false,
+    val fullscreenUpscale: Boolean? = null
 ) {
+    /**
+     * Whether this popup covers the entire display (including system bars and cutouts).
+     */
+    val coversScreen: Boolean
+        get() = fullscreen
+
+    /**
+     * Whether this popup contains a media object or legacy image URI.
+     */
+    val hasMedia: Boolean
+        get() = media != null || !image.isNullOrEmpty()
+
+    /**
+     * Effective stacking axis direction ("vertical" or "horizontal"), or null if stacking is not set or disabled by [coversScreen].
+     */
+    val effectiveStack: String?
+        get() = if (coversScreen) null else stack
+
+    /**
+     * Resolves the effective [Media] object, wrapping legacy top-level [image]/[imageWidth] fields when [media] is null.
+     */
+    fun resolveEffectiveMedia(): Media? {
+        return media ?: image?.let {
+            val explicitW = imageWidth?.takeIf { w -> w > 0 }
+            Media.Image(
+                uri = it,
+                width = explicitW ?: 480,
+                cache = cache,
+                scale = scale,
+                explicitWidth = explicitW != null
+            )
+        }
+    }
+
     @Transient
     var measuredSize: Pair<Int, Int>? = null
 
@@ -78,6 +114,8 @@ data class PopupProps(
             fun optNullableString(key: String): String? = if (j.has(key) && !j.isNull(key)) j.getString(key) else null
             fun optNullableStringIn(obj: JSONObject, key: String): String? =
                 if (obj.has(key) && !obj.isNull(key)) obj.getString(key) else null
+            fun optPositiveInt(obj: JSONObject, key: String): Int? =
+                if (obj.has(key) && !obj.isNull(key)) obj.optInt(key, 0).takeIf { it > 0 } else null
 
             // Handle polymorphic media structure
             var media: Media? = null
@@ -86,73 +124,62 @@ data class PopupProps(
                 when {
                     m.has("video") -> {
                         val v = m.getJSONObject("video")
-                        val width = v.optInt("width", 480)
-                        val height = if (v.has("height") && !v.isNull("height") && v.optInt("height", 0) > 0) {
-                            v.getInt("height")
-                        } else {
-                            null
-                        }
+                        val explicitW = optPositiveInt(v, "width")
                         media = Media.Video(
                             uri = v.getString("uri"),
-                            width = width,
-                            height = height,
+                            width = explicitW ?: 480,
+                            height = optPositiveInt(v, "height"),
                             scale = v.optBoolean("scale", true),
                             muted = v.optBoolean("muted", true),
                             udp = v.optBoolean("udp", false),
                             poster = optNullableStringIn(v, "poster"),
                             posterMode = parsePosterMode(optNullableStringIn(v, "posterMode"))?.name?.lowercase(),
-                            bufferMs = if (v.has("bufferMs") && !v.isNull("bufferMs")) {
-                                v.optInt("bufferMs").takeIf { it > 0 }?.coerceIn(100, 10_000)
-                            } else {
-                                null
-                            }
+                            bufferMs = optPositiveInt(v, "bufferMs")?.coerceIn(100, 10_000),
+                            explicitWidth = explicitW != null
                         )
                     }
                     m.has("image") -> {
                         val i = m.getJSONObject("image")
+                        val explicitW = optPositiveInt(i, "width")
                         media = Media.Image(
                             uri = i.getString("uri"),
-                            width = i.optInt("width", 480),
+                            width = explicitW ?: 480,
                             cache = i.optBoolean("cache", true),
-                            scale = i.optBoolean("scale", true)
+                            scale = i.optBoolean("scale", true),
+                            explicitWidth = explicitW != null
                         )
                     }
                     m.has("web") -> {
                         val w = m.getJSONObject("web")
-                        val width = w.optInt("width", 640)
-                        val height = if (w.has("height") && !w.isNull("height") && w.optInt("height", 0) > 0) {
-                            w.getInt("height")
-                        } else {
-                            (width * 9) / 16
-                        }
+                        val explicitW = optPositiveInt(w, "width")
+                        val width = explicitW ?: 640
+                        val explicitH = optPositiveInt(w, "height")
                         media = Media.Web(
                             uri = w.getString("uri"),
                             width = width,
-                            height = height,
+                            height = explicitH ?: ((width * 9) / 16),
                             cache = w.optBoolean("cache", true),
                             scale = w.optBoolean("scale", true),
                             muted = w.optBoolean("muted", true),
                             poster = optNullableStringIn(w, "poster"),
-                            posterMode = parsePosterMode(optNullableStringIn(w, "posterMode"))?.name?.lowercase()
+                            posterMode = parsePosterMode(optNullableStringIn(w, "posterMode"))?.name?.lowercase(),
+                            explicitWidth = explicitW != null,
+                            explicitHeight = explicitH != null
                         )
                     }
                     m.has("whep") -> {
                         val w = m.getJSONObject("whep")
-                        val width = w.optInt("width", 640)
-                        val height = if (w.has("height") && !w.isNull("height") && w.optInt("height", 0) > 0) {
-                            w.getInt("height")
-                        } else {
-                            null
-                        }
+                        val explicitW = optPositiveInt(w, "width")
                         media = Media.Whep(
                             uri = w.getString("uri"),
-                            width = width,
-                            height = height,
+                            width = explicitW ?: 640,
+                            height = optPositiveInt(w, "height"),
                             scale = w.optBoolean("scale", true),
                             videoFit = w.optString("videoFit", "cover"),
                             poster = optNullableStringIn(w, "poster"),
                             posterMode = parsePosterMode(optNullableStringIn(w, "posterMode"))?.name?.lowercase(),
-                            muted = w.optBoolean("muted", true)
+                            muted = w.optBoolean("muted", true),
+                            explicitWidth = explicitW != null
                         )
                     }
                 }
@@ -185,6 +212,12 @@ data class PopupProps(
             }
 
             val resolvedPosition = parsePositionIndex(if (j.has("position") && !j.isNull("position")) j.get("position") else null)
+
+            val resolvedFullscreenUpscale = when {
+                j.has("fullscreenUpscale") && !j.isNull("fullscreenUpscale") -> j.getBoolean("fullscreenUpscale")
+                j.has("upscale") && !j.isNull("upscale") -> j.getBoolean("upscale")
+                else -> null
+            }
 
             return PopupProps(
                 duration = j.optInt("duration", 10),
@@ -236,7 +269,9 @@ data class PopupProps(
                 liveBadge = if (j.has("liveBadge") && !j.isNull("liveBadge")) j.getBoolean("liveBadge") else null,
                 liveBadgeColor = optNullableString("liveBadgeColor"),
                 liveBadgePosition = optNullableString("liveBadgePosition"),
-                mediaFullBleed = if (j.has("mediaFullBleed") && !j.isNull("mediaFullBleed")) j.getBoolean("mediaFullBleed") else null
+                mediaFullBleed = if (j.has("mediaFullBleed") && !j.isNull("mediaFullBleed")) j.getBoolean("mediaFullBleed") else null,
+                fullscreen = j.optBoolean("fullscreen", false),
+                fullscreenUpscale = resolvedFullscreenUpscale
             )
         }
 
@@ -333,13 +368,16 @@ data class PopupProps(
         liveBadgeColor?.let { j.put("liveBadgeColor", it) }
         liveBadgePosition?.let { j.put("liveBadgePosition", it) }
         mediaFullBleed?.let { j.put("mediaFullBleed", it) }
+        j.put("fullscreen", fullscreen)
+        fullscreenUpscale?.let { j.put("fullscreenUpscale", it) }
 
         media?.let { m ->
             val mj = JSONObject()
             when (m) {
                 is Media.Video -> {
                     mj.put("video", JSONObject().apply {
-                        put("uri", m.uri); put("width", m.width); put("scale", m.scale); put("muted", m.muted); put("udp", m.udp)
+                        put("uri", m.uri); put("scale", m.scale); put("muted", m.muted); put("udp", m.udp)
+                        if (m.explicitWidth) put("width", m.width)
                         m.height?.let { put("height", it) }
                         m.poster?.let { put("poster", it) }
                         m.posterMode?.let { put("posterMode", it) }
@@ -348,19 +386,23 @@ data class PopupProps(
                 }
                 is Media.Image -> {
                     mj.put("image", JSONObject().apply {
-                        put("uri", m.uri); put("width", m.width); put("cache", m.cache); put("scale", m.scale)
+                        put("uri", m.uri); put("cache", m.cache); put("scale", m.scale)
+                        if (m.explicitWidth) put("width", m.width)
                     })
                 }
                 is Media.Web -> {
                     mj.put("web", JSONObject().apply {
-                        put("uri", m.uri); put("width", m.width); put("height", m.height); put("cache", m.cache); put("scale", m.scale); put("muted", m.muted)
+                        put("uri", m.uri); put("cache", m.cache); put("scale", m.scale); put("muted", m.muted)
+                        if (m.explicitWidth) put("width", m.width)
+                        if (m.explicitHeight) put("height", m.height)
                         m.poster?.let { put("poster", it) }
                         m.posterMode?.let { put("posterMode", it) }
                     })
                 }
                 is Media.Whep -> {
                     mj.put("whep", JSONObject().apply {
-                        put("uri", m.uri); put("width", m.width)
+                        put("uri", m.uri)
+                        if (m.explicitWidth) put("width", m.width)
                         m.height?.let { put("height", it) }
                         put("scale", m.scale); put("videoFit", m.videoFit); put("muted", m.muted)
                         m.poster?.let { put("poster", it) }
@@ -392,13 +434,15 @@ data class PopupProps(
             val udp: Boolean = false,
             val poster: String? = null,
             val bufferMs: Int? = null,
-            val posterMode: String? = null
+            val posterMode: String? = null,
+            val explicitWidth: Boolean = false
         ) : Media()
         data class Image(
             val uri: String,
             val width: Int = 480,
             val cache: Boolean = true,
-            val scale: Boolean = true
+            val scale: Boolean = true,
+            val explicitWidth: Boolean = false
         ) : Media()
         data class Web(
             val uri: String,
@@ -408,7 +452,9 @@ data class PopupProps(
             val scale: Boolean = true,
             val muted: Boolean = true,
             val poster: String? = null,
-            val posterMode: String? = null
+            val posterMode: String? = null,
+            val explicitWidth: Boolean = false,
+            val explicitHeight: Boolean = false
         ) : Media()
         data class Whep(
             val uri: String,
@@ -418,12 +464,14 @@ data class PopupProps(
             val videoFit: String = "cover", // cover, contain, fill
             val poster: String? = null,
             val posterMode: String? = null,
-            val muted: Boolean = true
+            val muted: Boolean = true,
+            val explicitWidth: Boolean = false
         ) : Media()
         data class LocalFile(
             val path: String,
             val width: Int = 480,
-            val scale: Boolean = true
+            val scale: Boolean = true,
+            val explicitWidth: Boolean = false
         ) : Media()
         data class Bitmap(
             val bitmap: android.graphics.Bitmap,
@@ -494,6 +542,7 @@ data class PopupProps(
      * Resolves the numeric [position] index into a [Position] enum value.
      */
     fun getPositionEnum(): Position {
+        if (coversScreen) return Position.Center
         return Position.entries.find { it.index == position } ?: Position.TopRight
     }
 
@@ -501,7 +550,7 @@ data class PopupProps(
      * Resolves the [stack] property into a [StackDirection] enum value.
      */
     fun getStackDirectionEnum(): StackDirection {
-        return parseStackDirection(stack)
+        return parseStackDirection(effectiveStack)
     }
 
     /**
@@ -587,6 +636,13 @@ data class PopupProps(
             fun calculate(context: android.content.Context, props: PopupProps, settings: AppSettings): PopupLayoutMetrics {
                 val screenWidth = context.resources.displayMetrics.widthPixels
                 val screenHeight = context.resources.displayMetrics.heightPixels
+                if (props.coversScreen) {
+                    return PopupLayoutMetrics(
+                        width = screenWidth,
+                        height = screenHeight,
+                        boundingBox = android.graphics.Rect(0, 0, screenWidth, screenHeight)
+                    )
+                }
                 val baseMargin = context.dpToPx(20)
 
                 val paddingVal = props.contentPadding ?: settings.contentPadding
