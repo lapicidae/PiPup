@@ -25,6 +25,7 @@ import android.widget.FrameLayout
 import android.widget.ImageView
 import androidx.core.view.isNotEmpty
 import androidx.core.view.isVisible
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -116,7 +117,7 @@ class MediaRenderer(
 
         when (media) {
             is PopupProps.Media.Image -> renderImage(uiContext, frame, media.uri, media.width, media.cache, media.scale, retryCount)
-            is PopupProps.Media.Video -> renderVideo(frame, media.uri, media.width, media.scale, media.udp, retryCount, uiContext)
+            is PopupProps.Media.Video -> renderVideo(frame, media.uri, media.width, media.scale, media.udp, media.muted, retryCount, uiContext)
             is PopupProps.Media.Web -> renderWeb(uiContext, frame, media.uri, media.width, media.height, media.cache, media.scale, retryCount)
             is PopupProps.Media.Whep -> renderWhep(frame, media.uri, media.width, media.height, media.scale, media.videoFit, retryCount)
             is PopupProps.Media.LocalFile -> renderLocalFile(uiContext, frame, media.path, media.width, media.scale)
@@ -210,7 +211,7 @@ class MediaRenderer(
         renderGlide(uiContext, frame, uri, width, scale, if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE, !cache, retryCount)
     }
 
-    private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean, udp: Boolean = false, retryCount: Int = 0, videoContext: Context) {
+    private fun renderVideo(frame: FrameLayout, uri: String, width: Int, scale: Boolean, udp: Boolean = false, muted: Boolean = true, retryCount: Int = 0, videoContext: Context) {
         val tw = if (scale) appContext.getScaledPixels(width) else width
         val th = (tw * 9) / 16
         callback?.onDimensionsUpdated(tw, th)
@@ -228,6 +229,13 @@ class MediaRenderer(
         val tv = TextureView(videoContext).also { videoView = it; it.isVisible = false }
         p.setVideoTextureView(tv)
         p.repeatMode = Player.REPEAT_MODE_ONE
+        if (muted) {
+            // Disable audio entirely: avoids audio-codec failures (e.g. RTSP Opus) and keeps TV audio untouched.
+            p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
+                .build()
+            p.volume = 0f
+        }
 
         val mediaItem = MediaItem.fromUri(uri)
         if (uri.startsWith("rtsp://", ignoreCase = true)) {
@@ -240,7 +248,7 @@ class MediaRenderer(
         }
         p.prepare()
 
-        p.addListener(VideoPlayerListener(this, WeakReference(frame), tw, th, uri, width, scale, udp, retryCount, videoContext))
+        p.addListener(VideoPlayerListener(this, WeakReference(frame), tw, th, uri, width, scale, udp, muted, retryCount, videoContext))
         frame.addView(tv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
     }
 
@@ -418,6 +426,7 @@ class MediaRenderer(
         private val width: Int,
         private val scale: Boolean,
         private val udp: Boolean,
+        private val muted: Boolean,
         private val retryCount: Int,
         uiContext: Context
     ) : Player.Listener {
@@ -454,7 +463,7 @@ class MediaRenderer(
                         val r = rendererRef.get() ?: return@postAtTime
                         if (r.callback?.isCleanedUp() == false) {
                             f.removeAllViews()
-                            r.renderVideo(f, uri, width, scale, udp, retryCount + 1, ui)
+                            r.renderVideo(f, uri, width, scale, udp, muted, retryCount + 1, ui)
                         }
                     }, renderer.rendererToken, SystemClock.uptimeMillis() + 1000L * (retryCount + 1))
                     return
