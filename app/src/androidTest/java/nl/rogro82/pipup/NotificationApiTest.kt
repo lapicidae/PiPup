@@ -8,6 +8,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import nl.rogro82.pipup.service.PipUpService
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -626,6 +627,61 @@ class NotificationApiTest {
             )
         } finally {
             sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+        }
+    }
+
+    @Test
+    fun testBackDismissesButtonAndDismissOnBackPopupsOnly() {
+        val service = PipUpService.getInstance()!!
+        try {
+            // 1. Standard button-less popup (dismissOnBack=false) is NOT dismissed by Back
+            val normalPayload = """{"id": "back_normal", "duration": 15, "title": "Normal Toast"}"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", normalPayload.toByteArray()).code)
+            Thread.sleep(400)
+            assertFalse("Normal popup must ignore Back", service.notificationManager.handleBackDismissal())
+            assertTrue(service.notificationManager.isDisplaying())
+
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            Thread.sleep(300)
+
+            // 2. Button-less popup with dismissOnBack=true IS dismissed by Back
+            val backPayload = """{
+                "id": "back_fullscreen",
+                "duration": 15,
+                "fullscreen": true,
+                "dismissOnBack": true,
+                "title": "Camera"
+            }"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", backPayload.toByteArray()).code)
+            Thread.sleep(400)
+            assertTrue(
+                "dismissOnBack popup must be dismissed by Back",
+                service.notificationManager.handleBackDismissal()
+            )
+            waitUntilIdle(service)
+            assertFalse(service.notificationManager.isDisplaying())
+
+            // 3. Popup with buttons IS dismissed by Back
+            val buttonPayload = """{
+                "id": "back_buttons",
+                "duration": 15,
+                "title": "Confirm",
+                "buttons": [{"id": "ok", "label": "OK"}]
+            }"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", buttonPayload.toByteArray()).code)
+            Thread.sleep(400)
+            assertTrue("Button popup must be dismissed by Back", service.notificationManager.handleBackDismissal())
+            waitUntilIdle(service)
+            assertFalse(service.notificationManager.isDisplaying())
+        } finally {
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+        }
+    }
+
+    private fun waitUntilIdle(service: PipUpService, timeoutMs: Long = 2000L) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (service.notificationManager.isDisplaying() && System.currentTimeMillis() < deadline) {
+            Thread.sleep(50)
         }
     }
 

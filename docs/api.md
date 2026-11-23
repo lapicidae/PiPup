@@ -33,6 +33,7 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 | `fullscreenUpscale`       | Bool       | null             | If true in fullscreen mode, upscales smaller media (e.g. 480p) up to the available fullscreen box (or up to any explicit media `width`/`height` cap) (alias: `upscale`; falls back to Media Settings). |
 | `animationType`           | Int        | 0                | 0..10 (Fade, Slide, Scale, etc.).                                                                                                                |
 | `overwrite`               | Bool       | false            | If true and max concurrency or geometry limit is reached, evicts conflicting or oldest popups.                                                   |
+| `dismissOnBack`           | Bool       | false            | If true, allows hardware Back key presses on the remote to dismiss button-less popups (e.g. fullscreen streams) with `popup_removed` (`reason: "back"`). Popups with `buttons` always support Back dismissal without firing button callbacks. |
 | `popupLoadingBehavior`    | Int        | 0                | 0: Strict Sequential (Default), 1: Parallel Fast-Track                                                                                           |
 
 **Popup Stacking & ID Behavior:**

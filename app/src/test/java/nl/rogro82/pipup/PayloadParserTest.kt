@@ -402,4 +402,22 @@ class PayloadParserTest {
         assertTrue(explicitRoundTrip.explicitWidth)
         assertEquals(350, explicitRoundTrip.width)
     }
+
+    @Test
+    fun testDismissOnBackParsingAndInputFocusRequirement() {
+        val defaultProps = PopupProps.fromJson("""{"title": "Toast"}""")
+        assertFalse(defaultProps.dismissOnBack)
+        assertFalse(defaultProps.requiresInputFocus)
+
+        val dismissProps = PopupProps.fromJson("""{"title": "Cam", "fullscreen": true, "dismissOnBack": true}""")
+        assertTrue(dismissProps.dismissOnBack)
+        assertTrue(dismissProps.requiresInputFocus)
+        assertTrue(PopupProps.fromJson(dismissProps.toJson()).dismissOnBack)
+
+        val buttonProps = PopupProps.fromJson(
+            """{"title": "Confirm", "buttons": [{"id": "ok", "label": "OK"}]}"""
+        )
+        assertFalse(buttonProps.dismissOnBack)
+        assertTrue(buttonProps.requiresInputFocus)
+    }
 }

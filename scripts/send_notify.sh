@@ -1197,6 +1197,7 @@ send_json_notification() {
   local popup_duration="${21:-${DURATION}}"
   local full_bleed="${22:-false}"
   local is_fullscreen="${23:-false}"
+  local dismiss_on_back="${24:-false}"
 
   local endpoint="http://${target_ip}:${PORT}/notify"
 
@@ -1230,6 +1231,7 @@ send_json_notification() {
   "mediaPosition": ${media_pos},
   "mediaFullBleed": ${full_bleed},
   "fullscreen": ${is_fullscreen},
+  "dismissOnBack": ${dismiss_on_back},
   "animationType": ${anim_type},
   "animationDuration": ${anim_duration},
   "overwrite": ${overwrite},
@@ -1280,6 +1282,7 @@ send_multipart_test() {
   local overwrite="${8:-false}"
   local popup_duration="${9:-${DURATION}}"
   local is_fullscreen="${10:-false}"
+  local dismiss_on_back="${11:-false}"
   local endpoint="http://${target_ip}:${PORT}/notify"
 
   local rand_idx=$(( RANDOM % ${#MULTIPART_IMAGES[@]} ))
@@ -1292,8 +1295,12 @@ send_multipart_test() {
   (( RANDOM % 2 == 1 )) && full_bleed="true"
 
   local full_msg
-  full_msg=$(printf "Mode: Form-Data (Source: %s)\nPos: %s | Duration: %ss | Fullscreen: %s\nMediaPos: %s | MediaSize: %s | FullBleed: %s\nPadding: %s\nOverwrite: %s%b" \
-    "${img_ext^^}" "${position}" "${popup_duration}" "${is_fullscreen}" "${media_pos}" "${media_label}" "${full_bleed}" "${padding}" "${overwrite}" "${suffix}")
+  full_msg=$(printf "%s\n%s\n%s\n%s\n%s%b" \
+    "Mode: Form-Data (Source: ${img_ext^^})" \
+    "Pos: ${position} | Dur: ${popup_duration}s | Full: ${is_fullscreen}" \
+    "Back: ${dismiss_on_back} | FullBleed: ${full_bleed}" \
+    "MediaPos: ${media_pos} | MediaSize: ${media_label}" \
+    "Padding: ${padding} | Overwrite: ${overwrite}" "${suffix}")
 
   local width_args=()
   [[ -n "${media_w}" && "${media_w}" -gt 0 ]] && width_args=(-F "imageWidth=${media_w}")
@@ -1309,6 +1316,7 @@ send_multipart_test() {
     -F "mediaPosition=${media_pos}" \
     -F "mediaFullBleed=${full_bleed}" \
     -F "fullscreen=${is_fullscreen}" \
+    -F "dismissOnBack=${dismiss_on_back}" \
     -F "contentPadding=${padding}" \
     -F "animationType=${anim_type}" \
     -F "animationDuration=${anim_duration}" \
@@ -1322,8 +1330,13 @@ send_multipart_test() {
   # rm -f "${temp_file}" # No longer needed with SHARED_MULTIPART_IMAGE
 
   local style_info
-  style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Full:%s Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-    "${position}" "${popup_duration}" "${media_pos}" "${media_label}" "${full_bleed}" "${is_fullscreen}" "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
+  style_info=$(printf \
+    "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Full:%s Back:%s " \
+    "${position}" "${popup_duration}" "${media_pos}" "${media_label}" \
+    "${full_bleed}" "${is_fullscreen}" "${dismiss_on_back}")
+  style_info+=$(printf \
+    "Rad:--px Bdr:--px Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+    "${padding}" "${anim_type}" "${anim_duration}" "${overwrite}")
 
   print_result_row "MULTIPART" "N/A (Form-Data)" "${style_info}" "${target_ip}" "${code}|${body}"
 }
@@ -1337,7 +1350,8 @@ send_multipart_test() {
 #######################################
 usage() {
   cat <<EOF
-Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]] [-a] [-l] [-o] [-F] [-C] [-c] [-s] [-k] [-h]
+Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]]
+       [-a] [-l] [-o] [-F] [-b] [-C] [-c] [-s] [-k] [-h]
 Options:
   -d    Target IP (default: ${DEFAULT_IP})
   -p    Screen position index (0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center, 5: TopCenter, 6: BottomCenter, 7: CenterLeft, 8: CenterRight)
@@ -1349,6 +1363,7 @@ Options:
   -l    Add long text to messages
   -o    Overwrite the current notification
   -F    Enable fullscreen mode (covers entire display)
+  -b    Dismiss popup when Back key is pressed (dismissOnBack)
   -C    Disable media caching (for URL-based media)
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
@@ -1400,6 +1415,7 @@ main() {
   local server_only="false"
   local overwrite="false"
   local fullscreen="false"
+  local dismiss_on_back="false"
   local monitor_mem="false"
   local trigger_unload="false"
   local USE_CACHE="true"
@@ -1407,7 +1423,7 @@ main() {
   local repeat_count=1
   local repeat_explicit="false"
 
-  while getopts "d:t:u:p:alFockswmghrCM?" opt; do
+  while getopts "d:t:u:p:alFbockswmghrCM?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       C) USE_CACHE="false" ;;
@@ -1418,6 +1434,7 @@ main() {
       l) use_long_text="true" ;;
       o) overwrite="true" ;;
       F) fullscreen="true" ;;
+      b) dismiss_on_back="true" ;;
       c) immediate_cancel="true" ;;
       k) kill_whep_pipeline="true" ;;
       s) run_stress="true" ;;
@@ -1679,15 +1696,22 @@ main() {
 
     local info_msg fit_label=""
     [[ "${type}" == "whep" ]] && fit_label=" | Fit: ${fit}"
-    info_msg=$(printf "Position: %s | Duration: %ss | Fullscreen: %s\nType: %s%s\nRadius: %spx | Border: %spx | FullBleed: %s\nMediaPos: %s | MediaSize: %s | Padding: %sdp\nAnim: %s (%sms)\nAlign: T=%s M=%s | Size: T=%s M=%s\nOverwrite: %s%b" \
-      "${pos}" "${popup_duration}" "${fullscreen}" "${type}" "${fit_label}" "${radius}" "${border_w}" "${full_bleed}" "${rand_media_pos}" "${media_size_label}" "${padding}" \
-      "${anim_type}" "${anim_dur}" "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${overwrite}" "${suffix}")
+    info_msg=$(printf "%s\n%s\n%s\n%s\n%s\n%s\n%s%b" \
+      "Position: ${pos} | Dur: ${popup_duration}s | Full: ${fullscreen}" \
+      "Back: ${dismiss_on_back} | Type: ${type}${fit_label}" \
+      "Radius: ${radius}px | Border: ${border_w}px | FullBleed: ${full_bleed}" \
+      "MediaPos: ${rand_media_pos} | MediaSize: ${media_size_label}" \
+      "Padding: ${padding}dp | Anim: ${anim_type} (${anim_dur}ms)" \
+      "Align: T=${rand_t_a} M=${rand_m_a} | Size: T=${title_s} M=${msg_s}" \
+      "Overwrite: ${overwrite}" "${suffix}")
 
     local response
-    response=$(send_json_notification "${target_ip}" "${title}" "${info_msg}" "${media}" \
-      "${pos}" "${bg}" "${border_w}" "${border}" "${title_c}" "${msg_c}" \
-      "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" "${anim_dur}" "${overwrite}" \
-      "${rand_t_a}" "${rand_m_a}" "${title_s}" "${msg_s}" "${popup_duration}" "${full_bleed}" "${fullscreen}")
+    response=$(send_json_notification "${target_ip}" "${title}" "${info_msg}" \
+      "${media}" "${pos}" "${bg}" "${border_w}" "${border}" "${title_c}" \
+      "${msg_c}" "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" \
+      "${anim_dur}" "${overwrite}" "${rand_t_a}" "${rand_m_a}" "${title_s}" \
+      "${msg_s}" "${popup_duration}" "${full_bleed}" "${fullscreen}" \
+      "${dismiss_on_back}")
 
     local table_type="${type^^}"
     if [[ "${type}" == "whep" ]]; then
@@ -1702,9 +1726,14 @@ main() {
     fi
 
     local style_info
-    style_info=$(printf "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Full:%s Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
-      "${pos}" "${popup_duration}" "${rand_media_pos}" "${media_size_label}" "${full_bleed}" "${fullscreen}" "${radius}" "${border_w}" "${padding}" \
-      "${anim_type}" "${anim_dur}" "${overwrite}")
+    style_info=$(printf \
+      "Pos:%s Dur:%ss MedPos:%s MedSz:%s Bld:%s Full:%s Back:%s " \
+      "${pos}" "${popup_duration}" "${rand_media_pos}" "${media_size_label}" \
+      "${full_bleed}" "${fullscreen}" "${dismiss_on_back}")
+    style_info+=$(printf \
+      "Rad:%spx Bdr:%spx Pad:%sdp Anim:%s (%sms) Overwrite:%s" \
+      "${radius}" "${border_w}" "${padding}" "${anim_type}" "${anim_dur}" \
+      "${overwrite}")
 
     print_result_row "${table_type}" "${theme_name}" "${style_info}" "${target_ip}" "${response}"
   }
@@ -1742,9 +1771,13 @@ main() {
 
     if [[ "${type}" == "multipart" ]]; then
       if [[ "${is_async}" == "true" ]]; then
-        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" "${fullscreen}" &
+        send_multipart_test "${target_ip}" "${pos}" "${suffix}" \
+          "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" \
+          "${fullscreen}" "${dismiss_on_back}" &
       else
-        send_multipart_test "${target_ip}" "${pos}" "${suffix}" "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" "${fullscreen}"
+        send_multipart_test "${target_ip}" "${pos}" "${suffix}" \
+          "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" \
+          "${fullscreen}" "${dismiss_on_back}"
       fi
     else
       local radius border_w padding anim_type anim_dur fit title_s msg_s _

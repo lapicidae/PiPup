@@ -60,13 +60,21 @@ data class PopupProps(
     val liveBadgePosition: String? = null,
     val mediaFullBleed: Boolean? = null,
     val fullscreen: Boolean = false,
-    val fullscreenUpscale: Boolean? = null
+    val fullscreenUpscale: Boolean? = null,
+    val dismissOnBack: Boolean = false
 ) {
     /**
      * Whether this popup covers the entire display (including system bars and cutouts).
      */
     val coversScreen: Boolean
         get() = fullscreen
+
+    /**
+     * Whether this popup requires overlay input focus (either for interactive buttons
+     * or to receive hardware Back key presses via [dismissOnBack]).
+     */
+    val requiresInputFocus: Boolean
+        get() = buttons.isNotEmpty() || dismissOnBack
 
     /**
      * Whether this popup contains a media object or legacy image URI.
@@ -271,7 +279,8 @@ data class PopupProps(
                 liveBadgePosition = optNullableString("liveBadgePosition"),
                 mediaFullBleed = if (j.has("mediaFullBleed") && !j.isNull("mediaFullBleed")) j.getBoolean("mediaFullBleed") else null,
                 fullscreen = j.optBoolean("fullscreen", false),
-                fullscreenUpscale = resolvedFullscreenUpscale
+                fullscreenUpscale = resolvedFullscreenUpscale,
+                dismissOnBack = j.optBoolean("dismissOnBack", false)
             )
         }
 
@@ -370,6 +379,7 @@ data class PopupProps(
         mediaFullBleed?.let { j.put("mediaFullBleed", it) }
         j.put("fullscreen", fullscreen)
         fullscreenUpscale?.let { j.put("fullscreenUpscale", it) }
+        j.put("dismissOnBack", dismissOnBack)
 
         media?.let { m ->
             val mj = JSONObject()

@@ -125,6 +125,7 @@ class PayloadParser(private val context: Context) {
         val liveBadgePosition = getVal("liveBadgePosition")
         val fullscreen = getVal("fullscreen")?.toBooleanStrictOrNull() ?: false
         val fullscreenUpscale = (getVal("fullscreenUpscale") ?: getVal("upscale"))?.toBooleanStrictOrNull()
+        val dismissOnBack = getVal("dismissOnBack")?.toBooleanStrictOrNull() ?: false
 
         var media: PopupProps.Media? = null
         files["image"]?.let { tempPath ->
@@ -175,7 +176,8 @@ class PayloadParser(private val context: Context) {
             overwrite = overwrite, scale = scale, media = media, stack = stack,
             mediaFullBleed = mediaFullBleed, liveBadge = liveBadge,
             liveBadgeColor = liveBadgeColor, liveBadgePosition = liveBadgePosition,
-            fullscreen = fullscreen, fullscreenUpscale = fullscreenUpscale
+            fullscreen = fullscreen, fullscreenUpscale = fullscreenUpscale,
+            dismissOnBack = dismissOnBack
         )
     } catch (e: Exception) {
         Log.e(TAG, "Multipart parsing error", e)

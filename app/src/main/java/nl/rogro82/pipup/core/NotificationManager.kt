@@ -9,9 +9,12 @@ import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowManager
+import android.window.OnBackInvokedCallback
+import android.window.OnBackInvokedDispatcher
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import androidx.core.view.isEmpty
@@ -1525,15 +1528,56 @@ class NotificationManager(
         }
     }
 
+    /**
+     * Dismisses the focused (or most recently shown) focusable popup with reason `"back"`.
+     * Button callbacks are never invoked.
+     * @return `true` if a popup was dismissed.
+     */
+    fun handleBackDismissal(): Boolean {
+        return runOnMainSync(false) {
+            performBackDismissal()
+        }
+    }
+
+    private fun performBackDismissal(): Boolean {
+        synchronized(this) {
+            val focusedView = overlay?.findFocus()
+            val target = mShown.values.firstOrNull { slot ->
+                slot.props.requiresInputFocus &&
+                    focusedView != null &&
+                    isDescendantOf(focusedView, slot.view)
+            } ?: mShown.values
+                .filter { it.props.requiresInputFocus }
+                .maxByOrNull { it.shownAt }
+                ?: return false
+
+            removePopupByKey(target.key, "back")
+            return true
+        }
+    }
+
+    private fun isDescendantOf(child: View, ancestor: View): Boolean {
+        var current: Any? = child
+        while (current is View) {
+            if (current === ancestor) return true
+            current = current.parent
+        }
+        return false
+    }
+
     private fun hasActiveFullscreen(): Boolean {
         return mShown.values.any { it.props.coversScreen } ||
             mExiting.values.any { it.props.coversScreen }
     }
 
+    private fun hasActiveFocusablePopup(): Boolean {
+        return mShown.values.any { it.props.requiresInputFocus }
+    }
+
     private fun computeOverlayFlags(): Int {
-        val hasButtons = mShown.values.any { it.props.buttons.isNotEmpty() } ||
-            mExiting.values.any { it.props.buttons.isNotEmpty() }
-        var flags = if (hasButtons) {
+        val needsFocus = hasActiveFocusablePopup() ||
+            mExiting.values.any { it.props.requiresInputFocus }
+        var flags = if (needsFocus) {
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
         } else {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -1574,14 +1618,66 @@ class NotificationManager(
                 Log.e(TAG, "WindowManager update flags error: ${e.message}")
             }
         }
+
+        val needsFocus = hasActiveFocusablePopup()
+        overlayView.isFocusable = needsFocus
+        overlayView.isFocusableInTouchMode = needsFocus
+        if (needsFocus && !overlayView.hasFocus()) {
+            overlayView.post {
+                if (overlay === overlayView && hasActiveFocusablePopup() && !overlayView.hasFocus()) {
+                    overlayView.requestFocus()
+                }
+            }
+        }
+    }
+
+    private inner class OverlayRootFrameLayout(context: Context) : FrameLayout(context) {
+        private var backCallback: Any? = null
+
+        init {
+            clipChildren = false
+            clipToPadding = false
+            descendantFocusability = FOCUS_AFTER_DESCENDANTS
+        }
+
+        override fun onAttachedToWindow() {
+            super.onAttachedToWindow()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                val callback = OnBackInvokedCallback {
+                    handler.post { handleBackDismissal() }
+                }
+                findOnBackInvokedDispatcher()?.registerOnBackInvokedCallback(
+                    OnBackInvokedDispatcher.PRIORITY_DEFAULT,
+                    callback
+                )
+                backCallback = callback
+            }
+        }
+
+        override fun onDetachedFromWindow() {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                (backCallback as? OnBackInvokedCallback)?.let { cb ->
+                    findOnBackInvokedDispatcher()?.unregisterOnBackInvokedCallback(cb)
+                }
+                backCallback = null
+            }
+            super.onDetachedFromWindow()
+        }
+
+        override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+            if (event.keyCode == KeyEvent.KEYCODE_BACK && hasActiveFocusablePopup()) {
+                if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+                    handler.post { handleBackDismissal() }
+                }
+                return true
+            }
+            return super.dispatchKeyEvent(event)
+        }
     }
 
     private fun ensureOverlay(): FrameLayout? {
         overlay?.let { return it }
-        val view = FrameLayout(context).apply {
-            clipChildren = false
-            clipToPadding = false
-        }
+        val view = OverlayRootFrameLayout(context)
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
