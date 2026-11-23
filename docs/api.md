@@ -106,8 +106,18 @@ Returns a comprehensive JSON snapshot of the application, including:
 - **`permissions`**: Status of Overlay, Admin, Accessibility, and App Ops.
 - **`update`**: Detailed block with update status (`available`, `latest`, `installing`, `error`, etc.).
 - **`haPipup`**: Object with integration compatibility info (`recommended`, `minimum`, `connected`).
-- **`push`**: Object with webhook/push notification status.
+- **`push`**: Object with webhook/push notification status (`supported`, `webhook`, `heartbeat`, `lastEvent`, `lastStatus`, `lastError`, `lastSecondsAgo`).
 - **`discovery`**: Count of other PiPup peers found.
+
+**Webhook Events (`POST` to configured `webhook` URL):**
+
+Every push sends the full `/state` JSON object plus an `"event"` field:
+
+- `started`: Emitted once when the PiPup service finishes starting its HTTP server.
+- `heartbeat`: Emitted periodically every `webhookHeartbeat` seconds when enabled (`> 0`).
+- `settings`: Emitted when webhook or application settings are updated via `POST /settings`.
+- `screen_on` / `screen_off` / `dreaming_started` / `dreaming_stopped`: Display and screensaver transitions.
+- `popup_shown` (`shownId`), `popup_replaced` (`shownId`, `replacedId`), `popup_removed` (`reason`, `removedId`): Popup lifecycle events.
 
 ---
 
@@ -129,9 +139,14 @@ Triggers an immediate check for updates and starts the background installation p
 
 ### Get/Update Settings
 
-`GET /settings` | `POST /settings` (application/json)
+`GET /settings` | `POST /settings`
 
-Styling and module configuration. The JSON structure matches the `SettingsData` class in `AppSettings.kt`.
+- **Full Settings (`application/json`):** Returns or updates styling and module configuration matching `SettingsData` in `AppSettings.kt`.
+- **Webhook Configuration (query parameters or webhook-only JSON body):**
+  - `webhook`: `http(s)` URL to receive state push events (empty string disables push).
+  - `webhookHeartbeat`: Periodic heartbeat interval in seconds (`0` disables heartbeat; positive values are clamped to `10..86400`; negative or non-integer values return `400 Bad Request`).
+  - Example query: `POST /settings?webhook=http://192.168.1.10:8123/api/webhook/pipup&webhookHeartbeat=60`
+  - Example partial JSON (leaves all styling settings untouched): `POST /settings` with `{"webhookHeartbeat": 60}`
 
 ---
 

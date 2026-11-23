@@ -125,4 +125,68 @@ class SettingsSyncTest {
             PiPupApp.settings.apply(originalSettings)
         }
     }
+
+    @Test
+    fun testWebhookHeartbeatQueryAndPartialJsonPreserveStyling() {
+        val originalSettings = PiPupApp.settings.getAll()
+        val originalWebhook = PiPupApp.settings.webhook
+        try {
+            PiPupApp.settings.positionIndex = 3
+            PiPupApp.settings.backgroundColor = "#223344"
+
+            // 1. Set via query parameter
+            val queryUrl = URL("http://localhost:7979/settings?webhookHeartbeat=60")
+            val queryConn = queryUrl.openConnection() as HttpURLConnection
+            try {
+                queryConn.requestMethod = "POST"
+                assertEquals(200, queryConn.responseCode)
+            } finally {
+                queryConn.disconnect()
+            }
+            assertEquals(60, PiPupApp.settings.webhookHeartbeat)
+
+            // 2. Set via webhook-only JSON body without clobbering styling settings
+            val jsonBody = """{"webhookHeartbeat": 120}""".toByteArray(Charsets.UTF_8)
+            val jsonConn = (URL("http://localhost:7979/settings").openConnection() as HttpURLConnection)
+            try {
+                jsonConn.requestMethod = "POST"
+                jsonConn.doOutput = true
+                jsonConn.setRequestProperty("Content-Type", "application/json")
+                jsonConn.setRequestProperty("Content-Length", jsonBody.size.toString())
+                jsonConn.outputStream.use { it.write(jsonBody) }
+                assertEquals(200, jsonConn.responseCode)
+            } finally {
+                jsonConn.disconnect()
+            }
+            assertEquals(120, PiPupApp.settings.webhookHeartbeat)
+            assertEquals(3, PiPupApp.settings.positionIndex)
+            assertEquals("#223344", PiPupApp.settings.backgroundColor)
+
+            // 3. Reject negative interval with 400 Bad Request
+            val invalidUrl = URL("http://localhost:7979/settings?webhookHeartbeat=-5")
+            val invalidConn = invalidUrl.openConnection() as HttpURLConnection
+            try {
+                invalidConn.requestMethod = "POST"
+                assertEquals(400, invalidConn.responseCode)
+            } finally {
+                invalidConn.disconnect()
+            }
+            assertEquals(120, PiPupApp.settings.webhookHeartbeat)
+
+            // 4. Verify push.heartbeat is exposed in GET /state
+            val stateConn = (URL("http://localhost:7979/state").openConnection() as HttpURLConnection)
+            try {
+                stateConn.requestMethod = "GET"
+                assertEquals(200, stateConn.responseCode)
+                val stateJson = org.json.JSONObject(stateConn.inputStream.bufferedReader().use { it.readText() })
+                assertEquals(120, stateJson.getJSONObject("push").getInt("heartbeat"))
+            } finally {
+                stateConn.disconnect()
+            }
+        } finally {
+            PiPupApp.settings.webhook = originalWebhook
+            Pusher.url = originalWebhook
+            PiPupApp.settings.apply(originalSettings)
+        }
+    }
 }

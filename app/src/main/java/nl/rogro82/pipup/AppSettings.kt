@@ -70,6 +70,9 @@ class AppSettings(context: Context) {
             prefs.edit { putString("webhook", value) }
         }
 
+    /** Periodic webhook heartbeat interval in seconds (`0` = disabled). */
+    var webhookHeartbeat: Int by IntPref("webhook_heartbeat", 0)
+
     /**
      * Retrieves the mode for a specific module.
      */
@@ -318,7 +321,8 @@ class AppSettings(context: Context) {
         val pendingUpdateDigest: String,
         val pendingUpdateTagName: String,
         val language: String,
-        val moduleModeMedia: Int? = null
+        val moduleModeMedia: Int? = null,
+        val webhookHeartbeat: Int = 0
     ) {
         fun toJSONObject(): JSONObject {
             return JSONObject().apply {
@@ -364,6 +368,7 @@ class AppSettings(context: Context) {
                 put("pendingUpdateTagName", pendingUpdateTagName)
                 put("language", language)
                 moduleModeMedia?.let { put("moduleModeMedia", it) }
+                put("webhookHeartbeat", webhookHeartbeat)
             }
         }
 
@@ -416,7 +421,8 @@ class AppSettings(context: Context) {
                     pendingUpdateDigest = j.optString("pendingUpdateDigest", ""),
                     pendingUpdateTagName = j.optString("pendingUpdateTagName", ""),
                     language = j.optString("language", "default"),
-                    moduleModeMedia = if (j.has("moduleModeMedia")) j.getInt("moduleModeMedia") else null
+                    moduleModeMedia = if (j.has("moduleModeMedia")) j.getInt("moduleModeMedia") else null,
+                    webhookHeartbeat = j.optInt("webhookHeartbeat", 0)
                 )
             }
         }
@@ -470,7 +476,8 @@ class AppSettings(context: Context) {
             pendingUpdateId = pendingUpdateId,
             pendingUpdateDigest = pendingUpdateDigest,
             pendingUpdateTagName = pendingUpdateTagName,
-            language = language
+            language = language,
+            webhookHeartbeat = webhookHeartbeat
         )
     }
 
@@ -529,6 +536,7 @@ class AppSettings(context: Context) {
         pendingUpdateDigest = data.pendingUpdateDigest
         pendingUpdateTagName = data.pendingUpdateTagName
         language = data.language
+        webhookHeartbeat = normalizeWebhookHeartbeat(data.webhookHeartbeat) ?: 0
 
         cachedFullBgColor = null
     }
@@ -690,5 +698,18 @@ class AppSettings(context: Context) {
         const val DEFAULT_RADIUS = 16
         const val DEFAULT_BORDER_WIDTH = 0
         const val DEFAULT_PADDING = 20
+        const val MIN_WEBHOOK_HEARTBEAT_SEC = 10
+        const val MAX_WEBHOOK_HEARTBEAT_SEC = 86_400
+
+        /**
+         * Normalizes a webhook heartbeat interval in seconds (`0` disables the heartbeat; positive
+         * values are clamped to `[MIN_WEBHOOK_HEARTBEAT_SEC, MAX_WEBHOOK_HEARTBEAT_SEC]`).
+         * Returns `null` when [seconds] is negative.
+         */
+        fun normalizeWebhookHeartbeat(seconds: Int): Int? = when {
+            seconds < 0 -> null
+            seconds == 0 -> 0
+            else -> seconds.coerceIn(MIN_WEBHOOK_HEARTBEAT_SEC, MAX_WEBHOOK_HEARTBEAT_SEC)
+        }
     }
 }

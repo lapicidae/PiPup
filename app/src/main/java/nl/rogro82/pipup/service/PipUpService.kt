@@ -131,6 +131,25 @@ class PipUpService : Service() {
         }
     }
 
+    private val webhookHeartbeatRunnable = object : Runnable {
+        override fun run() {
+            val intervalSec = settings.webhookHeartbeat
+            if (intervalSec > 0 && !Pusher.url.isNullOrBlank()) {
+                emit("heartbeat")
+                handler.postDelayed(this, intervalSec * 1000L)
+            }
+        }
+    }
+
+    @Synchronized
+    private fun rescheduleWebhookHeartbeat() {
+        handler.removeCallbacks(webhookHeartbeatRunnable)
+        val intervalSec = settings.webhookHeartbeat
+        if (intervalSec > 0 && !Pusher.url.isNullOrBlank()) {
+            handler.postDelayed(webhookHeartbeatRunnable, intervalSec * 1000L)
+        }
+    }
+
     private var cachedLandingPage: String? = null
 
     /** Concrete implementation of [ModuleContext] for the background service. */
@@ -162,6 +181,9 @@ class PipUpService : Service() {
 
                 // 4. Update Notification
                 updateForegroundNotification(settings.language)
+
+                // 5. Keep webhook heartbeat schedule in sync
+                rescheduleWebhookHeartbeat()
             }
         }
     }
@@ -222,6 +244,8 @@ class PipUpService : Service() {
         try {
             webServer.start(30000)
             Log.i(TAG, "WebServer started on port $SERVER_PORT (timeout: 30s)")
+            emit("started")
+            rescheduleWebhookHeartbeat()
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start WebServer", e)
         }
@@ -230,6 +254,7 @@ class PipUpService : Service() {
     override fun onDestroy() {
         Log.d(TAG, "Service destroying, cleaning up resources...")
         instance = null
+        handler.removeCallbacks(webhookHeartbeatRunnable)
         try {
             unregisterReceiver(settingsReceiver)
         } catch (_: Exception) {}
@@ -423,6 +448,7 @@ class PipUpService : Service() {
         state["push"] = mapOf(
             "supported" to true,
             "webhook" to !Pusher.url.isNullOrBlank(),
+            "heartbeat" to settings.webhookHeartbeat,
             "lastEvent" to Pusher.lastEvent,
             "lastStatus" to Pusher.lastStatus,
             "lastError" to Pusher.lastError,
@@ -567,36 +593,64 @@ class PipUpService : Service() {
                 NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json).apply { setGzipEncoding(false) }
             }
             NanoHTTPD.Method.POST -> {
+                var webhookUpdated = false
                 session.parameters["webhook"]?.firstOrNull()?.let { raw ->
-                    val v = raw.trim()
-                    if (v.isNotEmpty()) {
-                        try {
-                            val uri = URI(v)
-                            if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
-                                return invalidRequest("webhook must be a valid http(s) URL")
-                            }
-                        } catch (_: Exception) {
-                            return invalidRequest("webhook must be a valid http(s) URL")
-                        }
-                        settings.webhook = v
-                        Pusher.url = v
-                    } else {
-                        settings.webhook = null
-                        Pusher.url = null
-                    }
+                    applyWebhookUrl(raw)?.let { return invalidRequest(it) }
+                    webhookUpdated = true
                 }
-                if (session.parameters.containsKey("webhook")) {
-                    emit("settings")
+                session.parameters["webhookHeartbeat"]?.firstOrNull()?.let { raw ->
+                    applyWebhookHeartbeat(raw)?.let { return invalidRequest(it) }
+                    webhookUpdated = true
                 }
 
                 val length = session.headers["content-length"]?.toIntOrNull() ?: 0
                 if (length > 0) {
-                    val content = session.inputStream.readExactBytes(length)
+                    val bodyText = String(session.inputStream.readExactBytes(length), Charsets.UTF_8)
+                    val json = try {
+                        org.json.JSONObject(bodyText)
+                    } catch (e: Exception) {
+                        return invalidRequest(e.message)
+                    }
+                    val keys = buildSet { json.keys().forEach { add(it) } }
+                    val isWebhookOnlyJson = keys.isNotEmpty() &&
+                        keys.all { it == "webhook" || it == "webhookHeartbeat" }
+                    if (isWebhookOnlyJson) {
+                        if (json.has("webhook")) {
+                            val rawUrl = if (json.isNull("webhook")) "" else json.optString("webhook", "")
+                            applyWebhookUrl(rawUrl)?.let { return invalidRequest(it) }
+                            webhookUpdated = true
+                        }
+                        if (json.has("webhookHeartbeat")) {
+                            val rawHb = if (json.isNull("webhookHeartbeat")) {
+                                "0"
+                            } else {
+                                json.get("webhookHeartbeat").toString()
+                            }
+                            applyWebhookHeartbeat(rawHb)?.let { return invalidRequest(it) }
+                            webhookUpdated = true
+                        }
+                        rescheduleWebhookHeartbeat()
+                        emit("settings")
+                        return ok()
+                    }
                     try {
-                        val data = AppSettings.SettingsData.fromJson(String(content, Charsets.UTF_8))
+                        val parsed = AppSettings.SettingsData.fromJson(bodyText)
+                        val data = if (json.has("webhookHeartbeat")) {
+                            val rawHb = if (json.isNull("webhookHeartbeat")) {
+                                "0"
+                            } else {
+                                json.get("webhookHeartbeat").toString()
+                            }
+                            val normalized = parseWebhookHeartbeat(rawHb)
+                                ?: return invalidRequest("webhookHeartbeat must be a non-negative integer")
+                            parsed.copy(webhookHeartbeat = normalized)
+                        } else {
+                            parsed.copy(webhookHeartbeat = settings.webhookHeartbeat)
+                        }
                         handler.post {
                             settings.apply(data)
                             applyGlobalSettings(data)
+                            rescheduleWebhookHeartbeat()
 
                             // Notify UI about settings change
                             val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
@@ -605,12 +659,17 @@ class PipUpService : Service() {
                             }
                             sendBroadcast(intent)
                         }
+                        if (webhookUpdated) {
+                            rescheduleWebhookHeartbeat()
+                        }
                         emit("settings")
                         ok()
                     } catch (e: Exception) {
                         invalidRequest(e.message)
                     }
-                } else if (session.parameters.containsKey("webhook")) {
+                } else if (webhookUpdated) {
+                    rescheduleWebhookHeartbeat()
+                    emit("settings")
                     ok()
                 } else {
                     invalidRequest("Empty")
@@ -618,6 +677,38 @@ class PipUpService : Service() {
             }
             else -> NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
         }
+    }
+
+    private fun applyWebhookUrl(raw: String): String? {
+        val v = raw.trim()
+        if (v.isNotEmpty()) {
+            try {
+                val uri = URI(v)
+                if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
+                    return "webhook must be a valid http(s) URL"
+                }
+            } catch (_: Exception) {
+                return "webhook must be a valid http(s) URL"
+            }
+            settings.webhook = v
+            Pusher.url = v
+        } else {
+            settings.webhook = null
+            Pusher.url = null
+        }
+        return null
+    }
+
+    private fun parseWebhookHeartbeat(raw: String): Int? {
+        val parsed = raw.trim().toIntOrNull() ?: return null
+        return AppSettings.normalizeWebhookHeartbeat(parsed)
+    }
+
+    private fun applyWebhookHeartbeat(raw: String): String? {
+        val normalized = parseWebhookHeartbeat(raw)
+            ?: return "webhookHeartbeat must be a non-negative integer"
+        settings.webhookHeartbeat = normalized
+        return null
     }
 
     private fun applyGlobalSettings(data: AppSettings.SettingsData) {
