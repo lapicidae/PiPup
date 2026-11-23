@@ -24,6 +24,7 @@
     <string name="settings_nav_modules">Module</string>
     <string name="settings_nav_permissions">Berechtigungen</string>
     <string name="settings_nav_advanced">Erweitert</string>
+    <string name="settings_nav_about">Über</string>
     <string name="settings_nav_performance">Leistung</string>
 
     <!-- App UI & Designs -->
@@ -350,4 +351,27 @@
     <string name="vendor_status_inactive">INAKTIV (Accessibility Service erforderlich)</string>
     <string name="permission_autostart">Auto-Start</string>
     <string name="permission_autostart_why">Erlaubt dem System, den Dienst nach einem Neustart oder Kill automatisch wiederherzustellen.</string>
+
+    <!-- Über & Open-Source-Lizenzen -->
+    <!-- %1$s: App-Name, %2$s: Formatierte Version -->
+    <string name="settings_about_version_format">%1$s %2$s</string>
+    <string name="settings_about_description">Android-TV-Server für Bild-in-Bild-Benachrichtigungen und Medien-Overlays.</string>
+    <string name="settings_about_credits_label">Projekt &amp; Mitwirkende</string>
+    <string name="settings_about_credits_value">Original von rogro82 · Weiterentwickelt von lapicidae</string>
+    <string name="settings_about_repo_label">Quellcode &amp; Dokumentation</string>
+    <string name="settings_about_repo_url">https://github.com/lapicidae/PiPup</string>
+    <string name="settings_about_translators_label">Übersetzung</string>
+    <string name="settings_about_licenses">Open-Source-Lizenzen</string>
+    <string name="settings_about_licenses_title">Open-Source-Lizenzen</string>
+    <string name="settings_about_licenses_empty">Keine Lizenzinformationen verfügbar.</string>
+    <string name="settings_about_licenses_close">Schließen</string>
+    <!-- %1$s: Autor oder Organisation der Bibliothek -->
+    <string name="settings_about_license_author">Autor: %1$s</string>
+    <!-- %1$d: Anzahl der gruppierten Maven-Module -->
+    <plurals name="settings_about_license_modules">
+        <item quantity="one">%1$d Modul</item>
+        <item quantity="other">%1$d Module</item>
+    </plurals>
+    <!-- %1$d: Anzahl der gruppierten Maven-Artefakte -->
+    <string name="settings_about_license_artifacts">Enthaltene Artefakte (%1$d):</string>
 </resources>

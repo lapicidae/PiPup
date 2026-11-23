@@ -95,7 +95,8 @@ class SettingsActivity : AppCompatActivity() {
         NavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, 60, R.layout.submenu_updates),
         NavItem(R.id.nav_item_modules, R.string.settings_nav_modules, R.drawable.ic_modules, 70, R.layout.submenu_modules),
         NavItem(R.id.nav_item_permissions, R.string.settings_nav_permissions, R.drawable.ic_permissions, 80, R.layout.submenu_permissions),
-        NavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, 90, R.layout.submenu_advanced)
+        NavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, 90, R.layout.submenu_advanced),
+        NavItem(R.id.nav_item_about, R.string.settings_nav_about, R.drawable.ic_about, 100, R.layout.submenu_about),
     )
 
     private var dynamicRailItems = mutableListOf<NavItem>()
@@ -424,6 +425,7 @@ class SettingsActivity : AppCompatActivity() {
             R.id.nav_item_modules -> R.id.stub_modules
             R.id.nav_item_permissions -> R.id.stub_permissions
             R.id.nav_item_advanced -> R.id.stub_advanced
+            R.id.nav_item_about -> R.id.stub_about
             R.id.nav_item_performance -> R.id.stub_performance
             else -> R.id.stub_module_dynamic
         }
@@ -475,6 +477,7 @@ class SettingsActivity : AppCompatActivity() {
                 R.layout.submenu_media -> MediaSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_animation -> AnimationSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_advanced -> AdvancedSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_about -> AboutSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_performance -> PerformanceSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_updates -> UpdatesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_permissions -> PermissionsSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)

@@ -143,6 +143,12 @@
                 android:layout="@layout/submenu_advanced" />
 
             <ViewStub
+                android:id="@+id/stub_about"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout="@layout/submenu_about" />
+
+            <ViewStub
                 android:id="@+id/stub_performance"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"

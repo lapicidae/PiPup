@@ -24,6 +24,7 @@
     <string name="settings_nav_modules">Modules</string>
     <string name="settings_nav_permissions">Permissions</string>
     <string name="settings_nav_advanced">Advanced</string>
+    <string name="settings_nav_about">About</string>
     <string name="settings_nav_performance">Performance</string>
 
     <!-- App UI & Themes -->
@@ -350,4 +351,27 @@
     <string name="vendor_status_inactive">INACTIVE (Accessibility Service required)</string>
     <string name="permission_autostart">Auto-Start</string>
     <string name="permission_autostart_why">Allows the system to automatically restore the service after a reboot or kill.</string>
+
+    <!-- About & Open-Source Licenses -->
+    <!-- %1$s: App Name, %2$s: Formatted Version -->
+    <string name="settings_about_version_format">%1$s %2$s</string>
+    <string name="settings_about_description">Android TV Picture-in-Picture notification and media overlay server.</string>
+    <string name="settings_about_credits_label">Project &amp; Credits</string>
+    <string name="settings_about_credits_value">Original by rogro82 · Maintained &amp; extended by lapicidae</string>
+    <string name="settings_about_repo_label">Source Code &amp; Documentation</string>
+    <string name="settings_about_repo_url">https://github.com/lapicidae/PiPup</string>
+    <string name="settings_about_translators_label">Translation</string>
+    <string name="settings_about_licenses">Open-Source Licenses</string>
+    <string name="settings_about_licenses_title">Open-Source Licenses</string>
+    <string name="settings_about_licenses_empty">No license information available.</string>
+    <string name="settings_about_licenses_close">Close</string>
+    <!-- %1$s: Library Author or Organization -->
+    <string name="settings_about_license_author">Author: %1$s</string>
+    <!-- %1$d: Number of grouped Maven modules -->
+    <plurals name="settings_about_license_modules">
+        <item quantity="one">%1$d module</item>
+        <item quantity="other">%1$d modules</item>
+    </plurals>
+    <!-- %1$d: Number of grouped Maven artifacts -->
+    <string name="settings_about_license_artifacts">Included artifacts (%1$d):</string>
 </resources>

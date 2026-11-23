@@ -1,0 +1,14 @@
+{
+  "uniqueId": "com.pictogrammers:material-design-icons",
+  "name": "Material Design Icons (Pictogrammers)",
+  "artifactVersion": "",
+  "description": "Vector UI icons from the Pictogrammers Material Design Icons library (partially modified).",
+  "website": "https://pictogrammers.com/library/mdi/",
+  "organization": {
+    "name": "Pictogrammers",
+    "url": "https://pictogrammers.com/"
+  },
+  "licenses": [
+    "Apache-2.0"
+  ]
+}

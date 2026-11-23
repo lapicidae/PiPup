@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_nav_about"
+        android:textColor="@color/colorOnSurface"
+        android:textSize="28sp"
+        android:textStyle="bold"
+        android:layout_marginBottom="32dp"/>
+
+    <!-- App Version & Description -->
+    <TextView
+        android:id="@+id/text_about_version"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/colorOnSurface"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        tools:text="PiPup v0.14.2"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_about_description"
+        android:textColor="@color/colorOnSurfaceVariant"
+        android:textSize="14sp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="24dp"/>
+
+    <!-- Project Credits -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_about_credits_label"
+        android:textColor="@color/colorOnSurfaceVariant"
+        android:textSize="12sp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_about_credits_value"
+        android:textColor="@color/colorOnSurface"
+        android:textSize="16sp"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Source Repository -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_about_repo_label"
+        android:textColor="@color/colorOnSurfaceVariant"
+        android:textSize="12sp"/>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_about_repo_url"
+        android:textColor="@color/colorOnSurface"
+        android:textSize="16sp"
+        android:fontFamily="monospace"
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="16dp"/>
+
+    <!-- Translator Credits (shown only when present for the active locale) -->
+    <LinearLayout
+        android:id="@+id/container_about_translators"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:visibility="gone"
+        android:layout_marginBottom="16dp"
+        tools:visibility="visible">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_about_translators_label"
+            android:textColor="@color/colorOnSurfaceVariant"
+            android:textSize="12sp"/>
+
+        <TextView
+            android:id="@+id/text_about_translators"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurface"
+            android:textSize="16sp"
+            android:layout_marginTop="2dp"
+            tools:text="Translated by: lapicidae"/>
+    </LinearLayout>
+
+    <!-- Open-Source Licenses Action -->
+    <Button
+        android:id="@+id/btn_open_source_licenses"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/settings_about_licenses"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:gravity="start|center_vertical"
+        android:textAllCaps="false"
+        android:textColor="@color/colorOnSurface"/>
+
+</LinearLayout>

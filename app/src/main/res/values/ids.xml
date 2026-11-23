@@ -14,6 +14,8 @@
 	<item name="nav_item_performance" type="id" />
     <item name="nav_item_permissions" type="id" />
     <item name="nav_item_advanced" type="id" />
+    <item name="nav_item_about" type="id" />
+    <item name="stub_about" type="id" />
 
     <!-- Modules -->
     <item name="container_discovery_module" type="id" />

@@ -8,8 +8,10 @@ import androidx.test.espresso.Espresso.onView
 import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.ViewMatchers.*
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import nl.rogro82.pipup.ui.SettingsActivity
 import org.hamcrest.Matcher
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -20,6 +22,11 @@ import org.junit.runner.RunWith
 @RunWith(AndroidJUnit4::class)
 @UnstableApi
 class SettingsUiTest {
+
+    @Before
+    fun exitTouchMode() {
+        InstrumentationRegistry.getInstrumentation().setInTouchMode(false)
+    }
 
     @Test
     fun testInitialState() {
@@ -53,6 +60,36 @@ class SettingsUiTest {
                 .check(matches(isDisplayed()))
             onView(withId(R.id.switch_media_placeholder))
                 .perform(androidx.test.espresso.action.ViewActions.scrollTo())
+                .check(matches(isDisplayed()))
+        }
+    }
+
+    @Test
+    fun testAboutSubmenu() {
+        ActivityScenario.launch(SettingsActivity::class.java).use {
+            it.onActivity { activity ->
+                activity.findViewById<View>(R.id.nav_item_about).requestFocus()
+            }
+            Thread.sleep(1000)
+
+            onView(withId(R.id.text_about_version)).check(matches(isDisplayed()))
+            onView(withId(R.id.btn_open_source_licenses))
+                .perform(androidx.test.espresso.action.ViewActions.scrollTo())
+                .check(matches(isDisplayed()))
+
+            // Trigger via performClick() to avoid entering touch mode on Android TV emulator
+            it.onActivity { activity ->
+                activity.findViewById<View>(R.id.btn_open_source_licenses).performClick()
+            }
+
+            onView(withText(R.string.settings_about_licenses_title))
+                .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
+                .check(matches(isDisplayed()))
+            onView(withText("AndroidX (Jetpack)"))
+                .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
+                .check(matches(isDisplayed()))
+            onView(withText(R.string.settings_about_licenses_close))
+                .inRoot(androidx.test.espresso.matcher.RootMatchers.isDialog())
                 .check(matches(isDisplayed()))
         }
     }

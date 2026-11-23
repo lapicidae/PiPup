@@ -1,3 +1,5 @@
+import com.mikepenz.aboutlibraries.plugin.DuplicateMode
+import com.mikepenz.aboutlibraries.plugin.DuplicateRule
 import io.gitlab.arturbosch.detekt.Detekt
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 /**
@@ -7,6 +9,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.aboutlibraries.android)
     alias(libs.plugins.google.devtools.ksp)
     alias(libs.plugins.detekt)
 }
@@ -57,6 +60,16 @@ tasks.withType(Detekt).configureEach {
         txt.required.set(false)
         sarif.required.set(false)
     }
+}
+
+aboutLibraries {
+    collect.configPath = file("config/aboutlibraries")
+    collect.fetchRemoteLicense = false
+    collect.fetchRemoteFunding = false
+    collect.includePlatform = false
+    library.duplicationMode = DuplicateMode.MERGE
+    library.duplicationRule = DuplicateRule.SIMPLE
+    export.excludeFields.addAll("funding")
 }
 
 android {
