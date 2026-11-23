@@ -79,8 +79,12 @@ class PipUpService : Service() {
     val notificationManager by lazy {
         val wm = getSystemService(WINDOW_SERVICE) as WindowManager
         NotificationManager(this, wm).apply {
-            onPopupShown = { _ ->
-                emit("popup_shown")
+            onPopupShown = { props ->
+                emit("popup_shown", mapOf("shownId" to props.id))
+                notifyLocalStateChange()
+            }
+            onPopupReplaced = { props, replacedId ->
+                emit("popup_replaced", mapOf("shownId" to props.id, "replacedId" to replacedId))
                 notifyLocalStateChange()
             }
             onPopupRemoved = { reason, removedId ->

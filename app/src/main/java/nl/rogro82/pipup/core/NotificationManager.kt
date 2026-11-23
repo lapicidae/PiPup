@@ -91,6 +91,8 @@ class NotificationManager(
         private set
 
     var onPopupShown: ((PopupProps) -> Unit)? = null
+    /** Callback invoked when an active popup is replaced in-place with updated props. */
+    var onPopupReplaced: ((PopupProps, String?) -> Unit)? = null
     var onPopupRemoved: ((String, String) -> Unit)? = null
     /** Callback invoked when the overall notification display/queue active state changes. */
     var onStateChanged: ((Boolean) -> Unit)? = null
@@ -271,11 +273,13 @@ class NotificationManager(
 
     private fun handleInPlaceUpdate(id: String, props: PopupProps) {
         val current = mShown[id] ?: return
-        val oldPos = current.props.getPositionEnum()
+        val oldProps = current.props
+        val oldPos = oldProps.getPositionEnum()
         val newPos = props.getPositionEnum()
-        val positionChanged = oldPos != newPos || current.props.coversScreen != props.coversScreen
+        val positionChanged = oldPos != newPos || oldProps.coversScreen != props.coversScreen
 
         current.expire?.let { handler.removeCallbacks(it) }
+        current.expire = null
         handler.removeCallbacksAndMessages(current)
 
         if (positionChanged) {
@@ -300,6 +304,7 @@ class NotificationManager(
         }
 
         current.props = props
+        current.shownAt = SystemClock.elapsedRealtime()
         current.view.updateFromProps(props)
         measurePopupView(current.view)
         if (positionChanged) {
@@ -317,6 +322,7 @@ class NotificationManager(
 
         current.view.startMedia()
         scheduleRemoval(current)
+        onPopupReplaced?.invoke(props, oldProps.id)
     }
 
 

@@ -591,6 +591,44 @@ class NotificationApiTest {
         }
     }
 
+    @Test
+    fun testInPlaceOverwriteResetsElapsedTimer() {
+        try {
+            val firstPayload = """{
+                "id": "replace_timer_1",
+                "overwrite": true,
+                "duration": 15,
+                "title": "Camera A"
+            }"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", firstPayload.toByteArray()).code)
+
+            Thread.sleep(2200)
+            val beforeReplace = org.json.JSONObject(sendGetWithResponse("$baseUrl/state").body)
+                .getJSONObject("popup")
+            assertEquals("Camera A", beforeReplace.getString("title"))
+            assertTrue("Expected elapsed >= 2s before replace", beforeReplace.getLong("elapsed") >= 2L)
+
+            val secondPayload = """{
+                "id": "replace_timer_1",
+                "overwrite": true,
+                "duration": 15,
+                "title": "Camera B"
+            }"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", secondPayload.toByteArray()).code)
+
+            Thread.sleep(300)
+            val afterReplace = org.json.JSONObject(sendGetWithResponse("$baseUrl/state").body)
+                .getJSONObject("popup")
+            assertEquals("Camera B", afterReplace.getString("title"))
+            assertTrue(
+                "Expected elapsed timer to reset on in-place overwrite, was ${afterReplace.getLong("elapsed")}",
+                afterReplace.getLong("elapsed") < 2L
+            )
+        } finally {
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+        }
+    }
+
     private data class ApiResponse(val code: Int, val body: String)
 
     private fun sendGetWithResponse(urlStr: String): ApiResponse {

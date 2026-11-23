@@ -38,7 +38,7 @@ Displays an overlay on the TV. Supports `application/json` and `multipart/form-d
 **Popup Stacking & ID Behavior:**
 
 - **Stacking:** Multiple notifications sent to the same screen position stack vertically up to the configured `maxPopups` limit (1..5, configured in performance settings).
-- **In-Place Updates:** If a notification with a matching `id` is already active or waiting in the queue when a new request arrives, it updates in-place without dismissing or re-animating.
+- **In-Place Updates:** If a notification with a matching `id` is already active or waiting in the queue when a new request arrives, it updates in-place without dismissing or re-animating. Replacing an active popup in-place resets `elapsed`, restarts its `duration` countdown, and pushes a `popup_replaced` webhook event (`shownId`, `replacedId`).
 - **Cancellation:** Active popups can be cancelled individually by ID using `POST /cancel?id=<id>` or all at once via `POST /cancel` or `POST /cancel?all=true`.
 
 **Media Object Types:**
