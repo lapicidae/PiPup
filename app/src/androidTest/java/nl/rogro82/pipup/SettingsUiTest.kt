@@ -96,15 +96,20 @@ class SettingsUiTest {
 
     @Test
     fun testNavigationAndSliders() {
-        ActivityScenario.launch(SettingsActivity::class.java).use {
-            // Navigate to Background
-            it.onActivity { activity ->
-                activity.findViewById<View>(R.id.nav_item_background).requestFocus()
-            }
-            Thread.sleep(1000)
+        val originalAlpha = PiPupApp.settings.backgroundAlpha
+        try {
+            ActivityScenario.launch(SettingsActivity::class.java).use {
+                // Navigate to Background
+                it.onActivity { activity ->
+                    activity.findViewById<View>(R.id.nav_item_background).requestFocus()
+                }
+                Thread.sleep(1000)
 
-            onView(withId(R.id.seekbar_bg_alpha)).check(matches(isDisplayed()))
-            onView(withId(R.id.seekbar_bg_alpha)).perform(setProgress())
+                onView(withId(R.id.seekbar_bg_alpha)).check(matches(isDisplayed()))
+                onView(withId(R.id.seekbar_bg_alpha)).perform(setProgress())
+            }
+        } finally {
+            PiPupApp.settings.backgroundAlpha = originalAlpha
         }
     }
 
