@@ -22,6 +22,7 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleSettingDefinition
@@ -98,11 +99,15 @@ abstract class SubmenuBase(
         resId: Int,
         valueResId: Int,
         initialValue: Int,
+        max: Int? = null,
         onChanged: (Int) -> Unit
     ) {
         val seekBar = root.findViewById<SeekBar>(resId) ?: return
         val textView = root.findViewById<TextView>(valueResId)
 
+        if (max != null) {
+            seekBar.max = max
+        }
         seekBar.progress = initialValue
         updateSliderValueDisplay(seekBar, textView)
 
@@ -170,7 +175,9 @@ abstract class SubmenuBase(
         val isAlwaysVisible = seekBar.id == R.id.seekbar_media_timeout ||
                 seekBar.id == R.id.seekbar_media_retries ||
                 seekBar.id == R.id.seekbar_max_popups ||
-                seekBar.id == R.id.seekbar_buffer_ms
+                seekBar.id == R.id.seekbar_buffer_ms ||
+                seekBar.id == R.id.seekbar_close_button_size ||
+                seekBar.id == R.id.seekbar_close_button_timeout
         textView?.visibility = if (settings.advancedMode || isAlwaysVisible) View.VISIBLE else View.GONE
     }
 
@@ -178,6 +185,16 @@ abstract class SubmenuBase(
         val format = when (bar.id) {
             R.id.seekbar_animation_duration -> "%d ms"
             R.id.seekbar_media_timeout -> context.resources.getQuantityString(R.plurals.settings_media_timeout_seconds, bar.progress, bar.progress)
+            R.id.seekbar_close_button_size -> "%d dp"
+            R.id.seekbar_close_button_timeout -> if (bar.progress == 0) {
+                context.getString(R.string.settings_close_button_off)
+            } else {
+                context.resources.getQuantityString(
+                    R.plurals.settings_media_timeout_seconds,
+                    bar.progress,
+                    bar.progress
+                )
+            }
             R.id.seekbar_media_retries -> context.resources.getQuantityString(R.plurals.settings_media_retries_count, bar.progress, bar.progress)
             R.id.seekbar_max_popups -> "%d"
             R.id.seekbar_buffer_ms -> if (bar.progress == 0) context.getString(R.string.language_default) else "%d ms"
@@ -186,6 +203,7 @@ abstract class SubmenuBase(
         }
         textView?.text = when (bar.id) {
             R.id.seekbar_animation_duration -> String.format(format, bar.progress)
+            R.id.seekbar_close_button_size -> String.format(format, bar.progress + PopupProps.CLOSE_BUTTON_SIZE_MIN)
             R.id.seekbar_max_popups -> String.format(format, bar.progress + 1)
             R.id.seekbar_buffer_ms -> if (bar.progress == 0) format else String.format(format, bar.progress * 100)
             R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -> String.format(format, bar.progress + 10)

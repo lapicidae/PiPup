@@ -1031,6 +1031,9 @@ class NotificationManager(
             onButton = { btn ->
                 PipUpService.getInstance()?.handleButtonClick(this.props, btn, slotKey)
             }
+            onClose = {
+                removePopupByKey(slotKey, "close")
+            }
             onFirstFrame = { ms ->
                 lastFirstFrameMs = ms
             }
@@ -1576,11 +1579,11 @@ class NotificationManager(
         synchronized(this) {
             val focusedView = overlay?.findFocus()
             val target = mShown.values.firstOrNull { slot ->
-                slot.props.requiresInputFocus &&
+                slot.props.dismissibleByBack &&
                     focusedView != null &&
                     isDescendantOf(focusedView, slot.view)
             } ?: mShown.values
-                .filter { it.props.requiresInputFocus }
+                .filter { it.props.dismissibleByBack }
                 .maxByOrNull { it.shownAt }
                 ?: return false
 
@@ -1605,6 +1608,10 @@ class NotificationManager(
 
     private fun hasActiveFocusablePopup(): Boolean {
         return mShown.values.any { it.props.requiresInputFocus }
+    }
+
+    private fun hasActiveBackDismissiblePopup(): Boolean {
+        return mShown.values.any { it.props.dismissibleByBack }
     }
 
     private fun computeOverlayFlags(): Int {
@@ -1699,12 +1706,20 @@ class NotificationManager(
 
         override fun dispatchKeyEvent(event: KeyEvent): Boolean {
             if (event.keyCode == KeyEvent.KEYCODE_BACK && hasActiveFocusablePopup()) {
-                if (event.action == KeyEvent.ACTION_UP && !event.isCanceled) {
+                if (event.action == KeyEvent.ACTION_UP && !event.isCanceled && hasActiveBackDismissiblePopup()) {
                     handler.post { handleBackDismissal() }
                 }
                 return true
             }
-            return super.dispatchKeyEvent(event)
+            val handled = super.dispatchKeyEvent(event)
+            return handled || (findFocus() === this && dispatchToActiveCloseButton(event))
+        }
+
+        private fun dispatchToActiveCloseButton(event: KeyEvent): Boolean {
+            val closeSlot = synchronized(this@NotificationManager) {
+                mShown.values.filter { it.props.hasCloseButton }.maxByOrNull { it.shownAt }
+            }
+            return closeSlot?.view?.dispatchKeyEvent(event) == true
         }
     }
 
@@ -1742,7 +1757,11 @@ class NotificationManager(
             if (view.parent != null) {
                 try {
                     windowManager.removeView(view)
-                } catch (e: Exception) {
+                } catch (e: IllegalArgumentException) {
+                    Log.e(TAG, "WindowManager removeView error: ${e.message}")
+                } catch (e: IllegalStateException) {
+                    Log.e(TAG, "WindowManager removeView error: ${e.message}")
+                } catch (e: WindowManager.BadTokenException) {
                     Log.e(TAG, "WindowManager removeView error: ${e.message}")
                 }
             }

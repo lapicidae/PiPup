@@ -63,6 +63,11 @@
     <string name="settings_button_text_color">Button-Textfarbe</string>
     <string name="settings_button_focus_text_color">Button-Fokustextfarbe</string>
     <string name="settings_button_border_color">Button-Rahmenfarbe</string>
+    <string name="settings_close_button">Overlay-Schließen-Button</string>
+    <string name="settings_close_button_off">Aus</string>
+    <string name="settings_close_button_size">Schließen-Button-Größe (dp)</string>
+    <string name="settings_close_button_timeout">Schließen-Button automatisch ausblenden</string>
+    <string name="close_button_content_desc">Popup schließen</string>
 
     <!-- Medien-Darstellung -->
     <string name="settings_media_position">Medienposition</string>

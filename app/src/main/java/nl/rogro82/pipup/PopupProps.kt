@@ -61,7 +61,10 @@ data class PopupProps(
     val mediaFullBleed: Boolean? = null,
     val fullscreen: Boolean = false,
     val fullscreenUpscale: Boolean? = null,
-    val dismissOnBack: Boolean = false
+    val dismissOnBack: Boolean = false,
+    val closeButton: String? = null,
+    val closeButtonTimeout: Int? = null,
+    val closeButtonSize: Int? = null
 ) {
     /**
      * Whether this popup covers the entire display (including system bars and cutouts).
@@ -70,10 +73,23 @@ data class PopupProps(
         get() = fullscreen
 
     /**
-     * Whether this popup requires overlay input focus (either for interactive buttons
-     * or to receive hardware Back key presses via [dismissOnBack]).
+     * Whether this popup displays an overlaid close button in a corner.
+     */
+    val hasCloseButton: Boolean
+        get() = !closeButton.isNullOrBlank() && closeButton != "none"
+
+    /**
+     * Whether this popup requires overlay input focus (for interactive buttons,
+     * an overlaid close button, or hardware Back key dismissal via [dismissOnBack]).
      */
     val requiresInputFocus: Boolean
+        get() = buttons.isNotEmpty() || dismissOnBack || hasCloseButton
+
+    /**
+     * Whether pressing the hardware Back key should dismiss this popup.
+     * Popups with only [closeButton] require explicit [dismissOnBack] to close on Back.
+     */
+    val dismissibleByBack: Boolean
         get() = buttons.isNotEmpty() || dismissOnBack
 
     /**
@@ -112,6 +128,18 @@ data class PopupProps(
         private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
         private const val DEFAULT_BG_COLOR = "#CC000000"
         private const val DEFAULT_BORDER_COLOR = "#00000000"
+        /** Maximum allowed auto-hide delay in seconds for the overlay close button. */
+        const val CLOSE_BUTTON_TIMEOUT_MAX = 300
+        /** Maximum auto-hide delay in seconds exposed by the Button Settings slider. */
+        const val CLOSE_BUTTON_TIMEOUT_UI_MAX = 30
+        /** Default auto-hide delay in seconds for the overlay close button. */
+        const val CLOSE_BUTTON_TIMEOUT_DEFAULT = 5
+        /** Minimum allowed diameter in dp for the overlay close button. */
+        const val CLOSE_BUTTON_SIZE_MIN = 24
+        /** Maximum allowed diameter in dp for the overlay close button. */
+        const val CLOSE_BUTTON_SIZE_MAX = 72
+        /** Default diameter in dp for the overlay close button. */
+        const val CLOSE_BUTTON_SIZE_DEFAULT = 32
 
         /**
          * Manual JSON parser for PopupProps to avoid reflection overhead.
@@ -280,8 +308,68 @@ data class PopupProps(
                 mediaFullBleed = if (j.has("mediaFullBleed") && !j.isNull("mediaFullBleed")) j.getBoolean("mediaFullBleed") else null,
                 fullscreen = j.optBoolean("fullscreen", false),
                 fullscreenUpscale = resolvedFullscreenUpscale,
-                dismissOnBack = j.optBoolean("dismissOnBack", false)
+                dismissOnBack = j.optBoolean("dismissOnBack", false),
+                closeButton = if (j.has("closeButton") && !j.isNull("closeButton")) {
+                    parseCloseButton(j.get("closeButton"))
+                } else {
+                    null
+                },
+                closeButtonTimeout = if (j.has("closeButtonTimeout") && !j.isNull("closeButtonTimeout")) {
+                    parseCloseButtonTimeout(j.get("closeButtonTimeout"))
+                } else {
+                    null
+                },
+                closeButtonSize = if (j.has("closeButtonSize") && !j.isNull("closeButtonSize")) {
+                    parseCloseButtonSize(j.get("closeButtonSize"))
+                } else {
+                    null
+                }
             )
+        }
+
+        /**
+         * Parses a raw close button setting (boolean or corner name) into a canonical position
+         * ("top_right", "top_left", "bottom_right", "bottom_left", "none") or null if invalid/unset.
+         */
+        fun parseCloseButton(raw: Any?): String? = when (raw) {
+            is Boolean -> if (raw) "top_right" else "none"
+            is String -> when (raw.trim().lowercase().replace("-", "_")) {
+                "true", "on", "1" -> "top_right"
+                "false", "off", "none", "0", "" -> "none"
+                "top_right", "topright" -> "top_right"
+                "top_left", "topleft" -> "top_left"
+                "bottom_right", "bottomright" -> "bottom_right"
+                "bottom_left", "bottomleft" -> "bottom_left"
+                else -> null
+            }
+            else -> null
+        }
+
+        /**
+         * Normalizes a persisted close button position to a canonical corner or "none".
+         */
+        fun normalizeCloseButtonPosition(raw: String?): String {
+            return parseCloseButton(raw)?.takeIf {
+                it in setOf("top_right", "top_left", "bottom_right", "bottom_left")
+            } ?: "none"
+        }
+
+        /**
+         * Parses a close button auto-hide timeout in seconds (0 = always visible, clamped 0..300).
+         */
+        fun parseCloseButtonTimeout(raw: Any?): Int? = when (raw) {
+            is Number -> raw.toInt().coerceIn(0, CLOSE_BUTTON_TIMEOUT_MAX)
+            is String -> raw.trim().toIntOrNull()?.coerceIn(0, CLOSE_BUTTON_TIMEOUT_MAX)
+            else -> null
+        }
+
+        /**
+         * Parses a close button diameter in dp (clamped 24..72).
+         */
+        fun parseCloseButtonSize(raw: Any?): Int? = when (raw) {
+            is Number -> raw.toInt().coerceIn(CLOSE_BUTTON_SIZE_MIN, CLOSE_BUTTON_SIZE_MAX)
+            is String -> raw.trim().toIntOrNull()?.coerceIn(CLOSE_BUTTON_SIZE_MIN, CLOSE_BUTTON_SIZE_MAX)
+            else -> null
         }
 
         /**
@@ -380,6 +468,9 @@ data class PopupProps(
         j.put("fullscreen", fullscreen)
         fullscreenUpscale?.let { j.put("fullscreenUpscale", it) }
         j.put("dismissOnBack", dismissOnBack)
+        closeButton?.let { j.put("closeButton", it) }
+        closeButtonTimeout?.let { j.put("closeButtonTimeout", it) }
+        closeButtonSize?.let { j.put("closeButtonSize", it) }
 
         media?.let { m ->
             val mj = JSONObject()

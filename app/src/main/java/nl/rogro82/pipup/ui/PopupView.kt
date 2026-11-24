@@ -7,13 +7,16 @@ import android.graphics.drawable.GradientDrawable
 import android.graphics.drawable.StateListDrawable
 import android.util.Log
 import android.view.Gravity
+import android.view.KeyEvent
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import androidx.core.content.ContextCompat
 import androidx.core.graphics.toColorInt
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
@@ -40,6 +43,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     /** The listener to be notified when the media is fully loaded and ready to be displayed. */
     var readyListener: ReadyListener? = null
     var onButton: ((PopupProps.Button) -> Unit)? = null
+    var onClose: (() -> Unit)? = null
     var onLayoutAdjusted: (() -> Unit)? = null
     var onFirstFrame: ((Long) -> Unit)? = null
     var onMediaError: ((String) -> Unit)? = null
@@ -78,6 +82,71 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var isCleanedUp = false
     private var lastMediaError: String? = null
     private var liveBadgeRevealed = false
+    private var closeButtonHidden = false
+    private var closeButtonWakeConsumedDown = false
+    private var lastCloseButtonPosition: String? = null
+    private val closeButtonAutoHideRunnable = Runnable { fadeOutCloseButton() }
+
+    /**
+     * Returns true while the overlay close button is currently faded out by its auto-hide timer.
+     */
+    fun isCloseButtonHidden(): Boolean = closeButtonHidden
+
+    override fun dispatchKeyEvent(event: KeyEvent): Boolean =
+        handleCloseButtonKeyEvent(event) || super.dispatchKeyEvent(event)
+
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        val closeBtn = binding.popupCloseButton
+        if (ev.action == MotionEvent.ACTION_DOWN && closeBtn.isVisible && !props.isPreview) {
+            if (closeButtonHidden) {
+                revealCloseButton()
+                val x = ev.x.toInt()
+                val y = ev.y.toInt()
+                if (x in closeBtn.left..closeBtn.right && y in closeBtn.top..closeBtn.bottom) {
+                    return true
+                }
+            } else {
+                scheduleCloseButtonAutoHide()
+            }
+        }
+        return super.dispatchTouchEvent(ev)
+    }
+
+    private fun handleCloseButtonKeyEvent(event: KeyEvent): Boolean {
+        val closeBtn = binding.popupCloseButton
+        return closeBtn.isVisible && !props.isPreview && when (event.keyCode) {
+            KeyEvent.KEYCODE_DPAD_UP,
+            KeyEvent.KEYCODE_DPAD_DOWN,
+            KeyEvent.KEYCODE_DPAD_LEFT,
+            KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                if (event.action == KeyEvent.ACTION_DOWN) {
+                    val wasHidden = closeButtonHidden
+                    revealCloseButton()
+                    wasHidden && props.buttons.isEmpty()
+                } else {
+                    false
+                }
+            }
+            KeyEvent.KEYCODE_DPAD_CENTER,
+            KeyEvent.KEYCODE_ENTER,
+            KeyEvent.KEYCODE_NUMPAD_ENTER -> handleCloseButtonConfirmKey(event, closeBtn)
+            else -> false
+        }
+    }
+
+    private fun handleCloseButtonConfirmKey(event: KeyEvent, closeBtn: View): Boolean = when {
+        !closeBtn.hasFocus() && props.buttons.isNotEmpty() -> false
+        event.action == KeyEvent.ACTION_DOWN && closeButtonHidden -> {
+            closeButtonWakeConsumedDown = true
+            revealCloseButton()
+            true
+        }
+        event.action == KeyEvent.ACTION_UP && closeButtonWakeConsumedDown -> {
+            closeButtonWakeConsumedDown = false
+            true
+        }
+        else -> false
+    }
 
     private fun handleWhepRetry(error: String, currentRetry: Int) {
         lastMediaError = error
@@ -399,6 +468,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
 
         updateButtons()
+        updateCloseButton()
         applyHeightConstraints(notifyCallback = false)
     }
 
@@ -839,7 +909,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     private fun configureLiveBadgeAppearance() {
         val badge = binding.popupLiveBadge
-        val defaultBadgeColor = androidx.core.content.ContextCompat.getColor(context, R.color.live_badge_background)
+        val defaultBadgeColor = ContextCompat.getColor(context, R.color.live_badge_background)
         val badgeColor = props.liveBadgeColor?.let { colorStr ->
             try {
                 val clean = if (colorStr.startsWith("#")) colorStr else "#$colorStr"
@@ -928,6 +998,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         if (isCleanedUp) return
         isCleanedUp = true
         mainHandler.removeCallbacksAndMessages(null)
+        binding.popupCloseButton.animate().cancel()
         mediaRenderer.fullCleanup(binding.popupMediaFrame, props.media)
     }
 
@@ -1041,6 +1112,150 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
+    private fun updateCloseButton() {
+        val btn = binding.popupCloseButton
+        val pos = PopupProps.normalizeCloseButtonPosition(props.closeButton ?: settings.closeButton)
+        if (pos == "none") {
+            hideCloseButton(btn)
+            return
+        }
+
+        val wasVisible = btn.isVisible
+        val positionChanged = lastCloseButtonPosition != pos
+        lastCloseButtonPosition = pos
+
+        applyCloseButtonLayout(btn, pos)
+        applyCloseButtonStyleAndListeners(btn)
+        btn.isVisible = true
+        btn.bringToFront()
+
+        if (props.isPreview) {
+            showCloseButtonPreviewState(btn)
+            return
+        }
+        if (!wasVisible || positionChanged || !closeButtonHidden) {
+            revealCloseButton()
+        }
+        if (props.buttons.isEmpty() && !btn.hasFocus()) {
+            btn.post {
+                if (!isCleanedUp && btn.isVisible) {
+                    btn.requestFocus()
+                }
+            }
+        }
+    }
+
+    private fun hideCloseButton(btn: ImageView) {
+        mainHandler.removeCallbacks(closeButtonAutoHideRunnable)
+        btn.animate().cancel()
+        btn.isVisible = false
+        closeButtonHidden = false
+        closeButtonWakeConsumedDown = false
+        lastCloseButtonPosition = null
+    }
+
+    private fun showCloseButtonPreviewState(btn: ImageView) {
+        mainHandler.removeCallbacks(closeButtonAutoHideRunnable)
+        btn.animate().cancel()
+        btn.alpha = 1f
+        btn.scaleX = 1f
+        btn.scaleY = 1f
+        closeButtonHidden = false
+    }
+
+    private fun applyCloseButtonLayout(btn: ImageView, pos: String) {
+        val gravity = when (pos) {
+            "top_left" -> Gravity.TOP or Gravity.START
+            "bottom_left" -> Gravity.BOTTOM or Gravity.START
+            "bottom_right" -> Gravity.BOTTOM or Gravity.END
+            else -> Gravity.TOP or Gravity.END
+        }
+        val sizeDp = (props.closeButtonSize ?: settings.closeButtonSize).coerceIn(
+            PopupProps.CLOSE_BUTTON_SIZE_MIN,
+            PopupProps.CLOSE_BUTTON_SIZE_MAX
+        )
+        val sizePx = context.dpToPx(sizeDp)
+        val marginDp = if (props.coversScreen) {
+            CLOSE_BUTTON_MARGIN_FULLSCREEN_DP
+        } else {
+            CLOSE_BUTTON_MARGIN_COMPACT_DP
+        }
+        val margin = context.dpToPx(marginDp)
+        (btn.layoutParams as? LayoutParams)?.let { lp ->
+            lp.width = sizePx
+            lp.height = sizePx
+            lp.gravity = gravity
+            lp.setMargins(margin, margin, margin, margin)
+            btn.layoutParams = lp
+        }
+    }
+
+    private fun applyCloseButtonStyleAndListeners(btn: ImageView) {
+        val previewFocused = props.isPreview && props.buttons.isEmpty()
+        val normalColor = parseColorOrDefault(
+            props.buttonColor ?: settings.defaultButtonColor,
+            ContextCompat.getColor(context, R.color.preset_platinum)
+        )
+        val focusColor = parseColorOrDefault(
+            props.buttonFocusColor ?: settings.defaultButtonFocusColor,
+            ContextCompat.getColor(context, R.color.preset_sky_blue)
+        )
+        btn.background = null
+        btn.imageTintList = if (previewFocused) {
+            ColorStateList.valueOf(focusColor)
+        } else {
+            createButtonTextColorStateList(normalColor, focusColor)
+        }
+        btn.isFocusable = !props.isPreview
+        btn.isClickable = !props.isPreview
+        btn.setOnFocusChangeListener { v, hasFocus ->
+            if (!props.isPreview) {
+                val scale = if (hasFocus) CLOSE_BUTTON_FOCUS_SCALE else 1.0f
+                v.animate().scaleX(scale).scaleY(scale).setDuration(CLOSE_BUTTON_FOCUS_ANIM_MS).start()
+                if (hasFocus && closeButtonHidden) {
+                    revealCloseButton()
+                }
+            }
+        }
+        btn.setOnClickListener {
+            if (props.isPreview) return@setOnClickListener
+            if (closeButtonHidden) {
+                revealCloseButton()
+            } else {
+                onClose?.invoke()
+            }
+        }
+    }
+
+    private fun revealCloseButton() {
+        val btn = binding.popupCloseButton
+        if (!btn.isVisible || isCleanedUp) return
+        mainHandler.removeCallbacks(closeButtonAutoHideRunnable)
+        closeButtonHidden = false
+        btn.animate().cancel()
+        if (btn.alpha < 1f) {
+            btn.animate().alpha(1f).setDuration(CLOSE_BUTTON_REVEAL_ANIM_MS).start()
+        }
+        scheduleCloseButtonAutoHide()
+    }
+
+    private fun scheduleCloseButtonAutoHide() {
+        mainHandler.removeCallbacks(closeButtonAutoHideRunnable)
+        if (props.isPreview || isCleanedUp || !binding.popupCloseButton.isVisible) return
+        val timeoutSec = props.closeButtonTimeout ?: settings.closeButtonTimeout
+        if (timeoutSec > 0) {
+            mainHandler.postDelayed(closeButtonAutoHideRunnable, timeoutSec * MS_PER_SECOND)
+        }
+    }
+
+    private fun fadeOutCloseButton() {
+        val btn = binding.popupCloseButton
+        if (props.isPreview || isCleanedUp || !btn.isVisible) return
+        closeButtonHidden = true
+        btn.animate().cancel()
+        btn.animate().alpha(0f).setDuration(CLOSE_BUTTON_FADE_OUT_ANIM_MS).start()
+    }
+
     private fun createButtonBackground(props: PopupProps, forceFocused: Boolean = false): android.graphics.drawable.Drawable {
         val radius = props.buttonCornerRadius ?: settings.defaultButtonCornerRadius
         val radiusPx = if (props.scale) context.getScaledPixels(radius.toInt()).toFloat() else radius
@@ -1083,12 +1298,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         )
     }
 
-    private fun parseColorOrDefault(hex: String, fallback: String): Int {
+    private fun parseColorOrDefault(hex: String, fallback: String): Int =
+        parseColorOrDefault(hex, fallback.toColorInt())
+
+    private fun parseColorOrDefault(hex: String, fallbackColor: Int): Int {
         return try {
             val clean = if (hex.startsWith("#")) hex else "#$hex"
             clean.toColorInt()
-        } catch (_: Exception) {
-            fallback.toColorInt()
+        } catch (_: IllegalArgumentException) {
+            fallbackColor
         }
     }
 
@@ -1096,6 +1314,14 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
      * Convenience builder method to create and initialize a [PopupView].
      */
     companion object {
+        private const val CLOSE_BUTTON_MARGIN_FULLSCREEN_DP = 16
+        private const val CLOSE_BUTTON_MARGIN_COMPACT_DP = 8
+        private const val CLOSE_BUTTON_FOCUS_SCALE = 1.15f
+        private const val CLOSE_BUTTON_FOCUS_ANIM_MS = 120L
+        private const val CLOSE_BUTTON_REVEAL_ANIM_MS = 150L
+        private const val CLOSE_BUTTON_FADE_OUT_ANIM_MS = 300L
+        private const val MS_PER_SECOND = 1000L
+
         fun build(context: Context, props: PopupProps, listener: ReadyListener? = null): PopupView {
             return PopupView(context, props).apply { readyListener = listener }.create()
         }

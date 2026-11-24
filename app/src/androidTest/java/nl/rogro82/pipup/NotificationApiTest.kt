@@ -673,6 +673,43 @@ class NotificationApiTest {
             assertTrue("Button popup must be dismissed by Back", service.notificationManager.handleBackDismissal())
             waitUntilIdle(service)
             assertFalse(service.notificationManager.isDisplaying())
+
+            // 4. Popup with only closeButton (dismissOnBack=false) is NOT dismissed by Back
+            val closeOnlyPayload = """{
+                "id": "close_only",
+                "duration": 15,
+                "fullscreen": true,
+                "closeButton": "top_right",
+                "title": "Close Button Only"
+            }"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", closeOnlyPayload.toByteArray()).code)
+            Thread.sleep(400)
+            assertFalse(
+                "closeButton-only popup must ignore Back unless dismissOnBack is true",
+                service.notificationManager.handleBackDismissal()
+            )
+            assertTrue(service.notificationManager.isDisplaying())
+
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            waitUntilIdle(service)
+
+            // 5. Popup with closeButton AND dismissOnBack=true IS dismissed by Back
+            val closeAndBackPayload = """{
+                "id": "close_and_back",
+                "duration": 15,
+                "fullscreen": true,
+                "closeButton": "top_right",
+                "dismissOnBack": true,
+                "title": "Close + Back"
+            }"""
+            assertEquals(200, sendPostWithResponse("$baseUrl/notify", closeAndBackPayload.toByteArray()).code)
+            Thread.sleep(400)
+            assertTrue(
+                "closeButton + dismissOnBack popup must be dismissed by Back",
+                service.notificationManager.handleBackDismissal()
+            )
+            waitUntilIdle(service)
+            assertFalse(service.notificationManager.isDisplaying())
         } finally {
             sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
         }

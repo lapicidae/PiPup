@@ -215,6 +215,12 @@ class AppSettings(context: Context) {
     var liveBadge by BooleanPref("live_badge", false)
     /** Default corner position for the Live indicator pill. */
     var liveBadgePosition by StringPref("live_badge_position", "bottom_right")
+    /** Default overlay close button corner position ("none" = disabled). */
+    var closeButton by StringPref("close_button", "none")
+    /** Default auto-hide delay in seconds for the overlay close button (0 = always visible). */
+    var closeButtonTimeout by IntPref("close_button_timeout", PopupProps.CLOSE_BUTTON_TIMEOUT_DEFAULT)
+    /** Default diameter in dp for the overlay close button (24..72). */
+    var closeButtonSize by IntPref("close_button_size", PopupProps.CLOSE_BUTTON_SIZE_DEFAULT)
 
     // System / App
     /** Enables additional technical settings and information. */
@@ -307,6 +313,9 @@ class AppSettings(context: Context) {
         val fullscreenUpscale: Boolean = false,
         val liveBadge: Boolean = false,
         val liveBadgePosition: String = "bottom_right",
+        val closeButton: String = "none",
+        val closeButtonTimeout: Int = PopupProps.CLOSE_BUTTON_TIMEOUT_DEFAULT,
+        val closeButtonSize: Int = PopupProps.CLOSE_BUTTON_SIZE_DEFAULT,
         val appTheme: Int,
         val advancedMode: Boolean,
         val moduleModes: Map<String, Int>,
@@ -353,6 +362,9 @@ class AppSettings(context: Context) {
                 put("fullscreenUpscale", fullscreenUpscale)
                 put("liveBadge", liveBadge)
                 put("liveBadgePosition", liveBadgePosition)
+                put("closeButton", closeButton)
+                put("closeButtonTimeout", closeButtonTimeout)
+                put("closeButtonSize", closeButtonSize)
                 put("appTheme", appTheme)
                 put("advancedMode", advancedMode)
                 put("moduleModes", JSONObject(moduleModes))
@@ -414,6 +426,23 @@ class AppSettings(context: Context) {
                     fullscreenUpscale = j.optBoolean("fullscreenUpscale", defaults?.fullscreenUpscale ?: false),
                     liveBadge = j.optBoolean("liveBadge", defaults?.liveBadge ?: false),
                     liveBadgePosition = j.optString("liveBadgePosition", defaults?.liveBadgePosition ?: "bottom_right"),
+                    closeButton = if (j.has("closeButton") && !j.isNull("closeButton")) {
+                        PopupProps.parseCloseButton(j.get("closeButton")) ?: "none"
+                    } else {
+                        defaults?.closeButton ?: "none"
+                    },
+                    closeButtonTimeout = if (j.has("closeButtonTimeout") && !j.isNull("closeButtonTimeout")) {
+                        PopupProps.parseCloseButtonTimeout(j.get("closeButtonTimeout"))
+                            ?: PopupProps.CLOSE_BUTTON_TIMEOUT_DEFAULT
+                    } else {
+                        defaults?.closeButtonTimeout ?: PopupProps.CLOSE_BUTTON_TIMEOUT_DEFAULT
+                    },
+                    closeButtonSize = if (j.has("closeButtonSize") && !j.isNull("closeButtonSize")) {
+                        PopupProps.parseCloseButtonSize(j.get("closeButtonSize"))
+                            ?: PopupProps.CLOSE_BUTTON_SIZE_DEFAULT
+                    } else {
+                        defaults?.closeButtonSize ?: PopupProps.CLOSE_BUTTON_SIZE_DEFAULT
+                    },
                     appTheme = j.optInt("appTheme", defaults?.appTheme ?: 0),
                     advancedMode = j.optBoolean("advancedMode", defaults?.advancedMode ?: false),
                     moduleModes = mergedModes,
@@ -477,6 +506,9 @@ class AppSettings(context: Context) {
             fullscreenUpscale = fullscreenUpscale,
             liveBadge = liveBadge,
             liveBadgePosition = liveBadgePosition,
+            closeButton = closeButton,
+            closeButtonTimeout = closeButtonTimeout,
+            closeButtonSize = closeButtonSize,
             appTheme = appTheme,
             advancedMode = advancedMode,
             moduleModes = modes,
@@ -528,6 +560,12 @@ class AppSettings(context: Context) {
         liveBadgePosition = data.liveBadgePosition.takeIf {
             it in listOf("top_left", "top_right", "bottom_left", "bottom_right")
         } ?: "bottom_right"
+        closeButton = PopupProps.normalizeCloseButtonPosition(data.closeButton)
+        closeButtonTimeout = data.closeButtonTimeout.coerceIn(0, PopupProps.CLOSE_BUTTON_TIMEOUT_MAX)
+        closeButtonSize = data.closeButtonSize.coerceIn(
+            PopupProps.CLOSE_BUTTON_SIZE_MIN,
+            PopupProps.CLOSE_BUTTON_SIZE_MAX
+        )
         appTheme = data.appTheme.coerceIn(0, 1)
         advancedMode = data.advancedMode
 
@@ -638,7 +676,10 @@ class AppSettings(context: Context) {
             mediaFullBleed = props.mediaFullBleed ?: mediaFullBleed,
             fullscreenUpscale = props.fullscreenUpscale ?: fullscreenUpscale,
             liveBadge = props.liveBadge ?: liveBadge,
-            liveBadgePosition = props.liveBadgePosition ?: liveBadgePosition
+            liveBadgePosition = props.liveBadgePosition ?: liveBadgePosition,
+            closeButton = props.closeButton ?: closeButton,
+            closeButtonTimeout = props.closeButtonTimeout ?: closeButtonTimeout,
+            closeButtonSize = props.closeButtonSize ?: closeButtonSize
         )
     }
 

@@ -204,7 +204,9 @@ class SettingsSyncTest {
                 )
             )
 
-            val partialBody = """{"maxPopups": 4}""".toByteArray(Charsets.UTF_8)
+            val partialBody =
+                """{"maxPopups": 4, "closeButton": "top_right", "closeButtonTimeout": 8, "closeButtonSize": 56}"""
+                    .toByteArray(Charsets.UTF_8)
             val conn = (URL("http://localhost:7979/settings").openConnection() as HttpURLConnection)
             try {
                 conn.requestMethod = "POST"
@@ -220,6 +222,9 @@ class SettingsSyncTest {
 
             val updated = PiPupApp.settings.getAll()
             assertEquals(4, updated.maxPopups)
+            assertEquals("top_right", updated.closeButton)
+            assertEquals(8, updated.closeButtonTimeout)
+            assertEquals(56, updated.closeButtonSize)
             assertEquals(2, updated.positionIndex)
             assertEquals("#334455", updated.backgroundColor)
             assertTrue(updated.advancedMode)

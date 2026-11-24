@@ -145,4 +145,77 @@
         android:textAllCaps="false"
         android:fontFamily="monospace"/>
 
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_close_button"
+        android:textColor="@color/colorOnSurfaceVariant"
+        android:layout_marginTop="24dp"/>
+    <Spinner
+        android:id="@+id/spinner_close_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="8dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="24dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_close_button_size"
+            android:textColor="@color/colorOnSurfaceVariant" />
+        <TextView
+            android:id="@+id/text_close_button_size_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            tools:text="32 dp" />
+    </LinearLayout>
+    <SeekBar
+        android:id="@+id/seekbar_close_button_size"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:thumbTint="@color/tv_thumb_selector"
+        android:progressTint="@color/tv_thumb_selector"
+        android:progressBackgroundTint="@color/tv_track_selector"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginTop="24dp">
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="@string/settings_close_button_timeout"
+            android:textColor="@color/colorOnSurfaceVariant" />
+        <TextView
+            android:id="@+id/text_close_button_timeout_value"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textColor="@color/colorOnSurfaceVariant"
+            tools:text="5 seconds" />
+    </LinearLayout>
+    <SeekBar
+        android:id="@+id/seekbar_close_button_timeout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:focusable="true"
+        android:background="@drawable/focus_background"
+        android:padding="12dp"
+        android:thumbTint="@color/tv_thumb_selector"
+        android:progressTint="@color/tv_thumb_selector"
+        android:progressBackgroundTint="@color/tv_track_selector"/>
+
 </LinearLayout>

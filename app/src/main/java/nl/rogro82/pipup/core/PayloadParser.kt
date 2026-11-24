@@ -126,6 +126,9 @@ class PayloadParser(private val context: Context) {
         val fullscreen = getVal("fullscreen")?.toBooleanStrictOrNull() ?: false
         val fullscreenUpscale = (getVal("fullscreenUpscale") ?: getVal("upscale"))?.toBooleanStrictOrNull()
         val dismissOnBack = getVal("dismissOnBack")?.toBooleanStrictOrNull() ?: false
+        val closeButton = getVal("closeButton")?.let { PopupProps.parseCloseButton(it) }
+        val closeButtonTimeout = getVal("closeButtonTimeout")?.let { PopupProps.parseCloseButtonTimeout(it) }
+        val closeButtonSize = getVal("closeButtonSize")?.let { PopupProps.parseCloseButtonSize(it) }
 
         var media: PopupProps.Media? = null
         files["image"]?.let { tempPath ->
@@ -177,7 +180,9 @@ class PayloadParser(private val context: Context) {
             mediaFullBleed = mediaFullBleed, liveBadge = liveBadge,
             liveBadgeColor = liveBadgeColor, liveBadgePosition = liveBadgePosition,
             fullscreen = fullscreen, fullscreenUpscale = fullscreenUpscale,
-            dismissOnBack = dismissOnBack
+            dismissOnBack = dismissOnBack,
+            closeButton = closeButton, closeButtonTimeout = closeButtonTimeout,
+            closeButtonSize = closeButtonSize
         )
     } catch (e: Exception) {
         Log.e(TAG, "Multipart parsing error", e)

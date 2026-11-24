@@ -1198,6 +1198,9 @@ send_json_notification() {
   local full_bleed="${22:-false}"
   local is_fullscreen="${23:-false}"
   local dismiss_on_back="${24:-false}"
+  local close_button="${25:-}"
+  local close_btn_json="null"
+  [[ -n "${close_button}" ]] && close_btn_json="\"${close_button}\""
 
   local endpoint="http://${target_ip}:${PORT}/notify"
 
@@ -1232,6 +1235,7 @@ send_json_notification() {
   "mediaFullBleed": ${full_bleed},
   "fullscreen": ${is_fullscreen},
   "dismissOnBack": ${dismiss_on_back},
+  "closeButton": ${close_btn_json},
   "animationType": ${anim_type},
   "animationDuration": ${anim_duration},
   "overwrite": ${overwrite},
@@ -1283,6 +1287,7 @@ send_multipart_test() {
   local popup_duration="${9:-${DURATION}}"
   local is_fullscreen="${10:-false}"
   local dismiss_on_back="${11:-false}"
+  local close_button="${12:-}"
   local endpoint="http://${target_ip}:${PORT}/notify"
 
   local rand_idx=$(( RANDOM % ${#MULTIPART_IMAGES[@]} ))
@@ -1304,6 +1309,10 @@ send_multipart_test() {
 
   local width_args=()
   [[ -n "${media_w}" && "${media_w}" -gt 0 ]] && width_args=(-F "imageWidth=${media_w}")
+  local close_btn_args=()
+  if [[ -n "${close_button}" ]]; then
+    close_btn_args=(-F "closeButton=${close_button}")
+  fi
 
   local response
   response=$(curl -s --max-time 60 -w "\n%{http_code}" -X POST "${endpoint}" \
@@ -1311,6 +1320,7 @@ send_multipart_test() {
     -F "message=${full_msg}" \
     -F "image=@${img_file}" \
     "${width_args[@]}" \
+    "${close_btn_args[@]}" \
     -F "duration=${popup_duration}" \
     -F "position=${position}" \
     -F "mediaPosition=${media_pos}" \
@@ -1351,7 +1361,7 @@ send_multipart_test() {
 usage() {
   cat <<EOF
 Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]]
-       [-a] [-l] [-o] [-F] [-b] [-C] [-c] [-s] [-k] [-h]
+       [-a] [-l] [-o] [-F] [-b] [-x [pos]] [-C] [-c] [-s] [-k] [-h]
 Options:
   -d    Target IP (default: ${DEFAULT_IP})
   -p    Screen position index (0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center, 5: TopCenter, 6: BottomCenter, 7: CenterLeft, 8: CenterRight)
@@ -1364,6 +1374,8 @@ Options:
   -o    Overwrite the current notification
   -F    Enable fullscreen mode (covers entire display)
   -b    Dismiss popup when Back key is pressed (dismissOnBack)
+  -x    Show overlaid close button (optional corner: top_right, top_left,
+        bottom_right, bottom_left; default: top_right)
   -C    Disable media caching (for URL-based media)
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
@@ -1416,6 +1428,7 @@ main() {
   local overwrite="false"
   local fullscreen="false"
   local dismiss_on_back="false"
+  local close_button=""
   local monitor_mem="false"
   local trigger_unload="false"
   local USE_CACHE="true"
@@ -1423,7 +1436,7 @@ main() {
   local repeat_count=1
   local repeat_explicit="false"
 
-  while getopts "d:t:u:p:alFbockswmghrCM?" opt; do
+  while getopts "d:t:u:p:alFbxockswmghrCM?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       C) USE_CACHE="false" ;;
@@ -1435,6 +1448,16 @@ main() {
       o) overwrite="true" ;;
       F) fullscreen="true" ;;
       b) dismiss_on_back="true" ;;
+      x)
+        close_button="top_right"
+        local next_pos="${!OPTIND:-}"
+        case "${next_pos}" in
+          top_right|top_left|bottom_right|bottom_left|none)
+            close_button="${next_pos}"
+            OPTIND=$((OPTIND + 1))
+            ;;
+        esac
+        ;;
       c) immediate_cancel="true" ;;
       k) kill_whep_pipeline="true" ;;
       s) run_stress="true" ;;
@@ -1711,7 +1734,7 @@ main() {
       "${msg_c}" "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" \
       "${anim_dur}" "${overwrite}" "${rand_t_a}" "${rand_m_a}" "${title_s}" \
       "${msg_s}" "${popup_duration}" "${full_bleed}" "${fullscreen}" \
-      "${dismiss_on_back}")
+      "${dismiss_on_back}" "${close_button}")
 
     local table_type="${type^^}"
     if [[ "${type}" == "whep" ]]; then
@@ -1773,11 +1796,11 @@ main() {
       if [[ "${is_async}" == "true" ]]; then
         send_multipart_test "${target_ip}" "${pos}" "${suffix}" \
           "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" \
-          "${fullscreen}" "${dismiss_on_back}" &
+          "${fullscreen}" "${dismiss_on_back}" "${close_button}" &
       else
         send_multipart_test "${target_ip}" "${pos}" "${suffix}" \
           "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" \
-          "${fullscreen}" "${dismiss_on_back}"
+          "${fullscreen}" "${dismiss_on_back}" "${close_button}"
       fi
     else
       local radius border_w padding anim_type anim_dur fit title_s msg_s _

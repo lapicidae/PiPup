@@ -83,4 +83,18 @@
         </LinearLayout>
 
     </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/popup_close_button"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_gravity="top|end"
+        android:layout_margin="8dp"
+        android:padding="2dp"
+        android:background="@android:color/transparent"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_close"
+        android:contentDescription="@string/close_button_content_desc"
+        android:elevation="8dp"
+        android:visibility="gone"/>
 </merge>

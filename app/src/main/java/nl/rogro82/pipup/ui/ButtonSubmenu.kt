@@ -2,10 +2,12 @@ package nl.rogro82.pipup.ui
 
 import android.content.Context
 import android.view.View
+import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.colorToHex
 
@@ -95,6 +97,43 @@ class ButtonSubmenu(
         setupHexColorButton(root, R.id.btn_edit_button_border_color_hex, settings.defaultButtonBorderColor) {
             settings.defaultButtonBorderColor = it
             setSelectedColorInSpinner(root, R.id.spinner_button_border_color, adapterBorder, it)
+        }
+
+        val suffix = context.getString(R.string.settings_default_suffix)
+        val closeButtonItems = context.resources.getStringArray(R.array.close_button_position_options)
+            .mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
+        val closeButtonKeys = listOf("none", "top_right", "top_left", "bottom_right", "bottom_left")
+        val currentCloseButtonIdx = closeButtonKeys.indexOf(settings.closeButton).coerceAtLeast(0)
+        val closeButtonAdapter = ArrayAdapter(
+            context,
+            android.R.layout.simple_spinner_item,
+            closeButtonItems
+        ).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_close_button, closeButtonAdapter, currentCloseButtonIdx) {
+            settings.closeButton = closeButtonKeys.getOrElse(it) { "none" }
+        }
+
+        val sizeSpan = PopupProps.CLOSE_BUTTON_SIZE_MAX - PopupProps.CLOSE_BUTTON_SIZE_MIN
+        setupSeekBar(
+            root,
+            R.id.seekbar_close_button_size,
+            R.id.text_close_button_size_value,
+            (settings.closeButtonSize - PopupProps.CLOSE_BUTTON_SIZE_MIN).coerceIn(0, sizeSpan),
+            max = sizeSpan
+        ) {
+            settings.closeButtonSize = it + PopupProps.CLOSE_BUTTON_SIZE_MIN
+        }
+
+        setupSeekBar(
+            root,
+            R.id.seekbar_close_button_timeout,
+            R.id.text_close_button_timeout_value,
+            settings.closeButtonTimeout.coerceIn(0, PopupProps.CLOSE_BUTTON_TIMEOUT_UI_MAX),
+            max = PopupProps.CLOSE_BUTTON_TIMEOUT_UI_MAX
+        ) {
+            settings.closeButtonTimeout = it
         }
     }
 }

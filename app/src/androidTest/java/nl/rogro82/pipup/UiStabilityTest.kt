@@ -1,16 +1,22 @@
 package nl.rogro82.pipup
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.view.KeyEvent
+import android.view.View
 import android.view.WindowManager
 import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import nl.rogro82.pipup.core.NotificationManager
+import nl.rogro82.pipup.ui.PopupView
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.lang.reflect.Proxy
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Automated test suite for UI Stability, Popup Stacking across all 9 positions, and Animation variety.
@@ -274,6 +280,71 @@ class UiStabilityTest {
             )
         } finally {
             manager.cancelAll()
+        }
+    }
+
+    @Test
+    fun testOverlayCloseButtonAutoHideWakeAndDismiss() {
+        val dm = appContext.resources.displayMetrics
+        val bitmap = Bitmap.createBitmap(640, 360, Bitmap.Config.ARGB_8888)
+        val closeCalls = AtomicInteger(0)
+        var popupView: PopupView? = null
+
+        try {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                val props = PopupProps(
+                    id = "close_overlay_test",
+                    fullscreen = true,
+                    mediaFullBleed = true,
+                    contentPadding = 0,
+                    borderWidth = 0,
+                    closeButton = "top_right",
+                    closeButtonTimeout = 1,
+                    closeButtonSize = 56,
+                    media = PopupProps.Media.Bitmap(bitmap, 640)
+                )
+                val view = PopupView.build(appContext, props).apply {
+                    onClose = { closeCalls.incrementAndGet() }
+                }
+                popupView = view
+                val widthSpec = View.MeasureSpec.makeMeasureSpec(dm.widthPixels, View.MeasureSpec.EXACTLY)
+                val heightSpec = View.MeasureSpec.makeMeasureSpec(dm.heightPixels, View.MeasureSpec.EXACTLY)
+                view.measure(widthSpec, heightSpec)
+                view.layout(0, 0, dm.widthPixels, dm.heightPixels)
+
+                // Overlaid close button must take zero layout space (media keeps full screen bounds)
+                val mediaContainer = view.findViewById<View>(R.id.popup_media_container)
+                assertEquals(dm.widthPixels, mediaContainer.measuredWidth)
+                assertEquals(dm.heightPixels, mediaContainer.measuredHeight)
+
+                val closeBtn = view.findViewById<View>(R.id.popup_close_button)
+                assertEquals(View.VISIBLE, closeBtn.visibility)
+                assertEquals(appContext.dpToPx(56), closeBtn.layoutParams.width)
+                assertEquals(appContext.dpToPx(56), closeBtn.layoutParams.height)
+                assertFalse(view.isCloseButtonHidden())
+            }
+
+            // Wait for 1s auto-hide timer to fade the close button out
+            Thread.sleep(1300)
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                val view = popupView!!
+                assertTrue("Close button must fade out after timeout", view.isCloseButtonHidden())
+
+                // Variant B: First OK press while hidden wakes the close button without closing
+                view.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_CENTER))
+                view.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_DPAD_CENTER))
+                assertFalse("First OK press must reveal close button", view.isCloseButtonHidden())
+                assertEquals("First OK press while hidden must not close popup", 0, closeCalls.get())
+
+                // Second OK / click while visible invokes onClose
+                view.findViewById<View>(R.id.popup_close_button).performClick()
+                assertEquals("Click while visible must invoke onClose", 1, closeCalls.get())
+            }
+        } finally {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                popupView?.cleanup()
+            }
+            bitmap.recycle()
         }
     }
 }

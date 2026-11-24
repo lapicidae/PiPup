@@ -642,6 +642,8 @@ class SettingsActivity : AppCompatActivity() {
                 buttonFocusTextColor = settings.defaultButtonFocusTextColor,
                 buttonBorderColor = settings.defaultButtonBorderColor,
                 buttonCornerRadius = settings.defaultButtonCornerRadius,
+                closeButton = settings.closeButton,
+                closeButtonSize = settings.closeButtonSize,
                 isPreview = true
             )
 

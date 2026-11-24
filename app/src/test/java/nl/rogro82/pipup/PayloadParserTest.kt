@@ -419,5 +419,54 @@ class PayloadParserTest {
         )
         assertFalse(buttonProps.dismissOnBack)
         assertTrue(buttonProps.requiresInputFocus)
+        assertTrue(buttonProps.dismissibleByBack)
+    }
+
+    @Test
+    fun testCloseButtonParsingFocusAndBackSeparation() {
+        val defaultProps = PopupProps.fromJson("""{"title": "Plain"}""")
+        org.junit.Assert.assertNull(defaultProps.closeButton)
+        org.junit.Assert.assertNull(defaultProps.closeButtonTimeout)
+        org.junit.Assert.assertNull(defaultProps.closeButtonSize)
+        assertFalse(defaultProps.hasCloseButton)
+        assertFalse(defaultProps.requiresInputFocus)
+        assertFalse(defaultProps.dismissibleByBack)
+
+        val cornerProps = PopupProps.fromJson(
+            """{"fullscreen": true, "closeButton": "bottom_left", "closeButtonTimeout": 5, "closeButtonSize": 56}"""
+        )
+        assertEquals("bottom_left", cornerProps.closeButton)
+        assertEquals(5, cornerProps.closeButtonTimeout)
+        assertEquals(56, cornerProps.closeButtonSize)
+        assertTrue(cornerProps.hasCloseButton)
+        assertTrue(cornerProps.requiresInputFocus)
+        assertFalse(cornerProps.dismissibleByBack)
+
+        val roundTrip = PopupProps.fromJson(cornerProps.toJson())
+        assertEquals("bottom_left", roundTrip.closeButton)
+        assertEquals(5, roundTrip.closeButtonTimeout)
+        assertEquals(56, roundTrip.closeButtonSize)
+
+        val minClamped = PopupProps.fromJson("""{"closeButton": true, "closeButtonSize": 10}""")
+        assertEquals(24, minClamped.closeButtonSize)
+        val maxClamped = PopupProps.fromJson("""{"closeButton": true, "closeButtonSize": 120}""")
+        assertEquals(72, maxClamped.closeButtonSize)
+
+        val boolTrueProps = PopupProps.fromJson("""{"closeButton": true, "closeButtonTimeout": 0}""")
+        assertEquals("top_right", boolTrueProps.closeButton)
+        assertEquals(0, boolTrueProps.closeButtonTimeout)
+        assertTrue(boolTrueProps.hasCloseButton)
+
+        val boolFalseProps = PopupProps.fromJson("""{"closeButton": false}""")
+        assertEquals("none", boolFalseProps.closeButton)
+        assertFalse(boolFalseProps.hasCloseButton)
+        assertFalse(boolFalseProps.requiresInputFocus)
+
+        val combinedProps = PopupProps.fromJson(
+            """{"closeButton": "top_right", "dismissOnBack": true}"""
+        )
+        assertTrue(combinedProps.hasCloseButton)
+        assertTrue(combinedProps.requiresInputFocus)
+        assertTrue(combinedProps.dismissibleByBack)
     }
 }

@@ -46,4 +46,12 @@
         <item>@string/settings_live_badge_pos_top_left</item>
         <item>@string/settings_live_badge_pos_bottom_left</item>
     </string-array>
+
+    <string-array name="close_button_position_options">
+        <item>@string/settings_close_button_off</item>
+        <item>@string/settings_live_badge_pos_top_right</item>
+        <item>@string/settings_live_badge_pos_top_left</item>
+        <item>@string/settings_live_badge_pos_bottom_right</item>
+        <item>@string/settings_live_badge_pos_bottom_left</item>
+    </string-array>
 </resources>
