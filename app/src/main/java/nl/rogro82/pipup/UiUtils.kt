@@ -112,6 +112,8 @@ fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
     dialog.setupTvKeyboardAvoidance(input)
     input.requestFocus()
 }
+private const val TV_DIALOG_TOP_OFFSET_Y = 100
+
 /**
  * Configures an [AlertDialog] for TV input:
  * 1. Shifts window to TOP initially so the virtual IME does not obscure or distort input fields.
@@ -124,7 +126,7 @@ fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
 fun AlertDialog.setupTvKeyboardAvoidance(input: View) {
     window?.apply {
         setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL)
-        attributes = attributes.apply { y = 100 }
+        attributes = attributes.apply { y = TV_DIALOG_TOP_OFFSET_Y }
         setSoftInputMode(
             WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
                 WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING,
@@ -139,7 +141,7 @@ fun AlertDialog.setupTvKeyboardAvoidance(input: View) {
             window?.let { win ->
                 val p = win.attributes
                 p.gravity = if (wasKeyboardVisible) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
-                p.y = if (wasKeyboardVisible) 100 else 0
+                p.y = if (wasKeyboardVisible) TV_DIALOG_TOP_OFFSET_Y else 0
                 win.attributes = p
             }
         }

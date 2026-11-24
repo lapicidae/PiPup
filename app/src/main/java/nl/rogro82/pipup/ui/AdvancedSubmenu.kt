@@ -242,9 +242,11 @@ class AdvancedSubmenu(
         }
         Thread {
             try {
-                val url = java.net.URL(urlString); val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.connectTimeout = 5000; connection.readTimeout = 5000
-                if (connection.responseCode == 200) {
+                val url = java.net.URL(urlString)
+                val connection = url.openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = IMPORT_TIMEOUT_MS
+                connection.readTimeout = IMPORT_TIMEOUT_MS
+                if (connection.responseCode == HTTP_OK) {
                     val json = connection.inputStream.bufferedReader().use { it.readText() }
                     val data = AppSettings.SettingsData.fromJson(json)
                     settingsActivity?.runOnUiThread {
@@ -277,5 +279,11 @@ class AdvancedSubmenu(
                 }
             }
         }.start()
+    }
+
+    /** Network import constants for [AdvancedSubmenu]. */
+    companion object {
+        private const val HTTP_OK = 200
+        private const val IMPORT_TIMEOUT_MS = 5000
     }
 }

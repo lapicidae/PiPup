@@ -165,7 +165,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                         targetMediaHeight
                     )
                 }
-            }, 1000L * nextRetry)
+            }, MS_PER_SECOND * nextRetry)
         } else {
             mainHandler.post {
                 showPlaceholder(error)
@@ -216,7 +216,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         // Preserve original target height if already set (e.g. from WHEP props)
         // to prevent jumps during error state transitions.
         if (targetMediaHeight <= 0) {
-            targetMediaHeight = (tw * 9) / 16
+            targetMediaHeight = (tw * PopupProps.ASPECT_16_9_HEIGHT) / PopupProps.ASPECT_16_9_WIDTH
         }
 
         frame.layoutParams.width = tw
@@ -344,12 +344,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val width = props.rawMediaWidth() ?: 480
         targetMediaWidth = props.scaleValue(context, width)
 
+        val default16By9Height = (targetMediaWidth * PopupProps.ASPECT_16_9_HEIGHT) / PopupProps.ASPECT_16_9_WIDTH
         targetMediaHeight = when (media) {
             is PopupProps.Media.Video ->
-                media.height?.let { props.scaleValue(context, it) } ?: ((targetMediaWidth * 9) / 16)
+                media.height?.let { props.scaleValue(context, it) } ?: default16By9Height
             is PopupProps.Media.Web -> props.scaleValue(context, media.height)
             is PopupProps.Media.Whep ->
-                media.height?.let { props.scaleValue(context, it) } ?: ((targetMediaWidth * 9) / 16)
+                media.height?.let { props.scaleValue(context, it) } ?: default16By9Height
             is PopupProps.Media.Bitmap -> (targetMediaWidth * media.bitmap.height) / media.bitmap.width
             else -> 0 // For images, height is determined after load in renderGlide
         }
@@ -407,16 +408,16 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
 
         if (fullBleed) {
-            val gap = (scaledPadding * 2) / 3
-            val pos = props.mediaPosition ?: 0
-            val bottomContainerPad = if ((pos == 0) && (hasAnyText || hasButtons)) gap else borderPx
-            val topContainerPad = if (pos == 1 && hasAnyText) gap else borderPx
+            val gap = (scaledPadding * 2) / FULL_BLEED_GAP_DIVISOR
+            val pos = props.mediaPosition ?: MEDIA_POS_TOP
+            val bottomContainerPad = if ((pos == MEDIA_POS_TOP) && (hasAnyText || hasButtons)) gap else borderPx
+            val topContainerPad = if (pos == MEDIA_POS_BOTTOM && hasAnyText) gap else borderPx
             binding.popupContainer.setPadding(borderPx, topContainerPad, borderPx, bottomContainerPad)
             if (hasAnyText || (props.buttonsInline && hasButtons)) {
-                val textTop = if (pos == 0) gap else scaledPadding
+                val textTop = if (pos == MEDIA_POS_TOP) gap else scaledPadding
                 val textBottom = when (pos) {
-                    1 -> gap
-                    2, 3 -> scaledPadding
+                    MEDIA_POS_BOTTOM -> gap
+                    MEDIA_POS_LEFT, MEDIA_POS_RIGHT -> scaledPadding
                     else -> 0
                 }
                 binding.textContainer.setPadding(scaledPadding, textTop, scaledPadding, textBottom)
@@ -499,10 +500,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     return
                 }
                 when (mediaPos) {
-                    1 -> outline.setRoundRect(0, -extra, view.width, view.height, clip) // Bottom corners rounded
-                    2 -> outline.setRoundRect(0, 0, view.width + extra, view.height, clip) // Left corners rounded
-                    3 -> outline.setRoundRect(-extra, 0, view.width, view.height, clip) // Right corners rounded
-                    else -> outline.setRoundRect(0, 0, view.width, view.height + extra, clip) // Top corners rounded
+                    MEDIA_POS_BOTTOM -> outline.setRoundRect(0, -extra, view.width, view.height, clip)
+                    MEDIA_POS_LEFT -> outline.setRoundRect(0, 0, view.width + extra, view.height, clip)
+                    MEDIA_POS_RIGHT -> outline.setRoundRect(-extra, 0, view.width, view.height, clip)
+                    else -> outline.setRoundRect(0, 0, view.width, view.height + extra, clip)
                 }
             }
         }
@@ -520,7 +521,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val textContainer = binding.textContainer
         val mediaFrame = binding.popupMediaContainer
 
-        val pos = props.mediaPosition ?: 0
+        val pos = props.mediaPosition ?: MEDIA_POS_TOP
         val hasTextSection = hasTextOrInlineButtons()
         textContainer.isVisible = hasTextSection
         val noMediaGap = isFullBleedActive() || !hasTextSection
@@ -535,10 +536,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     lp.height = targetMediaHeight
                 }
                 when (pos) {
-                    0 -> lp.setMargins(0, 0, 0, marginV)
-                    1 -> lp.setMargins(0, marginV, 0, 0)
-                    2 -> lp.setMargins(0, 0, marginH, 0)
-                    3 -> lp.setMargins(marginH, 0, 0, 0)
+                    MEDIA_POS_TOP -> lp.setMargins(0, 0, 0, marginV)
+                    MEDIA_POS_BOTTOM -> lp.setMargins(0, marginV, 0, 0)
+                    MEDIA_POS_LEFT -> lp.setMargins(0, 0, marginH, 0)
+                    MEDIA_POS_RIGHT -> lp.setMargins(marginH, 0, 0, 0)
                 }
             }
             return
@@ -558,10 +559,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         container.tag = pos
         when (pos) {
-            0 -> setupVertical(container, mediaFrame, textContainer, true) // Top
-            1 -> setupVertical(container, textContainer, mediaFrame, false) // Bottom
-            2 -> setupHorizontal(container, mediaFrame, textContainer, true) // Left
-            3 -> setupHorizontal(container, textContainer, mediaFrame, false) // Right
+            MEDIA_POS_TOP -> setupVertical(container, mediaFrame, textContainer, true)
+            MEDIA_POS_BOTTOM -> setupVertical(container, textContainer, mediaFrame, false)
+            MEDIA_POS_LEFT -> setupHorizontal(container, mediaFrame, textContainer, true)
+            MEDIA_POS_RIGHT -> setupHorizontal(container, textContainer, mediaFrame, false)
         }
     }
 
@@ -911,7 +912,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         val contentHeight = binding.popupMessage.measuredHeight
         if (contentHeight > maxScrollHeight) {
-            binding.popupScrollView.layoutParams.height = maxScrollHeight.coerceAtLeast(context.dpToPx(100))
+            binding.popupScrollView.layoutParams.height = maxScrollHeight.coerceAtLeast(
+                context.dpToPx(MIN_SCROLL_HEIGHT_DP)
+            )
             binding.popupScrollView.requestLayout()
             if (!isScrolling) startAutoScroll()
         } else {
@@ -953,15 +956,15 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     binding.popupScrollView.postDelayed({
                         scrollPos = 0
                         binding.popupScrollView.scrollTo(0, 0)
-                        binding.popupScrollView.postDelayed(this, 2000)
-                    }, 3000)
+                        binding.popupScrollView.postDelayed(this, AUTO_SCROLL_START_DELAY_MS)
+                    }, AUTO_SCROLL_PAUSE_END_MS)
                     return
                 }
                 binding.popupScrollView.scrollTo(0, scrollPos)
-                binding.popupScrollView.postDelayed(this, 30)
+                binding.popupScrollView.postDelayed(this, AUTO_SCROLL_TICK_MS)
             }
         }
-        binding.popupScrollView.postDelayed(runnable, 2000)
+        binding.popupScrollView.postDelayed(runnable, AUTO_SCROLL_START_DELAY_MS)
     }
 
     private fun isStreamMedia(): Boolean {
@@ -1011,7 +1014,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             badge.alpha = 0f
             badge.isVisible = true
             badge.bringToFront()
-            badge.animate().alpha(1f).setDuration(150L).start()
+            badge.animate().alpha(1f).setDuration(LIVE_BADGE_FADE_IN_MS).start()
         }
     }
 
@@ -1024,7 +1027,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         val timeoutSec = settings.mediaTimeout
         if (timeoutSec > 0) {
-            mainHandler.postDelayed(timeoutRunnable, timeoutSec * 1000L)
+            mainHandler.postDelayed(timeoutRunnable, timeoutSec * MS_PER_SECOND)
         }
 
         // Live badge remains hidden until the stream's first frame renders (never shown on poster/placeholder).
@@ -1392,7 +1395,17 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         private const val CLOSE_BUTTON_FOCUS_ANIM_MS = 120L
         private const val CLOSE_BUTTON_REVEAL_ANIM_MS = 150L
         private const val CLOSE_BUTTON_FADE_OUT_ANIM_MS = 300L
+        private const val LIVE_BADGE_FADE_IN_MS = 150L
         private const val MS_PER_SECOND = 1000L
+        private const val MEDIA_POS_TOP = 0
+        private const val MEDIA_POS_BOTTOM = 1
+        private const val MEDIA_POS_LEFT = 2
+        private const val MEDIA_POS_RIGHT = 3
+        private const val FULL_BLEED_GAP_DIVISOR = 3
+        private const val MIN_SCROLL_HEIGHT_DP = 100
+        private const val AUTO_SCROLL_START_DELAY_MS = 2000L
+        private const val AUTO_SCROLL_PAUSE_END_MS = 3000L
+        private const val AUTO_SCROLL_TICK_MS = 30L
 
         /** Creates, binds, and initializes a [PopupView] with optional [listener]. */
         fun build(context: Context, props: PopupProps, listener: ReadyListener? = null): PopupView {

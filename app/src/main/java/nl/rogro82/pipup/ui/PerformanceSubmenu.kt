@@ -30,9 +30,9 @@ class PerformanceSubmenu(
             root,
             R.id.seekbar_max_popups,
             R.id.text_max_popups_value,
-            (settings.maxPopups - 1).coerceIn(0, 4),
+            (settings.maxPopups - 1).coerceIn(0, MAX_POPUPS_SEEKBAR_MAX),
         ) {
-            settings.maxPopups = (it + 1).coerceIn(1, 5)
+            settings.maxPopups = (it + 1).coerceIn(1, AppSettings.MAX_POPUPS_LIMIT)
         }
 
         // Loading Behavior Toggle
@@ -53,18 +53,18 @@ class PerformanceSubmenu(
                 context.getString(R.string.settings_buffer_ms_default)
             } else {
                 when {
-                    ms <= 400 -> context.getString(R.string.settings_buffer_ms_low, ms)
-                    ms <= 1200 -> context.getString(R.string.settings_buffer_ms_medium, ms)
+                    ms <= BUFFER_LOW_MAX_MS -> context.getString(R.string.settings_buffer_ms_low, ms)
+                    ms <= BUFFER_MEDIUM_MAX_MS -> context.getString(R.string.settings_buffer_ms_medium, ms)
                     else -> context.getString(R.string.settings_buffer_ms_high, ms)
                 }
             }
         }
 
-        val initialBufferProgress = (settings.defaultBufferMs / 100).coerceIn(0, 30)
-        updateBufferDesc(initialBufferProgress * 100)
+        val initialBufferProgress = (settings.defaultBufferMs / BUFFER_STEP_MS).coerceIn(0, BUFFER_SEEKBAR_MAX)
+        updateBufferDesc(initialBufferProgress * BUFFER_STEP_MS)
 
         setupSeekBar(root, R.id.seekbar_buffer_ms, R.id.text_buffer_ms_value, initialBufferProgress) { progress ->
-            val ms = progress * 100
+            val ms = progress * BUFFER_STEP_MS
             settings.defaultBufferMs = ms
             updateBufferDesc(ms)
         }
@@ -78,8 +78,13 @@ class PerformanceSubmenu(
         settingsActivity?.setupSubmenuFocus()
     }
 
-    /** Visibility helpers for [PerformanceSubmenu]. */
+    /** Visibility helpers and slider bounds for [PerformanceSubmenu]. */
     companion object {
+        private const val MAX_POPUPS_SEEKBAR_MAX = AppSettings.MAX_POPUPS_LIMIT - 1
+        private const val BUFFER_SEEKBAR_MAX = 30
+        private const val BUFFER_LOW_MAX_MS = 400
+        private const val BUFFER_MEDIUM_MAX_MS = 1200
+
         /**
          * Determines if this submenu has any visible settings to show.
          */

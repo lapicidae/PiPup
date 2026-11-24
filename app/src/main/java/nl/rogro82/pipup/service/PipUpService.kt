@@ -65,6 +65,8 @@ class PipUpService : Service() {
         private const val CHANNEL_ID = "pipup_service"
         private const val NOTIFICATION_ID = 1001
         private const val MS_PER_SECOND = 1000L
+        private const val WEBSERVER_TIMEOUT_MS = 30_000
+        private const val CALLBACK_TIMEOUT_MS = 5000
         /** The port on which the internal WebServer listens. */
         const val SERVER_PORT = 7979
 
@@ -254,7 +256,7 @@ class PipUpService : Service() {
         Pusher.url = settings.webhook
 
         try {
-            webServer.start(30000)
+            webServer.start(WEBSERVER_TIMEOUT_MS)
             Log.i(TAG, "WebServer started on port $SERVER_PORT (timeout: 30s)")
             emit("started")
             rescheduleWebhookHeartbeat()
@@ -391,7 +393,7 @@ class PipUpService : Service() {
             "dreaming" to dreaming,
             "popupsShown" to notificationManager.popupsShown.get(),
             "watchdogCleanups" to notificationManager.watchdogCleanups.get(),
-            "uptime" to (now - startedAt) / 1000,
+            "uptime" to (now - startedAt) / MS_PER_SECOND,
             "device" to mapOf(
                 "model" to Build.MODEL,
                 "manufacturer" to Build.MANUFACTURER,
@@ -406,7 +408,7 @@ class PipUpService : Service() {
                 "title" to topProps.title,
                 "duration" to topProps.duration,
                 "indefinite" to (topProps.duration <= 0),
-                "elapsed" to ((now - topShownAt) / 1000)
+                "elapsed" to ((now - topShownAt) / MS_PER_SECOND)
             )
         }
 
@@ -416,7 +418,7 @@ class PipUpService : Service() {
                 "position" to props.getPositionEnum().name,
                 "duration" to props.duration,
                 "indefinite" to (props.duration <= 0),
-                "elapsed" to ((now - slotShownAt) / 1000),
+                "elapsed" to ((now - slotShownAt) / MS_PER_SECOND),
                 "media" to mediaInfo(props)?.get("type")
             )
         }
@@ -439,7 +441,7 @@ class PipUpService : Service() {
             "phase" to updatePhase,
             "silent" to UpdateManager.silentInstall,
             "checkedSecondsAgo" to UpdateManager.lastCheckedAt.takeIf { it > 0 }
-                ?.let { (System.currentTimeMillis() - it) / 1000 },
+                ?.let { (System.currentTimeMillis() - it) / MS_PER_SECOND },
             "error" to UpdateManager.lastError
         )
 
@@ -466,7 +468,7 @@ class PipUpService : Service() {
                 "buttons" to last.buttons.size,
                 "firstFrameMs" to notificationManager.lastFirstFrameMs,
                 "mediaError" to notificationManager.lastMediaError,
-                "secondsAgo" to ((now - notificationManager.lastPopupAt) / 1000)
+                "secondsAgo" to ((now - notificationManager.lastPopupAt) / MS_PER_SECOND)
             )
         }
 
@@ -477,7 +479,8 @@ class PipUpService : Service() {
             "lastEvent" to Pusher.lastEvent,
             "lastStatus" to Pusher.lastStatus,
             "lastError" to Pusher.lastError,
-            "lastSecondsAgo" to Pusher.lastAt.takeIf { it > 0 }?.let { (System.currentTimeMillis() - it) / 1000 }
+            "lastSecondsAgo" to Pusher.lastAt.takeIf { it > 0 }
+                ?.let { (System.currentTimeMillis() - it) / MS_PER_SECOND }
         )
 
         moduleManager.augmentState(state)
@@ -821,8 +824,8 @@ class PipUpService : Service() {
                 conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "POST"
                     doOutput = true
-                    connectTimeout = 5000
-                    readTimeout = 5000
+                    connectTimeout = CALLBACK_TIMEOUT_MS
+                    readTimeout = CALLBACK_TIMEOUT_MS
                     setRequestProperty("Content-Type", "application/json")
                 }
                 conn.outputStream.use { it.write(Json.writeValueAsString(payload).toByteArray(Charsets.UTF_8)) }

@@ -351,7 +351,7 @@ class SettingsActivity : AppCompatActivity() {
                 }
             }
             ensureFocus(currentNavId)
-        }, 300)
+        }, POST_RESUME_FOCUS_DELAY_MS)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -769,7 +769,7 @@ class SettingsActivity : AppCompatActivity() {
                         val defaultGravity = Gravity.BOTTOM or Gravity.END
                         if (params.gravity != defaultGravity) {
                             params.gravity = defaultGravity
-                            val m = (resources.displayMetrics.density * 10).toInt()
+                            val m = (resources.displayMetrics.density * PREVIEW_MARGIN_DP).toInt()
                             params.setMargins(0, m, m, m)
                             existingPreview.layoutParams = params
                         }
@@ -782,9 +782,9 @@ class SettingsActivity : AppCompatActivity() {
                 var initialGravity = Gravity.BOTTOM or Gravity.END
                 currentFocus?.let { v ->
                     if (v.id !in allRailIds) {
-                        val location = IntArray(2)
+                        val location = IntArray(SCREEN_LOCATION_COORDS)
                         v.getLocationOnScreen(location)
-                        if (location[1] > resources.displayMetrics.heightPixels * 0.4) {
+                        if (location[1] > resources.displayMetrics.heightPixels * PREVIEW_FLIP_THRESHOLD) {
                             initialGravity = Gravity.TOP or Gravity.END
                         }
                     }
@@ -792,18 +792,24 @@ class SettingsActivity : AppCompatActivity() {
 
                 binding.previewArea.addView(
                     preview,
-                    FrameLayout.LayoutParams(-2, -2).apply {
+                    FrameLayout.LayoutParams(
+                        FrameLayout.LayoutParams.WRAP_CONTENT,
+                        FrameLayout.LayoutParams.WRAP_CONTENT
+                    ).apply {
                         gravity = initialGravity
-                        val m = (resources.displayMetrics.density * 10).toInt()
+                        val m = (resources.displayMetrics.density * PREVIEW_MARGIN_DP).toInt()
                         setMargins(0, m, m, m)
                     }
                 )
 
                 if (animate && props.animationType != 0) {
-                    preview.postDelayed({ if (preview.parent != null) preview.animateIn() }, 500)
+                    preview.postDelayed(
+                        { if (preview.parent != null) preview.animateIn() },
+                        PREVIEW_ANIMATE_DELAY_MS
+                    )
                 }
             }
-        }, 10)
+        }, PREVIEW_UPDATE_DELAY_MS)
     }
 
     override fun onResume() {
@@ -827,9 +833,15 @@ class SettingsActivity : AppCompatActivity() {
         cachedPlaceholder = null
     }
 
-    /** Intent extras for [SettingsActivity]. */
+    /** Intent extras and preview timing constants for [SettingsActivity]. */
     companion object {
         const val EXTRA_NAV_ID = "${PiPupApp.APP_PACKAGE}.extra.NAV_ID"
+        private const val POST_RESUME_FOCUS_DELAY_MS = 300L
+        private const val PREVIEW_UPDATE_DELAY_MS = 10L
+        private const val PREVIEW_ANIMATE_DELAY_MS = 500L
+        private const val PREVIEW_MARGIN_DP = 10
+        private const val SCREEN_LOCATION_COORDS = 2
+        private const val PREVIEW_FLIP_THRESHOLD = 0.4
     }
 
     /**

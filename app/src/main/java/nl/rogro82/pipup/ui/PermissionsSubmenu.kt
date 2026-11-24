@@ -38,7 +38,7 @@ class PermissionsSubmenu(
                 if (root.isAttachedToWindow) {
                     refreshPermissionList(root)
                 }
-                handler.postDelayed(this, 2000)
+                handler.postDelayed(this, REFRESH_INTERVAL_MS)
             } else {
                 handler.removeCallbacks(this)
             }
@@ -51,7 +51,7 @@ class PermissionsSubmenu(
         rootView = root
         handler.removeCallbacks(refreshTask)
         refreshPermissionList(root)
-        handler.postDelayed(refreshTask, 2000)
+        handler.postDelayed(refreshTask, REFRESH_INTERVAL_MS)
     }
 
     override fun onBackPress(): Boolean {
@@ -105,14 +105,14 @@ class PermissionsSubmenu(
         settingsActivity?.setupSubmenuFocus()
     }
 
-    private fun addSectionHeader(container: LinearLayout, title: String, marginTop: Int = 16) {
+    private fun addSectionHeader(container: LinearLayout, title: String, marginTop: Int = PAD_LG_DP) {
         container.addView(
             TextView(context).apply {
                 text = title.uppercase()
-                textSize = 14f
+                textSize = HEADER_TEXT_SIZE_SP
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
-                setPadding(context.dpToPx(16), context.dpToPx(marginTop), 0, context.dpToPx(8))
+                setPadding(context.dpToPx(PAD_LG_DP), context.dpToPx(marginTop), 0, context.dpToPx(PAD_SM_DP))
             }
         )
     }
@@ -131,13 +131,18 @@ class PermissionsSubmenu(
         val row = LinearLayout(context).apply {
             id = key.hashCode() and 0x7FFFFFFF
             orientation = LinearLayout.VERTICAL
-            setPadding(context.dpToPx(16), context.dpToPx(12), context.dpToPx(16), context.dpToPx(16))
+            setPadding(
+                context.dpToPx(PAD_LG_DP),
+                context.dpToPx(PAD_MD_DP),
+                context.dpToPx(PAD_LG_DP),
+                context.dpToPx(PAD_LG_DP),
+            )
             background = ContextCompat.getDrawable(context, R.drawable.focus_background)
             val params = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
             )
-            params.bottomMargin = context.dpToPx(16)
+            params.bottomMargin = context.dpToPx(PAD_LG_DP)
             layoutParams = params
 
             isFocusable = true
@@ -190,10 +195,10 @@ class PermissionsSubmenu(
         if (why != null && (isNotSupported || !isGranted || key in alwaysExplainKeys)) {
             row.addView(TextView(context).apply {
                 text = if (isNotSupported) "This permission is not applicable to your hardware." else why
-                textSize = 14f
-                alpha = 0.8f
+                textSize = WHY_TEXT_SIZE_SP
+                alpha = WHY_TEXT_ALPHA
                 setTextColor(ContextCompat.getColor(this@PermissionsSubmenu.context, R.color.colorOnSurfaceVariant))
-                setPadding(0, context.dpToPx(4), 0, 0)
+                setPadding(0, context.dpToPx(PAD_XS_DP), 0, 0)
             })
         }
 
@@ -202,14 +207,27 @@ class PermissionsSubmenu(
             if (adb.isNotEmpty()) {
                 row.addView(TextView(context).apply {
                     text = context.getString(R.string.permission_adb_format, adb)
-                    textSize = 11f
+                    textSize = ADB_TEXT_SIZE_SP
                     typeface = Typeface.MONOSPACE
                     setTextColor(ContextCompat.getColor(context, R.color.colorPrimary))
-                    setPadding(0, context.dpToPx(12), 0, 0)
+                    setPadding(0, context.dpToPx(PAD_MD_DP), 0, 0)
                 })
             }
         }
 
         container.addView(row)
+    }
+
+    /** Timing and layout constants for [PermissionsSubmenu]. */
+    companion object {
+        private const val REFRESH_INTERVAL_MS = 2000L
+        private const val HEADER_TEXT_SIZE_SP = 14f
+        private const val WHY_TEXT_SIZE_SP = 14f
+        private const val WHY_TEXT_ALPHA = 0.8f
+        private const val ADB_TEXT_SIZE_SP = 11f
+        private const val PAD_XS_DP = 4
+        private const val PAD_SM_DP = 8
+        private const val PAD_MD_DP = 12
+        private const val PAD_LG_DP = 16
     }
 }

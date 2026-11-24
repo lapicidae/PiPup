@@ -45,7 +45,7 @@ class VendorSubmenu(
     override fun onBind(root: View) {
         rootContainer = root.findViewById(R.id.module_settings_container) ?: return
         render()
-        handler.postDelayed(refreshTask, 1000)
+        handler.postDelayed(refreshTask, INITIAL_REFRESH_DELAY_MS)
     }
 
     override fun onBackPress(): Boolean {
@@ -120,11 +120,25 @@ class VendorSubmenu(
         container.addView(
             TextView(context).apply {
                 text = title.uppercase()
-                textSize = 14f
+                textSize = HEADER_TEXT_SIZE_SP
                 setTypeface(null, Typeface.BOLD)
                 setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
-                setPadding(context.dpToPx(16), context.dpToPx(24), 0, context.dpToPx(8))
+                setPadding(
+                    context.dpToPx(HEADER_PADDING_START_DP),
+                    context.dpToPx(HEADER_PADDING_TOP_DP),
+                    0,
+                    context.dpToPx(HEADER_PADDING_BOTTOM_DP),
+                )
             }
         )
+    }
+
+    /** Timing and layout constants for [VendorSubmenu]. */
+    companion object {
+        private const val INITIAL_REFRESH_DELAY_MS = 1000L
+        private const val HEADER_TEXT_SIZE_SP = 14f
+        private const val HEADER_PADDING_START_DP = 16
+        private const val HEADER_PADDING_TOP_DP = 24
+        private const val HEADER_PADDING_BOTTOM_DP = 8
     }
 }

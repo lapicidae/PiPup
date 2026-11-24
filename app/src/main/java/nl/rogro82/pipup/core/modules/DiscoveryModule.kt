@@ -26,6 +26,8 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
     companion object {
         private const val TAG = "DiscoveryModule"
         private const val SERVICE_TYPE = "_pipup._tcp."
+        private const val RESOLVE_QUEUE_DELAY_MS = 300L
+        private const val RESOLVE_TIMEOUT_MS = 5000L
     }
 
     override val id: String = "discovery"
@@ -215,7 +217,7 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
 
             queueHandler.postDelayed({
                 resolveServiceInternal(nextRequest)
-            }, 300)
+            }, RESOLVE_QUEUE_DELAY_MS)
         }
     }
 
@@ -229,7 +231,7 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
 
         // Start timeout watchdog (5s for slow emulators)
         queueHandler.removeCallbacks(resolveTimeoutRunnable)
-        queueHandler.postDelayed(resolveTimeoutRunnable, 5000)
+        queueHandler.postDelayed(resolveTimeoutRunnable, RESOLVE_TIMEOUT_MS)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             unregisterActiveInfoCallback()

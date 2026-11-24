@@ -37,7 +37,7 @@ class PipUpGlideAppModule : AppGlideModule() {
         builder.setBitmapPool(LruBitmapPool(calculator.bitmapPoolSize.toLong()))
 
         // Set a reasonable disk cache (50MB) to avoid re-downloading images from cameras/web
-        builder.setDiskCache(InternalCacheDiskCacheFactory(context, 50 * 1024 * 1024))
+        builder.setDiskCache(InternalCacheDiskCacheFactory(context, DISK_CACHE_SIZE_BYTES))
 
         // Prefer RGB_565 for lower memory footprint where transparency isn't strictly required
         // (Note: SVG and some overlays might still use ARGB_8888 as needed)
@@ -60,4 +60,9 @@ class PipUpGlideAppModule : AppGlideModule() {
      * Disables manifest parsing to improve Glide's initialization performance.
      */
     override fun isManifestParsingEnabled(): Boolean = false
+
+    /** Disk cache sizing constants for [PipUpGlideAppModule]. */
+    companion object {
+        private const val DISK_CACHE_SIZE_BYTES = 50L * 1024L * 1024L
+    }
 }

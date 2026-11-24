@@ -255,11 +255,11 @@ class PayloadParserTest {
 
     @Test
     fun testLowLatencyBufferDurationsAndAnamorphicAspect() {
-        val (minBuf, maxBuf, startBuf, rebuf) = nl.rogro82.pipup.ui.MediaRenderer.lowLatencyBufferDurations(250)!!
-        assertEquals(250, startBuf)
-        assertEquals(500, rebuf)
-        assertEquals(1000, minBuf)
-        assertEquals(5000, maxBuf)
+        val buf = nl.rogro82.pipup.ui.MediaRenderer.lowLatencyBufferDurations(250)!!
+        assertEquals(250, buf.startMs)
+        assertEquals(500, buf.rebufferMs)
+        assertEquals(1000, buf.minMs)
+        assertEquals(5000, buf.maxMs)
 
         // Substream 704x576 with DAR 16:9 (PAR ~ 1.4545) -> target height for width 640 should be 360
         val par = (16f / 9f) / (704f / 576f)

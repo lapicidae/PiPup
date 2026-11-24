@@ -67,6 +67,14 @@ class MediaRenderer(
     private val appSettings: AppSettings,
     callback: Callback
 ) {
+    /** Computed ExoPlayer buffer durations in milliseconds. */
+    internal data class BufferDurations(
+        val minMs: Int,
+        val maxMs: Int,
+        val startMs: Int,
+        val rebufferMs: Int
+    )
+
     /** Shared WebView clients, animation constants, and aspect-ratio calculation helpers. */
     companion object {
         private val DUMMY_CLIENT = WebViewClient()
@@ -74,6 +82,11 @@ class MediaRenderer(
         private val CROSSFADE_INTERPOLATOR = LinearInterpolator()
         private const val CROSSFADE_DURATION_MS = 350L
         private const val POSTER_FADE_CAP_MS = 20_000L
+        private const val MIN_BUFFER_FLOOR_MS = 1_000
+        private const val MAX_BUFFER_FLOOR_MS = 5_000
+        private const val VIDEO_RETRY_DELAY_MS = 1000L
+        private const val WEB_RETRY_DELAY_MS = 1000L
+        private const val GLIDE_RETRY_DELAY_MS = 500L
 
         private const val VIDEO_WATCH_JS = """
             (function() {
@@ -133,14 +146,17 @@ class MediaRenderer(
         """
 
         /**
-         * Computes ExoPlayer buffer durations for [bufferMs] as `(minMs, maxMs, startMs, rebufferMs)`,
+         * Computes ExoPlayer buffer durations for [bufferMs] as [BufferDurations],
          * or null when absent/<=0 so defaults apply. Clamped to 100..10000 ms.
          */
-        internal fun lowLatencyBufferDurations(bufferMs: Int?): List<Int>? {
-            val start = bufferMs?.takeIf { it > 0 }?.coerceIn(100, 10_000) ?: return null
+        internal fun lowLatencyBufferDurations(bufferMs: Int?): BufferDurations? {
+            val start = bufferMs?.takeIf { it > 0 }?.coerceIn(
+                PopupProps.BUFFER_MS_MIN,
+                PopupProps.BUFFER_MS_MAX
+            ) ?: return null
             val rebuffer = start * 2
-            val min = maxOf(rebuffer, 1_000)
-            return listOf(min, maxOf(min * 2, 5_000), start, rebuffer)
+            val min = maxOf(rebuffer, MIN_BUFFER_FLOOR_MS)
+            return BufferDurations(min, maxOf(min * 2, MAX_BUFFER_FLOOR_MS), start, rebuffer)
         }
 
         /**
@@ -731,14 +747,15 @@ class MediaRenderer(
         player = null
         videoView?.let { (it.parent as? ViewGroup)?.removeView(it) }
 
-        val loadControl = lowLatencyBufferDurations(bufferMs)?.let { (minBuf, maxBuf, playbackBuf, rebufferBuf) ->
+        val loadControl = lowLatencyBufferDurations(bufferMs)?.let { buf ->
             Log.d(
                 "PiPup-Media",
                 "Configuring ExoPlayer LoadControl with custom bufferMs=$bufferMs " +
-                    "(minBuf=$minBuf, maxBuf=$maxBuf, playbackBuf=$playbackBuf, rebufferBuf=$rebufferBuf)"
+                    "(minBuf=${buf.minMs}, maxBuf=${buf.maxMs}, " +
+                    "playbackBuf=${buf.startMs}, rebufferBuf=${buf.rebufferMs})"
             )
             DefaultLoadControl.Builder()
-                .setBufferDurationsMs(minBuf, maxBuf, playbackBuf, rebufferBuf)
+                .setBufferDurationsMs(buf.minMs, buf.maxMs, buf.startMs, buf.rebufferMs)
                 .setPrioritizeTimeOverSizeThresholds(true)
                 .build()
         } ?: run {
@@ -1174,7 +1191,7 @@ class MediaRenderer(
                             f.removeAllViews()
                             r.renderVideo(f, video, retryCount + 1, ui)
                         }
-                    }, renderer.rendererToken, SystemClock.uptimeMillis() + 1000L * (retryCount + 1))
+                    }, renderer.rendererToken, SystemClock.uptimeMillis() + VIDEO_RETRY_DELAY_MS * (retryCount + 1))
                     return
                 }
                 renderer.callback?.showPlaceholder(error.errorCodeName)
@@ -1248,7 +1265,7 @@ class MediaRenderer(
                 renderer.mainHandler.postAtTime({
                     val r = rendererRef.get() ?: return@postAtTime
                     if (r.callback?.isCleanedUp() == false) r.renderWeb(ui, f, web, retryCount + 1)
-                }, renderer.rendererToken, SystemClock.uptimeMillis() + 1000L * (retryCount + 1))
+                }, renderer.rendererToken, SystemClock.uptimeMillis() + WEB_RETRY_DELAY_MS * (retryCount + 1))
             } else {
                 renderer.callback?.showPlaceholder(description)
                 renderer.callback?.notifyReady()
@@ -1333,7 +1350,7 @@ class MediaRenderer(
                     if (r.callback?.isCleanedUp() == false) {
                         r.renderGlide(ui, f, source, width, scale, diskCache, skipMemory, retryCount + 1)
                     }
-                }, renderer.rendererToken, SystemClock.uptimeMillis() + 500L * (retryCount + 1))
+                }, renderer.rendererToken, SystemClock.uptimeMillis() + GLIDE_RETRY_DELAY_MS * (retryCount + 1))
                 return true
             }
             renderer.callback?.showPlaceholder(renderer.appContext.getString(R.string.media_error_load_failed))

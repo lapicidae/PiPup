@@ -49,6 +49,11 @@ class WakeActivity : Activity() {
             if (!isFinishing) {
                 finish()
             }
-        }, 1500)
+        }, WAKE_FINISH_DELAY_MS)
+    }
+
+    /** Timing constants for [WakeActivity]. */
+    companion object {
+        private const val WAKE_FINISH_DELAY_MS = 1500L
     }
 }

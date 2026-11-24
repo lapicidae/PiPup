@@ -17,6 +17,7 @@ class ModuleManager {
     companion object {
         private const val TAG = "ModuleManager"
         private const val DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes
+        private const val IDLE_WATCHDOG_INTERVAL_MS = 60_000L
     }
 
     private val modules = mutableMapOf<String, PiPupModule>()
@@ -34,7 +35,7 @@ class ModuleManager {
     private val idleWatchdog = object : Runnable {
         override fun run() {
             checkIdleModules()
-            handler.postDelayed(this, 60000) // Check every minute
+            handler.postDelayed(this, IDLE_WATCHDOG_INTERVAL_MS) // Check every minute
         }
     }
 
@@ -56,7 +57,7 @@ class ModuleManager {
             val mode = context.settings.getModuleMode(module.id)
             updateModuleState(module.id, mode)
         }
-        handler.postDelayed(idleWatchdog, 60000)
+        handler.postDelayed(idleWatchdog, IDLE_WATCHDOG_INTERVAL_MS)
     }
 
     /**

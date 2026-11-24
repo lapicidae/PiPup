@@ -27,9 +27,10 @@ class ButtonSubmenu(
             root,
             R.id.seekbar_button_size,
             R.id.text_button_size_value,
-            (settings.defaultButtonSize - 10).toInt().coerceIn(0, 30),
+            (settings.defaultButtonSize - PopupProps.TEXT_SIZE_UI_MIN).toInt()
+                .coerceIn(0, PopupProps.TEXT_SIZE_UI_SPAN),
         ) {
-            settings.defaultButtonSize = (it + 10).toFloat()
+            settings.defaultButtonSize = (it + PopupProps.TEXT_SIZE_UI_MIN).toFloat()
         }
         setupSeekBar(
             root,

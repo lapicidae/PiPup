@@ -154,7 +154,7 @@ class MainActivity : AppCompatActivity() {
             if (!isFinishing && !isDestroyed) {
                 checkAndShowPermissionNag()
             }
-        }, 500)
+        }, PERMISSION_NAG_DELAY_MS)
     }
 
     override fun onPause() {
@@ -276,5 +276,10 @@ class MainActivity : AppCompatActivity() {
         } catch (_: Exception) {
             versionText.text = getString(R.string.version_placeholder)
         }
+    }
+
+    /** Timing constants for [MainActivity]. */
+    companion object {
+        private const val PERMISSION_NAG_DELAY_MS = 500L
     }
 }

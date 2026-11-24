@@ -7,6 +7,7 @@ import androidx.core.content.edit
 import androidx.core.graphics.toColorInt
 import org.json.JSONObject
 import nl.rogro82.pipup.core.ModuleMode
+import java.util.Locale
 import java.util.UUID
 import kotlin.properties.ReadWriteProperty
 import kotlin.reflect.KProperty
@@ -413,23 +414,32 @@ class AppSettings(context: Context) {
                 return SettingsData(
                     positionIndex = j.optInt("positionIndex", defaults?.positionIndex ?: 0),
                     backgroundColor = j.optString("backgroundColor", defaults?.backgroundColor ?: ""),
-                    backgroundAlpha = j.optInt("backgroundAlpha", defaults?.backgroundAlpha ?: 225),
+                    backgroundAlpha = j.optInt("backgroundAlpha", defaults?.backgroundAlpha ?: DEFAULT_BG_ALPHA),
                     titleColor = j.optString("titleColor", defaults?.titleColor ?: ""),
-                    titleSize = j.optDouble("titleSize", defaults?.titleSize?.toDouble() ?: 22.0).toFloat(),
+                    titleSize = j.optDouble(
+                        "titleSize",
+                        defaults?.titleSize?.toDouble() ?: DEFAULT_TITLE_SIZE.toDouble()
+                    ).toFloat(),
                     messageColor = j.optString("messageColor", defaults?.messageColor ?: ""),
-                    messageSize = j.optDouble("messageSize", defaults?.messageSize?.toDouble() ?: 16.0).toFloat(),
-                    borderRadius = j.optInt("borderRadius", defaults?.borderRadius ?: 16),
-                    borderWidth = j.optInt("borderWidth", defaults?.borderWidth ?: 0),
+                    messageSize = j.optDouble(
+                        "messageSize",
+                        defaults?.messageSize?.toDouble() ?: DEFAULT_MSG_SIZE.toDouble()
+                    ).toFloat(),
+                    borderRadius = j.optInt("borderRadius", defaults?.borderRadius ?: DEFAULT_RADIUS),
+                    borderWidth = j.optInt("borderWidth", defaults?.borderWidth ?: DEFAULT_BORDER_WIDTH),
                     borderColor = j.optString("borderColor", defaults?.borderColor ?: ""),
-                    contentPadding = j.optInt("contentPadding", defaults?.contentPadding ?: 20),
+                    contentPadding = j.optInt("contentPadding", defaults?.contentPadding ?: DEFAULT_PADDING),
                     titleAlignment = j.optInt("titleAlignment", defaults?.titleAlignment ?: 0),
                     messageAlignment = j.optInt("messageAlignment", defaults?.messageAlignment ?: 0),
                     mediaPosition = j.optInt("mediaPosition", defaults?.mediaPosition ?: 0),
                     animationType = j.optInt("animationType", defaults?.animationType ?: 0),
-                    animationDuration = j.optInt("animationDuration", defaults?.animationDuration ?: 500),
+                    animationDuration = j.optInt(
+                        "animationDuration",
+                        defaults?.animationDuration ?: DEFAULT_ANIMATION_DURATION_MS
+                    ),
                     animationExit = j.optBoolean("animationExit", defaults?.animationExit ?: false),
-                    mediaTimeout = j.optInt("mediaTimeout", defaults?.mediaTimeout ?: 10),
-                    mediaRetries = j.optInt("mediaRetries", defaults?.mediaRetries ?: 3),
+                    mediaTimeout = j.optInt("mediaTimeout", defaults?.mediaTimeout ?: DEFAULT_MEDIA_TIMEOUT_SEC),
+                    mediaRetries = j.optInt("mediaRetries", defaults?.mediaRetries ?: DEFAULT_MEDIA_RETRIES),
                     maxPopups = j.optInt("maxPopups", defaults?.maxPopups ?: 1),
                     popupLoadingBehavior = j.optInt("popupLoadingBehavior", defaults?.popupLoadingBehavior ?: 0),
                     defaultBufferMs = j.optInt("defaultBufferMs", defaults?.defaultBufferMs ?: 0),
@@ -462,7 +472,7 @@ class AppSettings(context: Context) {
                     advancedMode = j.optBoolean("advancedMode", defaults?.advancedMode ?: false),
                     moduleModes = mergedModes,
                     updateChannel = j.optInt("updateChannel", defaults?.updateChannel ?: 0),
-                    updateInterval = j.optInt("updateInterval", defaults?.updateInterval ?: 4),
+                    updateInterval = j.optInt("updateInterval", defaults?.updateInterval ?: DEFAULT_UPDATE_INTERVAL),
                     updateNotificationStyle = j.optInt(
                         "updateNotificationStyle",
                         defaults?.updateNotificationStyle ?: 1
@@ -548,26 +558,26 @@ class AppSettings(context: Context) {
     fun apply(data: SettingsData) {
         positionIndex = data.positionIndex
         backgroundColor = validateHexColor(data.backgroundColor, appContext.colorToHex(R.color.preset_deep_slate))
-        backgroundAlpha = data.backgroundAlpha.coerceIn(0, 255)
+        backgroundAlpha = data.backgroundAlpha.coerceIn(0, MAX_BG_ALPHA)
         titleColor = validateHexColor(data.titleColor, appContext.colorToHex(R.color.preset_platinum))
-        titleSize = data.titleSize.coerceIn(10f, 100f)
+        titleSize = data.titleSize.coerceIn(MIN_TITLE_SIZE, MAX_TITLE_SIZE)
         messageColor = validateHexColor(data.messageColor, appContext.colorToHex(R.color.preset_silver))
-        messageSize = data.messageSize.coerceIn(8f, 80f)
-        borderRadius = data.borderRadius.coerceIn(0, 200)
-        borderWidth = data.borderWidth.coerceIn(0, 50)
+        messageSize = data.messageSize.coerceIn(MIN_MSG_SIZE, MAX_MSG_SIZE)
+        borderRadius = data.borderRadius.coerceIn(0, MAX_BORDER_RADIUS)
+        borderWidth = data.borderWidth.coerceIn(0, MAX_BORDER_WIDTH)
         borderColor = validateHexColor(data.borderColor, appContext.colorToHex(R.color.preset_gunmetal))
-        contentPadding = data.contentPadding.coerceIn(0, 200)
+        contentPadding = data.contentPadding.coerceIn(0, MAX_CONTENT_PADDING)
         titleAlignment = data.titleAlignment.coerceIn(0, 2)
         messageAlignment = data.messageAlignment.coerceIn(0, 2)
-        mediaPosition = data.mediaPosition.coerceIn(0, 3)
-        animationType = data.animationType.coerceIn(0, 10)
-        animationDuration = data.animationDuration.coerceIn(0, 5000)
+        mediaPosition = data.mediaPosition.coerceIn(0, MAX_MEDIA_POSITION)
+        animationType = data.animationType.coerceIn(0, MAX_ANIMATION_TYPE)
+        animationDuration = data.animationDuration.coerceIn(0, MAX_ANIMATION_DURATION_MS)
         animationExit = data.animationExit
-        mediaTimeout = data.mediaTimeout.coerceIn(1, 60)
-        mediaRetries = data.mediaRetries.coerceIn(0, 10)
-        maxPopups = data.maxPopups.coerceIn(1, 5)
+        mediaTimeout = data.mediaTimeout.coerceIn(1, MAX_MEDIA_TIMEOUT_SEC)
+        mediaRetries = data.mediaRetries.coerceIn(0, MAX_MEDIA_RETRIES)
+        maxPopups = data.maxPopups.coerceIn(1, MAX_POPUPS_LIMIT)
         popupLoadingBehavior = data.popupLoadingBehavior.coerceIn(0, 1)
-        defaultBufferMs = data.defaultBufferMs.coerceIn(0, 10000)
+        defaultBufferMs = data.defaultBufferMs.coerceIn(0, MAX_BUFFER_MS)
         mediaLoadingPlaceholder = data.mediaLoadingPlaceholder
         mediaFullBleed = data.mediaFullBleed
         fullscreenUpscale = data.fullscreenUpscale
@@ -593,7 +603,7 @@ class AppSettings(context: Context) {
         }
 
         updateChannel = data.updateChannel.coerceIn(-1, 1)
-        updateInterval = data.updateInterval.coerceIn(0, 4)
+        updateInterval = data.updateInterval.coerceIn(0, MAX_UPDATE_INTERVAL)
         updateNotificationStyle = data.updateNotificationStyle.coerceIn(0, 2)
         lastUpdateCheck = data.lastUpdateCheck
         updateAvailableTag = data.updateAvailableTag
@@ -612,7 +622,9 @@ class AppSettings(context: Context) {
         return try {
             val clean = if (hex.startsWith("#")) hex else "#$hex"
             clean.toColorInt()
-            if (clean.length != 4 && clean.length != 7 && clean.length != 9) return fallback
+            if (clean.length != HEX_LEN_SHORT && clean.length != HEX_LEN_RGB && clean.length != HEX_LEN_ARGB) {
+                return fallback
+            }
             clean
         } catch (_: Exception) {
             fallback
@@ -628,8 +640,8 @@ class AppSettings(context: Context) {
     fun getFullBackgroundColor(): String {
         cachedFullBgColor?.let { return it }
 
-        val clean = backgroundColor.replace("#", "").let { if (it.length == 8) it.substring(2) else it }
-        val alphaHex = String.format("%02X", backgroundAlpha)
+        val clean = backgroundColor.replace("#", "").let { if (it.length == HEX_DIGITS_ARGB) it.substring(2) else it }
+        val alphaHex = String.format(Locale.US, "%02X", backgroundAlpha)
         val result = "#$alphaHex$clean"
 
         cachedFullBgColor = result
@@ -664,7 +676,7 @@ class AppSettings(context: Context) {
         val updatedMedia = when (val m = props.media) {
             is PopupProps.Media.Video -> {
                 if (m.bufferMs == null && defaultBufferMs > 0) {
-                    m.copy(bufferMs = defaultBufferMs.coerceIn(100, 10_000))
+                    m.copy(bufferMs = defaultBufferMs.coerceIn(PopupProps.BUFFER_MS_MIN, PopupProps.BUFFER_MS_MAX))
                 } else {
                     m
                 }
@@ -682,15 +694,23 @@ class AppSettings(context: Context) {
             borderWidth = if (props.borderWidth == 0) borderWidth else props.borderWidth,
             contentPadding = props.contentPadding ?: contentPadding,
             titleColor = if (props.titleColor == "#FFFFFF") titleColor else props.titleColor,
-            titleSize = if (props.titleSize == 24f) titleSize else props.titleSize,
+            titleSize = if (props.titleSize == PopupProps.DEFAULT_TITLE_SIZE_SP) titleSize else props.titleSize,
             messageColor = if (props.messageColor == "#FFFFFF") messageColor else props.messageColor,
-            messageSize = if (props.messageSize == 16f) messageSize else props.messageSize,
+            messageSize = if (props.messageSize == PopupProps.DEFAULT_MESSAGE_SIZE_SP) {
+                messageSize
+            } else {
+                props.messageSize
+            },
             titleAlignment = if (props.titleAlignment == 0) titleAlignment else props.titleAlignment,
             messageAlignment = if (props.messageAlignment == 0) messageAlignment else props.messageAlignment,
             media = updatedMedia,
             mediaPosition = props.mediaPosition ?: mediaPosition,
             animationType = if (props.animationType == 0) animationType else props.animationType,
-            animationDuration = if (props.animationDuration == 500) animationDuration else props.animationDuration,
+            animationDuration = if (props.animationDuration == PopupProps.DEFAULT_ANIMATION_DURATION_MS) {
+                animationDuration
+            } else {
+                props.animationDuration
+            },
             animationExit = props.animationExit || animationExit,
             mediaFullBleed = props.mediaFullBleed ?: mediaFullBleed,
             fullscreenUpscale = props.fullscreenUpscale ?: fullscreenUpscale,
@@ -785,8 +805,33 @@ class AppSettings(context: Context) {
         const val DEFAULT_RADIUS = 16
         const val DEFAULT_BORDER_WIDTH = 0
         const val DEFAULT_PADDING = 20
+        const val DEFAULT_ANIMATION_DURATION_MS = 500
+        const val DEFAULT_MEDIA_TIMEOUT_SEC = 10
+        const val DEFAULT_MEDIA_RETRIES = 3
+        const val DEFAULT_UPDATE_INTERVAL = 4
+        const val MAX_POPUPS_LIMIT = 5
         const val MIN_WEBHOOK_HEARTBEAT_SEC = 10
         const val MAX_WEBHOOK_HEARTBEAT_SEC = 86_400
+
+        private const val MAX_BG_ALPHA = 255
+        private const val MIN_TITLE_SIZE = 10f
+        private const val MAX_TITLE_SIZE = 100f
+        private const val MIN_MSG_SIZE = 8f
+        private const val MAX_MSG_SIZE = 80f
+        private const val MAX_BORDER_RADIUS = 200
+        private const val MAX_BORDER_WIDTH = 50
+        private const val MAX_CONTENT_PADDING = 200
+        private const val MAX_MEDIA_POSITION = 3
+        private const val MAX_ANIMATION_TYPE = 10
+        private const val MAX_ANIMATION_DURATION_MS = 5000
+        private const val MAX_MEDIA_TIMEOUT_SEC = 60
+        private const val MAX_MEDIA_RETRIES = 10
+        private const val MAX_BUFFER_MS = 10_000
+        private const val MAX_UPDATE_INTERVAL = 4
+        private const val HEX_LEN_SHORT = 4
+        private const val HEX_LEN_RGB = 7
+        private const val HEX_LEN_ARGB = 9
+        private const val HEX_DIGITS_ARGB = 8
 
         /**
          * Normalizes a webhook heartbeat interval in seconds (`0` disables the heartbeat; positive

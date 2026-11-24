@@ -20,6 +20,10 @@ object Pusher {
     private const val TIMEOUT_MS = 5000
     private const val RETRY_DELAY_MS = 2000L
     private const val MAX_PENDING = 16
+    private const val HTTP_OK_MIN = 200
+    private const val HTTP_OK_MAX = 299
+    private const val HTTP_CLIENT_ERROR_MIN = 400
+    private const val HTTP_CLIENT_ERROR_MAX = 499
 
     private val executor = Executors.newSingleThreadExecutor()
 
@@ -76,8 +80,9 @@ object Pusher {
 
     private fun deliver(p: Pending) {
         val code = post(p.target, p.event, p.body)
-        if (code != null && code in 200..299) return
-        if (code != null && code in 400..499) return // refused: a retry changes nothing
+        if (code != null && code in HTTP_OK_MIN..HTTP_OK_MAX) return
+        // Refused: a retry changes nothing.
+        if (code != null && code in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX) return
         if (synchronized(pending) { pending.isNotEmpty() }) return // a newer push supersedes it
         try { Thread.sleep(RETRY_DELAY_MS) } catch (_: InterruptedException) { return }
         post(p.target, p.event, p.body)
@@ -100,7 +105,7 @@ object Pusher {
             lastStatus = code
             lastAt = System.currentTimeMillis()
             lastEvent = event
-            lastError = if (code in 200..299) null else "HTTP $code"
+            lastError = if (code in HTTP_OK_MIN..HTTP_OK_MAX) null else "HTTP $code"
             code
         } catch (ex: Throwable) {
             lastStatus = null

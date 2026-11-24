@@ -100,10 +100,10 @@ class UpdateManager(context: Context) {
             connection.requestMethod = "GET"
             connection.setRequestProperty("Accept", "application/vnd.github.v3+json")
             connection.setRequestProperty("User-Agent", "PiPup-App")
-            connection.connectTimeout = 10000
-            connection.readTimeout = 10000
+            connection.connectTimeout = HTTP_TIMEOUT_MS
+            connection.readTimeout = HTTP_TIMEOUT_MS
 
-            if (connection.responseCode == 200) {
+            if (connection.responseCode == HTTP_OK) {
                 val json = connection.inputStream.bufferedReader().use { it.readText() }
                 lastCheckedAt = System.currentTimeMillis()
                 lastError = null
@@ -381,7 +381,7 @@ class UpdateManager(context: Context) {
         val size = file.length()
         Log.i("UpdateManager", "Installing APK via PackageInstaller. Size: $size bytes")
 
-        if (size < 1024 * 100) {
+        if (size < MIN_APK_SIZE_BYTES) {
             Log.e("UpdateManager", "Downloaded file is too small ($size bytes). Likely a failed download.")
             return
         }
@@ -477,6 +477,9 @@ class UpdateManager(context: Context) {
 
         private const val REPO_URL = "https://api.github.com/repos/lapicidae/PiPup/releases"
         private const val INSTALL_ACTION = "${PiPupApp.APP_PACKAGE}.INSTALL_RESULT"
+        private const val HTTP_OK = 200
+        private const val HTTP_TIMEOUT_MS = 10_000
+        private const val MIN_APK_SIZE_BYTES = 100L * 1024L
 
         @Volatile var latestVersion: String? = null
             private set

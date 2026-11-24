@@ -114,7 +114,7 @@ data class PopupProps(
             val explicitW = imageWidth?.takeIf { w -> w > 0 }
             Media.Image(
                 uri = it,
-                width = explicitW ?: 480,
+                width = explicitW ?: DEFAULT_MEDIA_WIDTH,
                 cache = cache,
                 scale = scale,
                 explicitWidth = explicitW != null
@@ -133,6 +133,44 @@ data class PopupProps(
         private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
         private const val DEFAULT_BG_COLOR = "#CC000000"
         private const val DEFAULT_BORDER_COLOR = "#00000000"
+        /** Default popup display duration in seconds. */
+        const val DEFAULT_DURATION_SEC = 10
+        /** Default title font size in sp. */
+        const val DEFAULT_TITLE_SIZE_SP = 24f
+        /** Default message font size in sp. */
+        const val DEFAULT_MESSAGE_SIZE_SP = 16f
+        /** Default popup entrance/exit animation duration in milliseconds. */
+        const val DEFAULT_ANIMATION_DURATION_MS = 500
+        /** Default media width in pixels for image and video payloads. */
+        const val DEFAULT_MEDIA_WIDTH = 480
+        /** Default media width in pixels for web and WHEP payloads. */
+        const val DEFAULT_WEB_WIDTH = 640
+        /** Minimum allowed video buffer duration in milliseconds. */
+        const val BUFFER_MS_MIN = 100
+        /** Maximum allowed video buffer duration in milliseconds. */
+        const val BUFFER_MS_MAX = 10_000
+        /** Numerator of standard 16:9 media aspect ratio height calculation. */
+        const val ASPECT_16_9_HEIGHT = 9
+        /** Denominator of standard 16:9 media aspect ratio height calculation. */
+        const val ASPECT_16_9_WIDTH = 16
+        /** Minimum text/button size in sp supported by settings sliders. */
+        const val TEXT_SIZE_UI_MIN = 10
+        /** SeekBar span above [TEXT_SIZE_UI_MIN] for text/button size sliders. */
+        const val TEXT_SIZE_UI_SPAN = 30
+        private const val MAX_BUTTONS = 5
+        private const val MAX_BUTTON_LABEL_LENGTH = 30
+        private const val BUTTON_SIZE_MIN_SP = 10f
+        private const val BUTTON_SIZE_MAX_SP = 40f
+        private const val BUTTON_CORNER_RADIUS_MAX_DP = 50f
+        private const val POS_TOP_RIGHT = 0
+        private const val POS_TOP_LEFT = 1
+        private const val POS_BOTTOM_RIGHT = 2
+        private const val POS_BOTTOM_LEFT = 3
+        private const val POS_CENTER = 4
+        private const val POS_TOP_CENTER = 5
+        private const val POS_BOTTOM_CENTER = 6
+        private const val POS_CENTER_LEFT = 7
+        private const val POS_CENTER_RIGHT = 8
         /** Maximum allowed auto-hide delay in seconds for the overlay close button. */
         const val CLOSE_BUTTON_TIMEOUT_MAX = 300
         /** Maximum auto-hide delay in seconds exposed by the Button Settings slider. */
@@ -168,14 +206,14 @@ data class PopupProps(
                         val explicitW = optPositiveInt(v, "width")
                         media = Media.Video(
                             uri = v.getString("uri"),
-                            width = explicitW ?: 480,
+                            width = explicitW ?: DEFAULT_MEDIA_WIDTH,
                             height = optPositiveInt(v, "height"),
                             scale = v.optBoolean("scale", true),
                             muted = v.optBoolean("muted", true),
                             udp = v.optBoolean("udp", false),
                             poster = optNullableStringIn(v, "poster"),
                             posterMode = parsePosterMode(optNullableStringIn(v, "posterMode"))?.name?.lowercase(),
-                            bufferMs = optPositiveInt(v, "bufferMs")?.coerceIn(100, 10_000),
+                            bufferMs = optPositiveInt(v, "bufferMs")?.coerceIn(BUFFER_MS_MIN, BUFFER_MS_MAX),
                             explicitWidth = explicitW != null
                         )
                     }
@@ -184,7 +222,7 @@ data class PopupProps(
                         val explicitW = optPositiveInt(i, "width")
                         media = Media.Image(
                             uri = i.getString("uri"),
-                            width = explicitW ?: 480,
+                            width = explicitW ?: DEFAULT_MEDIA_WIDTH,
                             cache = i.optBoolean("cache", true),
                             scale = i.optBoolean("scale", true),
                             explicitWidth = explicitW != null
@@ -193,12 +231,12 @@ data class PopupProps(
                     m.has("web") -> {
                         val w = m.getJSONObject("web")
                         val explicitW = optPositiveInt(w, "width")
-                        val width = explicitW ?: 640
+                        val width = explicitW ?: DEFAULT_WEB_WIDTH
                         val explicitH = optPositiveInt(w, "height")
                         media = Media.Web(
                             uri = w.getString("uri"),
                             width = width,
-                            height = explicitH ?: ((width * 9) / 16),
+                            height = explicitH ?: ((width * ASPECT_16_9_HEIGHT) / ASPECT_16_9_WIDTH),
                             cache = w.optBoolean("cache", true),
                             scale = w.optBoolean("scale", true),
                             muted = w.optBoolean("muted", true),
@@ -213,7 +251,7 @@ data class PopupProps(
                         val explicitW = optPositiveInt(w, "width")
                         media = Media.Whep(
                             uri = w.getString("uri"),
-                            width = explicitW ?: 640,
+                            width = explicitW ?: DEFAULT_WEB_WIDTH,
                             height = optPositiveInt(w, "height"),
                             scale = w.optBoolean("scale", true),
                             videoFit = w.optString("videoFit", "cover"),
@@ -230,12 +268,12 @@ data class PopupProps(
             if (j.has("buttons") && !j.isNull("buttons")) {
                 val bArr = j.getJSONArray("buttons")
                 for (i in 0 until bArr.length()) {
-                    if (parsedButtons.size >= 5) break
+                    if (parsedButtons.size >= MAX_BUTTONS) break
                     val bObj = bArr.optJSONObject(i) ?: continue
                     val bId = bObj.optString("id", "").trim()
                     val bLabel = bObj.optString("label", "").trim()
                     if (bId.isNotEmpty() && bLabel.isNotEmpty() && bId != "null" && bLabel != "null") {
-                        parsedButtons.add(Button(bId, bLabel.take(30)))
+                        parsedButtons.add(Button(bId, bLabel.take(MAX_BUTTON_LABEL_LENGTH)))
                     }
                 }
             }
@@ -262,14 +300,14 @@ data class PopupProps(
             }
 
             return PopupProps(
-                duration = j.optInt("duration", 10),
+                duration = j.optInt("duration", DEFAULT_DURATION_SEC),
                 id = optNullableString("id"),
                 position = resolvedPosition,
                 title = optNullableString("title"),
-                titleSize = j.optDouble("titleSize", 24.0).toFloat(),
+                titleSize = j.optDouble("titleSize", DEFAULT_TITLE_SIZE_SP.toDouble()).toFloat(),
                 titleColor = j.optString("titleColor", DEFAULT_TEXT_COLOR) ?: DEFAULT_TEXT_COLOR,
                 message = optNullableString("message"),
-                messageSize = j.optDouble("messageSize", 16.0).toFloat(),
+                messageSize = j.optDouble("messageSize", DEFAULT_MESSAGE_SIZE_SP.toDouble()).toFloat(),
                 messageColor = j.optString("messageColor", DEFAULT_TEXT_COLOR) ?: DEFAULT_TEXT_COLOR,
                 backgroundColor = j.optString("backgroundColor", DEFAULT_BG_COLOR) ?: DEFAULT_BG_COLOR,
                 media = media,
@@ -279,7 +317,7 @@ data class PopupProps(
                     null
                 },
                 animationType = j.optInt("animationType", 0),
-                animationDuration = j.optInt("animationDuration", 500),
+                animationDuration = j.optInt("animationDuration", DEFAULT_ANIMATION_DURATION_MS),
                 animationExit = j.optBoolean("animationExit", false),
                 overwrite = j.optBoolean("overwrite", false),
                 borderRadius = resolvedBorderRadius,
@@ -295,7 +333,7 @@ data class PopupProps(
                 buttons = parsedButtons,
                 callback = optNullableString("callback"),
                 buttonSize = if (j.has("buttonSize") && !j.isNull("buttonSize")) {
-                    j.getDouble("buttonSize").toFloat().coerceIn(10f, 40f)
+                    j.getDouble("buttonSize").toFloat().coerceIn(BUTTON_SIZE_MIN_SP, BUTTON_SIZE_MAX_SP)
                 } else {
                     null
                 },
@@ -305,7 +343,7 @@ data class PopupProps(
                 buttonFocusTextColor = optNullableString("buttonFocusTextColor"),
                 buttonBorderColor = optNullableString("buttonBorderColor"),
                 buttonCornerRadius = if (j.has("buttonCornerRadius") && !j.isNull("buttonCornerRadius")) {
-                    j.getDouble("buttonCornerRadius").toFloat().coerceIn(0f, 50f)
+                    j.getDouble("buttonCornerRadius").toFloat().coerceIn(0f, BUTTON_CORNER_RADIUS_MAX_DP)
                 } else {
                     null
                 },
@@ -392,15 +430,15 @@ data class PopupProps(
          */
         fun parsePositionIndex(raw: Any?): Int {
             return when (raw) {
-                is Number -> raw.toInt().takeIf { it in 0..8 } ?: 0
+                is Number -> raw.toInt().takeIf { it in POS_TOP_RIGHT..POS_CENTER_RIGHT } ?: POS_TOP_RIGHT
                 is String -> {
                     val trimmed = raw.trim()
-                    trimmed.toIntOrNull()?.takeIf { it in 0..8 } ?: run {
+                    trimmed.toIntOrNull()?.takeIf { it in POS_TOP_RIGHT..POS_CENTER_RIGHT } ?: run {
                         val normalized = trimmed.replace("_", "").replace("-", "").lowercase()
-                        Position.entries.find { it.name.lowercase() == normalized }?.index ?: 0
+                        Position.entries.find { it.name.lowercase() == normalized }?.index ?: POS_TOP_RIGHT
                     }
                 }
-                else -> 0
+                else -> POS_TOP_RIGHT
             }
         }
 
@@ -612,15 +650,15 @@ data class PopupProps(
      * Enum defining supported screen positions across the full 3x3 grid.
      */
     enum class Position(val index: Int) {
-        TopRight(0),
-        TopLeft(1),
-        BottomRight(2),
-        BottomLeft(3),
-        Center(4),
-        TopCenter(5),
-        BottomCenter(6),
-        CenterLeft(7),
-        CenterRight(8);
+        TopRight(POS_TOP_RIGHT),
+        TopLeft(POS_TOP_LEFT),
+        BottomRight(POS_BOTTOM_RIGHT),
+        BottomLeft(POS_BOTTOM_LEFT),
+        Center(POS_CENTER),
+        TopCenter(POS_TOP_CENTER),
+        BottomCenter(POS_BOTTOM_CENTER),
+        CenterLeft(POS_CENTER_LEFT),
+        CenterRight(POS_CENTER_RIGHT);
 
         /**
          * Returns the horizontal screen side corresponding to this position.
@@ -692,7 +730,7 @@ data class PopupProps(
             is Media.Whep -> m.width
             is Media.LocalFile -> m.width
             is Media.Bitmap -> m.width
-            null -> imageWidth ?: if (!image.isNullOrEmpty()) 480 else null
+            null -> imageWidth ?: if (!image.isNullOrEmpty()) DEFAULT_MEDIA_WIDTH else null
         }
     }
 
@@ -757,6 +795,9 @@ data class PopupProps(
     ) {
         /** Pure layout estimation helpers for [PopupLayoutMetrics]. */
         companion object {
+            private const val FALLBACK_LINE_HEIGHT_FACTOR = 1.2f
+            private const val FALLBACK_CHARS_PER_LINE = 30
+
             /**
              * Estimates multiline text height in pixels for a given target [width].
              */
@@ -769,7 +810,7 @@ data class PopupProps(
                         .build()
                         .height
                 } catch (_: Exception) {
-                    (paint.textSize * 1.2f * (text.length / 30 + 1)).toInt()
+                    (paint.textSize * FALLBACK_LINE_HEIGHT_FACTOR * (text.length / FALLBACK_CHARS_PER_LINE + 1)).toInt()
                 }
             }
 
@@ -804,11 +845,12 @@ data class PopupProps(
                 props.rawMediaWidth()?.let { w ->
                     val scaledWidth = props.scaleValue(context, w)
                     mediaWidthEst = scaledWidth
+                    val default16By9Height = (scaledWidth * ASPECT_16_9_HEIGHT) / ASPECT_16_9_WIDTH
                     mediaHeightEst = when (val m = props.media) {
-                        is Media.Video -> m.height?.let { props.scaleValue(context, it) } ?: ((scaledWidth * 9) / 16)
+                        is Media.Video -> m.height?.let { props.scaleValue(context, it) } ?: default16By9Height
                         is Media.Web -> props.scaleValue(context, m.height)
-                        is Media.Whep -> m.height?.let { props.scaleValue(context, it) } ?: ((scaledWidth * 9) / 16)
-                        else -> (scaledWidth * 9) / 16
+                        is Media.Whep -> m.height?.let { props.scaleValue(context, it) } ?: default16By9Height
+                        else -> default16By9Height
                     }
                 }
 

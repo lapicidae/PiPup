@@ -124,7 +124,7 @@ abstract class SubmenuBase(
                         handler.postAtTime(
                             { onSettingsChanged(true) },
                             animationDebounceToken,
-                            android.os.SystemClock.uptimeMillis() + 800,
+                            android.os.SystemClock.uptimeMillis() + ANIMATION_DEBOUNCE_MS,
                         )
                     } else {
                         onSettingsChanged(false)
@@ -217,10 +217,14 @@ abstract class SubmenuBase(
             R.id.seekbar_animation_duration -> String.format(format, bar.progress)
             R.id.seekbar_close_button_size -> String.format(format, bar.progress + PopupProps.CLOSE_BUTTON_SIZE_MIN)
             R.id.seekbar_max_popups -> String.format(format, bar.progress + 1)
-            R.id.seekbar_buffer_ms -> if (bar.progress == 0) format else String.format(format, bar.progress * 100)
+            R.id.seekbar_buffer_ms -> if (bar.progress == 0) {
+                format
+            } else {
+                String.format(format, bar.progress * BUFFER_STEP_MS)
+            }
             R.id.seekbar_title_size,
             R.id.seekbar_message_size,
-            R.id.seekbar_button_size -> String.format(format, bar.progress + 10)
+            R.id.seekbar_button_size -> String.format(format, bar.progress + PopupProps.TEXT_SIZE_UI_MIN)
             else -> format
         }
     }
@@ -434,5 +438,11 @@ abstract class SubmenuBase(
             setPackage(PiPupApp.APP_PACKAGE)
         }
         context.sendBroadcast(intent)
+    }
+
+    /** Shared slider step and debounce constants for [SubmenuBase]. */
+    companion object {
+        const val BUFFER_STEP_MS = 100
+        private const val ANIMATION_DEBOUNCE_MS = 800L
     }
 }

@@ -7,6 +7,7 @@ import android.widget.Button
 import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.SettingCategory
 import nl.rogro82.pipup.colorToHex
@@ -63,17 +64,19 @@ class TextSubmenu(
             root,
             R.id.seekbar_title_size,
             R.id.text_title_size_value,
-            (settings.titleSize - 10).toInt().coerceIn(0, 30),
+            (settings.titleSize - PopupProps.TEXT_SIZE_UI_MIN).toInt()
+                .coerceIn(0, PopupProps.TEXT_SIZE_UI_SPAN),
         ) {
-            settings.titleSize = (it + 10).toFloat()
+            settings.titleSize = (it + PopupProps.TEXT_SIZE_UI_MIN).toFloat()
         }
         setupSeekBar(
             root,
             R.id.seekbar_message_size,
             R.id.text_message_size_value,
-            (settings.messageSize - 10).toInt().coerceIn(0, 30),
+            (settings.messageSize - PopupProps.TEXT_SIZE_UI_MIN).toInt()
+                .coerceIn(0, PopupProps.TEXT_SIZE_UI_SPAN),
         ) {
-            settings.messageSize = (it + 10).toFloat()
+            settings.messageSize = (it + PopupProps.TEXT_SIZE_UI_MIN).toFloat()
         }
 
         val suffix = context.getString(R.string.settings_default_suffix)

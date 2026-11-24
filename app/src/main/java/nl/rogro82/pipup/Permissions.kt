@@ -56,6 +56,10 @@ object Permissions {
     val FIXABLE_KEYS = listOf(KEY_OVERLAY, KEY_INSTALL, KEY_ADMIN, KEY_ACCESSIBILITY, KEY_ENERGY, KEY_AUTO_START)
 
     private const val OP_TCL_AUTO_START = "android:auto_start"
+    private const val MS_PER_SECOND = 1000L
+    private const val ENERGY_FALLBACK_DELAY_MS = 1500L
+    private const val OPTION_TITLE_TEXT_SIZE_SP = 18f
+    private const val OPTION_DESC_TEXT_SIZE_SP = 14f
     private val PLACEHOLDER_MARKERS = listOf("CTSDummy", "frameworkpackagestubs")
 
     const val BLOCKED_ERROR =
@@ -397,7 +401,7 @@ object Permissions {
                         context.startActivity(fallbackIntent)
                     } catch (_: Exception) {}
                 }
-            }, 1500)
+            }, ENERGY_FALLBACK_DELAY_MS)
             return true
         } catch (e: Exception) {
             Log.e(LOG_TAG, "Failed to launch energy settings", e)
@@ -584,13 +588,13 @@ object Permissions {
 
         row.addView(TextView(context).apply {
             text = title
-            textSize = 18f
+            textSize = OPTION_TITLE_TEXT_SIZE_SP
             setTextColor(ContextCompat.getColor(context, R.color.colorOnSurface))
         })
 
         row.addView(TextView(context).apply {
             text = desc
-            textSize = 14f
+            textSize = OPTION_DESC_TEXT_SIZE_SP
             setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
             setPadding(0, context.dpToPx(2), 0, 0)
         })
@@ -661,7 +665,7 @@ object Permissions {
             )
         },
         "lastFix" to mLastFix?.let { fix ->
-            fix + mapOf("secondsAgo" to (SystemClock.elapsedRealtime() - (fix["at"] as Long)) / 1000) - "at"
+            fix + mapOf("secondsAgo" to (SystemClock.elapsedRealtime() - (fix["at"] as Long)) / MS_PER_SECOND) - "at"
         }
     )
 }

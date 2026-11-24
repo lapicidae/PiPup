@@ -53,6 +53,7 @@ class NotificationManager(
         private const val EXIT_FALLBACK_DURATION_MS = 300L
         private const val EXIT_WATCHDOG_PADDING_MS = 250L
         private const val OVERLAY_ERROR_TOAST_COOLDOWN_MS = 5000L
+        private const val MS_PER_SECOND = 1000L
     }
 
     private class ShownSlot(
@@ -362,7 +363,7 @@ class NotificationManager(
         val conflictingKeys: Set<String> = emptySet()
     )
 
-    private data class LayoutItem(
+    private class LayoutItem(
         val key: String,
         val props: PopupProps,
         val width: Int,
@@ -410,10 +411,10 @@ class NotificationManager(
         }
         val result = LinkedHashMap<String, Rect>(items.size)
 
-        for ((key, _, width, height) in fullscreenItems) {
-            val left = (screenWidth - width) / 2
-            val top = (screenHeight - height) / 2
-            result[key] = Rect(left, top, left + width, top + height)
+        for (item in fullscreenItems) {
+            val left = (screenWidth - item.width) / 2
+            val top = (screenHeight - item.height) / 2
+            result[item.key] = Rect(left, top, left + item.width, top + item.height)
         }
 
         for (pos in PopupProps.Position.entries) {
@@ -427,11 +428,11 @@ class NotificationManager(
                 val anchor = pos.getVerticalAnchor()
                 if (anchor == PopupProps.VerticalAnchor.BOTTOM) {
                     var cursorY = screenHeight - baseMargin
-                    for ((key, _, width, height) in vItems) {
+                    for (item in vItems) {
                         val bottom = cursorY
-                        val top = bottom - height
-                        result[key] = computeVerticalItemRect(
-                            pos, width, top, bottom, screenWidth, baseMargin
+                        val top = bottom - item.height
+                        result[item.key] = computeVerticalItemRect(
+                            pos, item.width, top, bottom, screenWidth, baseMargin
                         )
                         cursorY = top - gapPx
                     }
@@ -441,11 +442,11 @@ class NotificationManager(
                     } else {
                         (screenHeight - vMeasuredHeight) / 2
                     }
-                    for ((key, _, width, height) in vItems) {
+                    for (item in vItems) {
                         val top = cursorY
-                        val bottom = top + height
-                        result[key] = computeVerticalItemRect(
-                            pos, width, top, bottom, screenWidth, baseMargin
+                        val bottom = top + item.height
+                        result[item.key] = computeVerticalItemRect(
+                            pos, item.width, top, bottom, screenWidth, baseMargin
                         )
                         cursorY = bottom + gapPx
                     }
@@ -459,11 +460,11 @@ class NotificationManager(
 
                 if (side == PopupProps.ScreenSide.RIGHT) {
                     var cursorX = screenWidth - baseMargin - (if (vWidth > 0) vWidth + gapPx else 0)
-                    for ((key, _, width, height) in hItems) {
+                    for (item in hItems) {
                         val right = cursorX
-                        val left = right - width
-                        result[key] = computeHorizontalItemRect(
-                            pos, height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
+                        val left = right - item.width
+                        result[item.key] = computeHorizontalItemRect(
+                            pos, item.height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
                         )
                         cursorX = left - gapPx
                     }
@@ -473,11 +474,11 @@ class NotificationManager(
                     } else {
                         (screenWidth - hMeasuredWidth) / 2
                     }
-                    for ((key, _, width, height) in hItems) {
+                    for (item in hItems) {
                         val left = cursorX
-                        val right = left + width
-                        result[key] = computeHorizontalItemRect(
-                            pos, height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
+                        val right = left + item.width
+                        result[item.key] = computeHorizontalItemRect(
+                            pos, item.height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
                         )
                         cursorX = right + gapPx
                     }
@@ -627,12 +628,12 @@ class NotificationManager(
         }
 
         // 1. Pairwise overlap check between candidate and all existing slots in other containers
-        for ((otherKey, otherProps) in existingItems) {
-            val otherRect = simulatedRects[otherKey]
-            if (!sharesContainer(props, otherProps) && otherRect != null &&
+        for (other in existingItems) {
+            val otherRect = simulatedRects[other.key]
+            if (!sharesContainer(props, other.props) && otherRect != null &&
                 rectsOverlapWithGap(candidateRect, otherRect)
             ) {
-                conflictingKeys.add(otherKey)
+                conflictingKeys.add(other.key)
             }
         }
 
@@ -640,16 +641,16 @@ class NotificationManager(
         val shiftedExisting = existingItems.filter {
             !it.props.coversScreen && it.props.getPositionEnum() == candidatePos
         }
-        for ((keyA, propsA) in shiftedExisting) {
-            val rectA = simulatedRects[keyA]
+        for (itemA in shiftedExisting) {
+            val rectA = simulatedRects[itemA.key]
             if (rectA != null) {
-                for ((keyB, propsB) in existingItems) {
-                    val rectB = simulatedRects[keyB]
-                    if (keyA != keyB && !sharesContainer(propsA, propsB) && rectB != null &&
+                for (itemB in existingItems) {
+                    val rectB = simulatedRects[itemB.key]
+                    if (itemA.key != itemB.key && !sharesContainer(itemA.props, itemB.props) && rectB != null &&
                         rectsOverlapWithGap(rectA, rectB)
                     ) {
-                        conflictingKeys.add(keyB)
-                        conflictingKeys.add(keyA)
+                        conflictingKeys.add(itemB.key)
+                        conflictingKeys.add(itemA.key)
                     }
                 }
             }
@@ -1237,7 +1238,7 @@ class NotificationManager(
             }
         }
         shown.expire = runnable
-        handler.postAtTime(runnable, shown, SystemClock.uptimeMillis() + (shown.props.duration * 1000L))
+        handler.postAtTime(runnable, shown, SystemClock.uptimeMillis() + (shown.props.duration * MS_PER_SECOND))
     }
 
     private fun triggerRemovalEvent(shown: ShownSlot, reason: String) {

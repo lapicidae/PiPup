@@ -26,6 +26,7 @@ class DebugModule : PiPupModule {
     /** Logging constants for [DebugModule]. */
     companion object {
         private const val TAG = "DebugModule"
+        private const val UNLOAD_AWAIT_SECONDS = 3L
     }
 
     override val id: String = "debug"
@@ -105,7 +106,7 @@ class DebugModule : PiPupModule {
 
         // Wait for cleanup to finish before responding to ensure accurate leak test results
         try {
-            latch.await(3, TimeUnit.SECONDS)
+            latch.await(UNLOAD_AWAIT_SECONDS, TimeUnit.SECONDS)
         } catch (_: InterruptedException) {}
 
         return NanoHTTPD.newFixedLengthResponse(

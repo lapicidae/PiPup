@@ -2,7 +2,7 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:NotificationManager.kt$NotificationManager$keyA != keyB &amp;&amp; !sharesContainer(propsA, propsB) &amp;&amp; rectB != null &amp;&amp; rectsOverlapWithGap(rectA, rectB)</ID>
+    <ID>ComplexCondition:NotificationManager.kt$NotificationManager$itemA.key != itemB.key &amp;&amp; !sharesContainer(itemA.props, itemB.props) &amp;&amp; rectB != null &amp;&amp; rectsOverlapWithGap(rectA, rectB)</ID>
     <ID>ComplexCondition:PermissionsSubmenu.kt$PermissionsSubmenu$why != null &amp;&amp; (isNotSupported || !isGranted || key in alwaysExplainKeys)</ID>
     <ID>ComplexCondition:PopupProps.kt$PopupProps.Companion$bId.isNotEmpty() &amp;&amp; bLabel.isNotEmpty() &amp;&amp; bId != "null" &amp;&amp; bLabel != "null"</ID>
     <ID>CyclomaticComplexMethod:AppSettings.kt$AppSettings$fun applyDefaults(props: PopupProps): PopupProps</ID>
@@ -43,17 +43,13 @@
     <ID>CyclomaticComplexMethod:SystemModule.kt$SystemModule$private fun fixResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
     <ID>CyclomaticComplexMethod:UiUtils.kt$fun AlertDialog.setupTvKeyboardAvoidance(input: View)</ID>
     <ID>CyclomaticComplexMethod:VendorSubmenu.kt$VendorSubmenu$private fun updateStatus()</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:MediaRenderer.kt$MediaRenderer$(minBuf, maxBuf, playbackBuf, rebufferBuf)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:NotificationManager.kt$NotificationManager$(key, _, width, height)</ID>
-    <ID>DestructuringDeclarationWithTooManyEntries:PayloadParserTest.kt$PayloadParserTest$val (minBuf, maxBuf, startBuf, rebuf) = nl.rogro82.pipup.ui.MediaRenderer.lowLatencyBufferDurations(250)!!</ID>
     <ID>ExplicitGarbageCollectionCall:CoreUtils.kt$gc()</ID>
     <ID>ExplicitGarbageCollectionCall:CoreUtils.kt$runFinalization()</ID>
-    <ID>ImplicitDefaultLocale:AppSettings.kt$AppSettings$String.format("%02X", backgroundAlpha)</ID>
-    <ID>ImplicitDefaultLocale:CoreUtils.kt$String.format("#%06X", 0xFFFFFF and color)</ID>
     <ID>LargeClass:MediaRenderer.kt$MediaRenderer</ID>
     <ID>LargeClass:NotificationManager.kt$NotificationManager</ID>
     <ID>LargeClass:PipUpService.kt$PipUpService : Service</ID>
     <ID>LargeClass:PopupView.kt$PopupView : FrameLayout</ID>
+    <ID>LargeClass:SettingsActivity.kt$SettingsActivity : AppCompatActivity</ID>
     <ID>LongMethod:AppSettings.kt$AppSettings.SettingsData.Companion$fun fromJson(jsonStr: String, defaults: SettingsData? = null): SettingsData</ID>
     <ID>LongMethod:ButtonSubmenu.kt$ButtonSubmenu$override fun onBind(root: View)</ID>
     <ID>LongMethod:GeneralSubmenu.kt$GeneralSubmenu$override fun onBind(root: View)</ID>
@@ -96,141 +92,6 @@
     <ID>LoopWithTooManyJumpStatements:ModuleManager.kt$ModuleManager$for</ID>
     <ID>LoopWithTooManyJumpStatements:OpenSourceLicenses.kt$OpenSourceLicenses$for</ID>
     <ID>LoopWithTooManyJumpStatements:PopupProps.kt$PopupProps.Companion$for</ID>
-    <ID>MagicNumber:AdvancedSubmenu.kt$AdvancedSubmenu$200</ID>
-    <ID>MagicNumber:AdvancedSubmenu.kt$AdvancedSubmenu$5000</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$10</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$10000</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$100f</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$10f</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$200</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$255</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$3</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$4</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$5</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$50</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$5000</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$60</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$7</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$80f</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$8f</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings$9</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$10</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$16</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$16.0</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$20</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$22.0</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$225</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$3</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$4</ID>
-    <ID>MagicNumber:AppSettings.kt$AppSettings.SettingsData.Companion$500</ID>
-    <ID>MagicNumber:ButtonSubmenu.kt$ButtonSubmenu$10</ID>
-    <ID>MagicNumber:ButtonSubmenu.kt$ButtonSubmenu$30</ID>
-    <ID>MagicNumber:CoreUtils.kt$0xFFFFFF</ID>
-    <ID>MagicNumber:DebugModule.kt$DebugModule$3</ID>
-    <ID>MagicNumber:DiscoveryModule.kt$DiscoveryModule$300</ID>
-    <ID>MagicNumber:DiscoveryModule.kt$DiscoveryModule$5000</ID>
-    <ID>MagicNumber:MainActivity.kt$MainActivity$500</ID>
-    <ID>MagicNumber:MediaRenderer.kt$MediaRenderer.Companion$5_000</ID>
-    <ID>MagicNumber:MediaRenderer.kt$MediaRenderer.GlideRequestListener$500L</ID>
-    <ID>MagicNumber:MediaRenderer.kt$MediaRenderer.VideoPlayerListener$1000L</ID>
-    <ID>MagicNumber:MediaRenderer.kt$MediaRenderer.WebRendererClient$1000L</ID>
-    <ID>MagicNumber:ModuleManager.kt$ModuleManager$60000</ID>
-    <ID>MagicNumber:NotificationManager.kt$NotificationManager$1000L</ID>
-    <ID>MagicNumber:PerformanceSubmenu.kt$PerformanceSubmenu$100</ID>
-    <ID>MagicNumber:PerformanceSubmenu.kt$PerformanceSubmenu$1200</ID>
-    <ID>MagicNumber:PerformanceSubmenu.kt$PerformanceSubmenu$4</ID>
-    <ID>MagicNumber:PerformanceSubmenu.kt$PerformanceSubmenu$400</ID>
-    <ID>MagicNumber:PerformanceSubmenu.kt$PerformanceSubmenu$5</ID>
-    <ID>MagicNumber:Permissions.kt$Permissions$1000</ID>
-    <ID>MagicNumber:Permissions.kt$Permissions$14f</ID>
-    <ID>MagicNumber:Permissions.kt$Permissions$1500</ID>
-    <ID>MagicNumber:Permissions.kt$Permissions$18f</ID>
-    <ID>MagicNumber:PermissionsSubmenu.kt$PermissionsSubmenu$0.8f</ID>
-    <ID>MagicNumber:PermissionsSubmenu.kt$PermissionsSubmenu$11f</ID>
-    <ID>MagicNumber:PermissionsSubmenu.kt$PermissionsSubmenu$12</ID>
-    <ID>MagicNumber:PermissionsSubmenu.kt$PermissionsSubmenu$14f</ID>
-    <ID>MagicNumber:PermissionsSubmenu.kt$PermissionsSubmenu$16</ID>
-    <ID>MagicNumber:PermissionsSubmenu.kt$PermissionsSubmenu$2000</ID>
-    <ID>MagicNumber:PermissionsSubmenu.kt$PermissionsSubmenu$4</ID>
-    <ID>MagicNumber:PermissionsSubmenu.kt$PermissionsSubmenu$8</ID>
-    <ID>MagicNumber:PipUpGlideAppModule.kt$PipUpGlideAppModule$1024</ID>
-    <ID>MagicNumber:PipUpGlideAppModule.kt$PipUpGlideAppModule$50</ID>
-    <ID>MagicNumber:PipUpService.kt$PipUpService$1000</ID>
-    <ID>MagicNumber:PipUpService.kt$PipUpService$30000</ID>
-    <ID>MagicNumber:PipUpService.kt$PipUpService$5000</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$0.5f</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$1.1f</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$1.5f</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$10</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$100f</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$150</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$3</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$300</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$3f</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$4</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$5</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$500f</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$6</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$7</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$8</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$9</ID>
-    <ID>MagicNumber:PopupAnimator.kt$PopupAnimator$90f</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps$480</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$10</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$100</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$10_000</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$10f</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$16.0</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$24.0</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$30</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$40f</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$5</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$500</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$50f</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Companion$8</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$1.2f</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$16</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$30</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$9</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Position.BottomCenter$6</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Position.BottomLeft$3</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Position.Center$4</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Position.CenterLeft$7</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Position.CenterRight$8</ID>
-    <ID>MagicNumber:PopupProps.kt$PopupProps.Position.TopCenter$5</ID>
-    <ID>MagicNumber:PopupView.kt$PopupView$100</ID>
-    <ID>MagicNumber:PopupView.kt$PopupView$1000L</ID>
-    <ID>MagicNumber:PopupView.kt$PopupView$150L</ID>
-    <ID>MagicNumber:PopupView.kt$PopupView$16</ID>
-    <ID>MagicNumber:PopupView.kt$PopupView$2000</ID>
-    <ID>MagicNumber:PopupView.kt$PopupView$3</ID>
-    <ID>MagicNumber:PopupView.kt$PopupView$9</ID>
-    <ID>MagicNumber:PopupView.kt$PopupView.&lt;no name provided&gt;$3</ID>
-    <ID>MagicNumber:Pusher.kt$Pusher$200</ID>
-    <ID>MagicNumber:Pusher.kt$Pusher$299</ID>
-    <ID>MagicNumber:Pusher.kt$Pusher$400</ID>
-    <ID>MagicNumber:Pusher.kt$Pusher$499</ID>
-    <ID>MagicNumber:SettingsActivity.kt$SettingsActivity$0.4</ID>
-    <ID>MagicNumber:SettingsActivity.kt$SettingsActivity$10</ID>
-    <ID>MagicNumber:SettingsActivity.kt$SettingsActivity$2</ID>
-    <ID>MagicNumber:SettingsActivity.kt$SettingsActivity$300</ID>
-    <ID>MagicNumber:SettingsActivity.kt$SettingsActivity$500</ID>
-    <ID>MagicNumber:SubmenuBase.kt$SubmenuBase$10</ID>
-    <ID>MagicNumber:SubmenuBase.kt$SubmenuBase$100</ID>
-    <ID>MagicNumber:SubmenuBase.kt$SubmenuBase.&lt;no name provided&gt;$800</ID>
-    <ID>MagicNumber:TextSubmenu.kt$TextSubmenu$10</ID>
-    <ID>MagicNumber:TextSubmenu.kt$TextSubmenu$30</ID>
-    <ID>MagicNumber:UiUtils.kt$100</ID>
-    <ID>MagicNumber:UpdateManager.kt$UpdateManager$100</ID>
-    <ID>MagicNumber:UpdateManager.kt$UpdateManager$10000</ID>
-    <ID>MagicNumber:UpdateManager.kt$UpdateManager$1024</ID>
-    <ID>MagicNumber:UpdateManager.kt$UpdateManager$200</ID>
-    <ID>MagicNumber:VendorSubmenu.kt$VendorSubmenu$1000</ID>
-    <ID>MagicNumber:VendorSubmenu.kt$VendorSubmenu$14f</ID>
-    <ID>MagicNumber:VendorSubmenu.kt$VendorSubmenu$16</ID>
-    <ID>MagicNumber:VendorSubmenu.kt$VendorSubmenu$24</ID>
-    <ID>MagicNumber:VendorSubmenu.kt$VendorSubmenu$8</ID>
-    <ID>MagicNumber:WakeActivity.kt$WakeActivity$1500</ID>
     <ID>NestedBlockDepth:MediaRenderer.kt$MediaRenderer$@SuppressLint("SetJavaScriptEnabled") private fun renderWhep(frame: FrameLayout, whep: PopupProps.Media.Whep, retryCount: Int = 0)</ID>
     <ID>NestedBlockDepth:NotificationManager.kt$NotificationManager$private fun adjustDualAxisContainerMargins(position: PopupProps.Position)</ID>
     <ID>NestedBlockDepth:NotificationManager.kt$NotificationManager$private fun computeSimulatedLayout(items: List&lt;LayoutItem&gt;): Map&lt;String, Rect&gt;</ID>

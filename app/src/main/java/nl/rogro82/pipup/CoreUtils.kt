@@ -18,12 +18,14 @@ import java.net.NetworkInterface.getNetworkInterfaces
 import java.net.SocketException
 import java.util.Locale
 
+private const val RGB_MASK = 0xFFFFFF
+
 /**
  * Returns the hex string representation of a color resource.
  */
 fun Context.colorToHex(colorRes: Int): String {
     val color = androidx.core.content.ContextCompat.getColor(this, colorRes)
-    return String.format("#%06X", 0xFFFFFF and color)
+    return String.format(Locale.US, "#%06X", RGB_MASK and color)
 }
 
 /**
