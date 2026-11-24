@@ -189,4 +189,43 @@ class SettingsSyncTest {
             PiPupApp.settings.apply(originalSettings)
         }
     }
+
+    @Test
+    fun testPartialPostSettingsPreservesOmittedFields() {
+        val originalSettings = PiPupApp.settings.getAll()
+        try {
+            PiPupApp.settings.apply(
+                originalSettings.copy(
+                    positionIndex = 2,
+                    backgroundColor = "#334455",
+                    maxPopups = 3,
+                    advancedMode = true,
+                    liveBadge = true
+                )
+            )
+
+            val partialBody = """{"maxPopups": 4}""".toByteArray(Charsets.UTF_8)
+            val conn = (URL("http://localhost:7979/settings").openConnection() as HttpURLConnection)
+            try {
+                conn.requestMethod = "POST"
+                conn.doOutput = true
+                conn.setRequestProperty("Content-Type", "application/json")
+                conn.setRequestProperty("Content-Length", partialBody.size.toString())
+                conn.outputStream.use { it.write(partialBody) }
+                assertEquals(200, conn.responseCode)
+            } finally {
+                conn.disconnect()
+            }
+            Thread.sleep(300)
+
+            val updated = PiPupApp.settings.getAll()
+            assertEquals(4, updated.maxPopups)
+            assertEquals(2, updated.positionIndex)
+            assertEquals("#334455", updated.backgroundColor)
+            assertTrue(updated.advancedMode)
+            assertTrue(updated.liveBadge)
+        } finally {
+            PiPupApp.settings.apply(originalSettings)
+        }
+    }
 }

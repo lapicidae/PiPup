@@ -21,6 +21,53 @@ readonly CLR_SUCCESS='\033[1;32m'
 readonly CLR_WARNING='\033[1;33m'
 readonly CLR_ERROR='\033[1;31m'
 
+# --- Cleanup & Settings Restore State ---
+PIPUP_CLEANUP_HOOKS=()
+PIPUP_CLEANUP_INSTALLED="false"
+SAVED_SETTINGS_ENDPOINT=""
+SAVED_SETTINGS_JSON=""
+
+#######################################
+# Executes all registered cleanup hooks in LIFO order on script exit or signal.
+# Arguments:
+#   $1: Exit code to preserve (defaults to $?).
+#######################################
+# shellcheck disable=SC2329
+pipup_run_cleanup() {
+  local exit_code="${1:-$?}"
+  trap - EXIT INT TERM
+
+  local i
+  for (( i = ${#PIPUP_CLEANUP_HOOKS[@]} - 1; i >= 0; i-- )); do
+    "${PIPUP_CLEANUP_HOOKS[i]}" "${exit_code}" || true
+  done
+
+  exit "${exit_code}"
+}
+
+#######################################
+# Registers a cleanup callback function to run on EXIT, INT, and TERM.
+# Multiple hooks may be registered without overwriting each other's traps.
+# Arguments:
+#   $1: Name of the shell function to invoke during cleanup.
+#######################################
+register_cleanup_hook() {
+  local hook="${1}"
+  if (( ${#PIPUP_CLEANUP_HOOKS[@]} > 0 )); then
+    local existing
+    for existing in "${PIPUP_CLEANUP_HOOKS[@]}"; do
+      [[ "${existing}" == "${hook}" ]] && return 0
+    done
+  fi
+  PIPUP_CLEANUP_HOOKS+=("${hook}")
+  if [[ "${PIPUP_CLEANUP_INSTALLED}" != "true" ]]; then
+    trap 'pipup_run_cleanup $?' EXIT
+    trap 'pipup_run_cleanup 130' INT
+    trap 'pipup_run_cleanup 143' TERM
+    PIPUP_CLEANUP_INSTALLED="true"
+  fi
+}
+
 #######################################
 # Sets up ADB port forwarding and ensures the PiPup webserver is running.
 # Arguments:
@@ -141,27 +188,63 @@ cancel_popup_by_id() {
 #   Writes the integer maxPopups value (defaults to 1) to stdout.
 #######################################
 get_max_popups() {
-  local endpoint_base="${1}"
-  curl -s --connect-timeout 3 --max-time 5 "${endpoint_base}/settings" \
-    | grep -o '"maxPopups":[0-9]*' | cut -d':' -f2 || printf "1"
-}
-
-#######################################
-# Reads the current mediaLoadingPlaceholder value from /settings.
-# Arguments:
-#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
-# Outputs:
-#   Writes the boolean string ("true" or "false", defaults to "false") to stdout.
-#######################################
-get_media_placeholder() {
   local endpoint_base="${1}" val
   val=$(curl -s --connect-timeout 3 --max-time 5 "${endpoint_base}/settings" \
-    | grep -o '"mediaLoadingPlaceholder":[a-z]*' | cut -d':' -f2 || printf "false")
-  printf "%s" "${val:-false}"
+    | grep -o '"maxPopups":[[:space:]]*[0-9]*' | grep -o '[0-9]*' || true)
+  printf "%s" "${val:-1}"
 }
 
 #######################################
-# Updates /settings with a partial JSON payload.
+# Posts a JSON payload to /settings.
+# Arguments:
+#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+#   $2: JSON object string
+#######################################
+post_app_settings() {
+  local endpoint_base="${1}"
+  local json_payload="${2}"
+  curl -s --connect-timeout 3 --max-time 5 -X POST \
+    -H "Content-Type: application/json" \
+    -d "${json_payload}" "${endpoint_base}/settings" >/dev/null 2>&1 || true
+}
+
+#######################################
+# Captures a full /settings snapshot once and registers a restore trap.
+# Arguments:
+#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+#######################################
+backup_app_settings() {
+  local endpoint_base="${1}"
+  if [[ -n "${SAVED_SETTINGS_JSON}" ]]; then
+    return 0
+  fi
+  local snapshot
+  snapshot=$(curl -sf --connect-timeout 3 --max-time 5 \
+    "${endpoint_base}/settings" 2>/dev/null || true)
+  if [[ -n "${snapshot}" ]]; then
+    SAVED_SETTINGS_ENDPOINT="${endpoint_base}"
+    SAVED_SETTINGS_JSON="${snapshot}"
+    register_cleanup_hook restore_app_settings
+  fi
+}
+
+#######################################
+# Restores the previously backed-up /settings snapshot (idempotent).
+#######################################
+# shellcheck disable=SC2329
+restore_app_settings() {
+  if [[ -n "${SAVED_SETTINGS_JSON}" && -n "${SAVED_SETTINGS_ENDPOINT}" ]]; then
+    local endpoint="${SAVED_SETTINGS_ENDPOINT}"
+    local snapshot="${SAVED_SETTINGS_JSON}"
+    SAVED_SETTINGS_JSON=""
+    SAVED_SETTINGS_ENDPOINT=""
+    post_app_settings "${endpoint}" "${snapshot}"
+  fi
+}
+
+#######################################
+# Updates /settings with a partial JSON payload, automatically backing up
+# and scheduling restoration of the original settings on script exit.
 # Arguments:
 #   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
 #   $2: JSON object string (e.g. '{"maxPopups": 5}')
@@ -169,8 +252,29 @@ get_media_placeholder() {
 update_app_settings() {
   local endpoint_base="${1}"
   local json_payload="${2}"
-  curl -s --connect-timeout 3 --max-time 5 -X POST -H "Content-Type: application/json" \
-    -d "${json_payload}" "${endpoint_base}/settings" >/dev/null 2>&1 || true
+  backup_app_settings "${endpoint_base}"
+  post_app_settings "${endpoint_base}" "${json_payload}"
+}
+
+#######################################
+# Temporarily raises maxPopups to at least the required minimum and
+# ensures the original setting is restored automatically on exit.
+# Arguments:
+#   $1: Endpoint base URL (e.g. http://127.0.0.1:7979)
+#   $2: Required minimum maxPopups (default: 2)
+#######################################
+ensure_min_max_popups() {
+  local endpoint_base="${1}"
+  local required_max="${2:-2}"
+  local current_max
+
+  current_max=$(get_max_popups "${endpoint_base}")
+  if (( current_max < required_max )); then
+    printf "%b[*] Temporarily raising maxPopups from %s to %s " \
+      "${CLR_HEADER}" "${current_max}" "${required_max}"
+    printf "(restored automatically on exit)...%b\n" "${CLR_RESET}"
+    update_app_settings "${endpoint_base}" "{\"maxPopups\": ${required_max}}"
+  fi
 }
 
 #######################################

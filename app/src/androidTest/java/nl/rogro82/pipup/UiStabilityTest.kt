@@ -6,8 +6,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import nl.rogro82.pipup.core.NotificationManager
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.lang.reflect.Proxy
 
 /**
  * Automated test suite for UI Stability, Popup Stacking across all 9 positions, and Animation variety.
@@ -222,6 +225,55 @@ class UiStabilityTest {
         } finally {
             manager.cancelAll()
             PiPupApp.settings.maxPopups = origMax
+        }
+    }
+
+    @Test
+    fun testOverlayPermissionDeniedDoesNotCrash() {
+        val delegate = windowManager
+        val denyingWindowManager = Proxy.newProxyInstance(
+            WindowManager::class.java.classLoader,
+            arrayOf(WindowManager::class.java)
+        ) { _, method, args ->
+            if (method.name == "addView") {
+                throw WindowManager.BadTokenException(
+                    "Unable to add window -- permission denied for window type 2038"
+                )
+            }
+            if (args == null) method.invoke(delegate) else method.invoke(delegate, *args)
+        } as WindowManager
+        val manager = NotificationManager(appContext, denyingWindowManager)
+        try {
+            InstrumentationRegistry.getInstrumentation().runOnMainSync {
+                manager.enqueue(
+                    PopupProps(
+                        id = "denied_1",
+                        title = "Permission Denied Test 1",
+                        message = "Must not crash without SYSTEM_ALERT_WINDOW",
+                        duration = 5
+                    )
+                )
+                manager.enqueue(
+                    PopupProps(
+                        title = "Permission Denied Test 2",
+                        message = "Burst notification without overlay permission",
+                        duration = 5
+                    )
+                )
+            }
+            // Wait for any posted UI work on the main thread to drain
+            InstrumentationRegistry.getInstrumentation().runOnMainSync { }
+
+            assertFalse(
+                "No popup should remain active when overlay creation fails",
+                manager.isDisplaying()
+            )
+            assertTrue(
+                "Active slot list must be empty when overlay creation fails",
+                manager.getActiveSlotDetails().isEmpty()
+            )
+        } finally {
+            manager.cancelAll()
         }
     }
 }

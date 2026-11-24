@@ -51,6 +51,7 @@ class NotificationManager(
         private const val MAX_PARALLEL_PREPARING = 3
         private const val EXIT_FALLBACK_DURATION_MS = 300L
         private const val EXIT_WATCHDOG_PADDING_MS = 250L
+        private const val OVERLAY_ERROR_TOAST_COOLDOWN_MS = 5000L
     }
 
     private class ShownSlot(
@@ -81,6 +82,7 @@ class NotificationManager(
 
     private val containers = mutableMapOf<ContainerKey, LinearLayout>()
     private var overlay: FrameLayout? = null
+    private var lastOverlayErrorToastAt: Long = 0L
 
     val watchdogCleanups = java.util.concurrent.atomic.AtomicLong(0)
     val popupsShown = java.util.concurrent.atomic.AtomicLong(0)
@@ -214,21 +216,23 @@ class NotificationManager(
 
             val id = props.id
 
-            if (!id.isNullOrEmpty() && mExiting.containsKey(id)) {
-                val exiting = mExiting.remove(id)!!
-                handler.removeCallbacksAndMessages(exiting)
-                exiting.container?.removeView(exiting.view)
-                exiting.view.cleanup()
+            if (!id.isNullOrEmpty()) {
+                mExiting.remove(id)?.let { exiting ->
+                    handler.removeCallbacksAndMessages(exiting)
+                    exiting.container?.removeView(exiting.view)
+                    exiting.view.cleanup()
+                }
             }
 
             // 1. If active on-screen unique ID popup exists
-            if (!id.isNullOrEmpty() && mShown.containsKey(id)) {
-                val current = mShown[id]!!
-                if (canUpdateInPlace(current.props, props)) {
-                    handleInPlaceUpdate(id, props)
-                    return
-                } else {
-                    removePopupInstantly(id, "replaced")
+            if (!id.isNullOrEmpty()) {
+                mShown[id]?.let { current ->
+                    if (canUpdateInPlace(current.props, props)) {
+                        handleInPlaceUpdate(id, props)
+                        return
+                    } else {
+                        removePopupInstantly(id, "replaced")
+                    }
                 }
             }
 
@@ -289,6 +293,20 @@ class NotificationManager(
             val oldContainer = current.container
             oldContainer?.removeView(current.view)
             val newContainer = ensurePositionContainer(newPos, props.effectiveStack, props.coversScreen)
+            if (newContainer == null) {
+                Log.w(TAG, "Overlay unavailable during in-place update; removing popup '$id'")
+                mShown.remove(id)
+                if (oldContainer != null && oldContainer.isEmpty()) {
+                    overlay?.removeView(oldContainer)
+                    containers.values.remove(oldContainer)
+                }
+                (props.media as? PopupProps.Media.LocalFile)?.let { lf ->
+                    PayloadParser.deleteFileAsync(lf.path)
+                }
+                discardSlotResources(current)
+                triggerRemovalEvent(current, "error")
+                return
+            }
 
             val lp = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
@@ -965,8 +983,8 @@ class NotificationManager(
         position: PopupProps.Position,
         stack: String? = null,
         fullscreen: Boolean = false
-    ): LinearLayout {
-        val overlayView = ensureOverlay()!!
+    ): LinearLayout? {
+        val overlayView = ensureOverlay() ?: return null
         val direction = PopupProps.parseStackDirection(if (fullscreen) null else stack)
         val key = ContainerKey(position, direction, fullscreen)
 
@@ -1081,11 +1099,7 @@ class NotificationManager(
             AdmissionStatus.UNPLACEABLE -> {
                 Log.w(TAG, "Discarding unplaceable ready popup: ${props.title ?: props.id}")
                 mReadyWaiting.remove(shown.key)
-                view.cleanup()
-                (props.media as? PopupProps.Media.LocalFile)?.let { lf ->
-                    PayloadParser.deleteFileAsync(lf.path)
-                }
-                checkIdleAndCleanupOverlay()
+                discardSlotResources(shown)
             }
             AdmissionStatus.ALLOWED -> {
                 mReadyWaiting.remove(shown.key)
@@ -1123,11 +1137,30 @@ class NotificationManager(
         return handled
     }
 
+    private fun discardSlotResources(shown: ShownSlot) {
+        handler.removeCallbacksAndMessages(shown)
+        shown.expire = null
+        shown.container?.removeView(shown.view)
+        shown.container = null
+        shown.view.cleanup()
+        (shown.props.media as? PopupProps.Media.LocalFile)?.let { lf ->
+            PayloadParser.deleteFileAsync(lf.path)
+        }
+        internalUpdateKeys.remove(shown.key)
+        shown.props.id?.let { internalUpdateKeys.remove(it) }
+        checkIdleAndCleanupOverlay()
+    }
+
     private fun displayReadySlot(shown: ShownSlot) {
         val slotKey = shown.key
         val props = shown.props
         val view = shown.view
         val container = ensurePositionContainer(props.getPositionEnum(), props.effectiveStack, props.coversScreen)
+        if (container == null) {
+            Log.w(TAG, "Overlay unavailable; discarding popup '${props.title ?: slotKey}' (key=$slotKey)")
+            discardSlotResources(shown)
+            return
+        }
         shown.container = container
 
         if (!props.id.isNullOrEmpty()) {
@@ -1692,13 +1725,28 @@ class NotificationManager(
             view
         } catch (e: Exception) {
             Log.e(TAG, "WindowManager error: ${e.message}")
-            context.showToast(context.getLocalizedContext(PiPupApp.settings.language).getString(R.string.error_permission_denied_overlay))
+            val now = SystemClock.elapsedRealtime()
+            if (lastOverlayErrorToastAt == 0L || now - lastOverlayErrorToastAt >= OVERLAY_ERROR_TOAST_COOLDOWN_MS) {
+                lastOverlayErrorToastAt = now
+                context.showToast(
+                    context.getLocalizedContext(PiPupApp.settings.language)
+                        .getString(R.string.error_permission_denied_overlay)
+                )
+            }
             null
         }
     }
 
     private fun removeOverlay() {
-        overlay?.let { if (it.parent != null) windowManager.removeView(it) }
+        overlay?.let { view ->
+            if (view.parent != null) {
+                try {
+                    windowManager.removeView(view)
+                } catch (e: Exception) {
+                    Log.e(TAG, "WindowManager removeView error: ${e.message}")
+                }
+            }
+        }
         overlay = null
         containers.clear()
     }

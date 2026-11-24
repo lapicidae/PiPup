@@ -373,56 +373,70 @@ class AppSettings(context: Context) {
         }
 
         companion object {
-            fun fromJson(jsonStr: String): SettingsData {
+            /**
+             * Parses a JSON object into [SettingsData], preserving any omitted fields from
+             * [defaults] when provided (partial merge).
+             */
+            fun fromJson(jsonStr: String, defaults: SettingsData? = null): SettingsData {
                 val j = JSONObject(jsonStr)
+                val mergedModes = (defaults?.moduleModes ?: emptyMap()).toMutableMap()
+                j.optJSONObject("moduleModes")?.let { modes ->
+                    modes.keys().forEach { key -> mergedModes[key] = modes.getInt(key) }
+                }
                 return SettingsData(
-                    positionIndex = j.optInt("positionIndex", 0),
-                    backgroundColor = j.optString("backgroundColor", ""),
-                    backgroundAlpha = j.optInt("backgroundAlpha", 225),
-                    titleColor = j.optString("titleColor", ""),
-                    titleSize = j.optDouble("titleSize", 22.0).toFloat(),
-                    messageColor = j.optString("messageColor", ""),
-                    messageSize = j.optDouble("messageSize", 16.0).toFloat(),
-                    borderRadius = j.optInt("borderRadius", 16),
-                    borderWidth = j.optInt("borderWidth", 0),
-                    borderColor = j.optString("borderColor", ""),
-                    contentPadding = j.optInt("contentPadding", 20),
-                    titleAlignment = j.optInt("titleAlignment", 0),
-                    messageAlignment = j.optInt("messageAlignment", 0),
-                    mediaPosition = j.optInt("mediaPosition", 0),
-                    animationType = j.optInt("animationType", 0),
-                    animationDuration = j.optInt("animationDuration", 500),
-                    animationExit = j.optBoolean("animationExit", false),
-                    mediaTimeout = j.optInt("mediaTimeout", 10),
-                    mediaRetries = j.optInt("mediaRetries", 3),
-                    maxPopups = j.optInt("maxPopups", 1),
-                    popupLoadingBehavior = j.optInt("popupLoadingBehavior", 0),
-                    defaultBufferMs = j.optInt("defaultBufferMs", 0),
-                    mediaLoadingPlaceholder = j.optBoolean("mediaLoadingPlaceholder", false),
-                    mediaFullBleed = j.optBoolean("mediaFullBleed", false),
-                    fullscreenUpscale = j.optBoolean("fullscreenUpscale", false),
-                    liveBadge = j.optBoolean("liveBadge", false),
-                    liveBadgePosition = j.optString("liveBadgePosition", "bottom_right"),
-                    appTheme = j.optInt("appTheme", 0),
-                    advancedMode = j.optBoolean("advancedMode", false),
-                    moduleModes = j.optJSONObject("moduleModes")?.let { modes ->
-                        val map = mutableMapOf<String, Int>()
-                        modes.keys().forEach { key -> map[key] = modes.getInt(key) }
-                        map
-                    } ?: emptyMap(),
-                    updateChannel = j.optInt("updateChannel", 0),
-                    updateInterval = j.optInt("updateInterval", 4),
-                    updateNotificationStyle = j.optInt("updateNotificationStyle", 1),
-                    lastUpdateCheck = j.optLong("lastUpdateCheck", 0L),
-                    updateAvailableTag = j.optString("updateAvailableTag", ""),
-                    updateRepeat = j.optBoolean("updateRepeat", false),
-                    lastNotifiedTag = j.optString("lastNotifiedTag", ""),
-                    pendingUpdateId = j.optLong("pendingUpdateId", -1L),
-                    pendingUpdateDigest = j.optString("pendingUpdateDigest", ""),
-                    pendingUpdateTagName = j.optString("pendingUpdateTagName", ""),
-                    language = j.optString("language", "default"),
-                    moduleModeMedia = if (j.has("moduleModeMedia")) j.getInt("moduleModeMedia") else null,
-                    webhookHeartbeat = j.optInt("webhookHeartbeat", 0)
+                    positionIndex = j.optInt("positionIndex", defaults?.positionIndex ?: 0),
+                    backgroundColor = j.optString("backgroundColor", defaults?.backgroundColor ?: ""),
+                    backgroundAlpha = j.optInt("backgroundAlpha", defaults?.backgroundAlpha ?: 225),
+                    titleColor = j.optString("titleColor", defaults?.titleColor ?: ""),
+                    titleSize = j.optDouble("titleSize", defaults?.titleSize?.toDouble() ?: 22.0).toFloat(),
+                    messageColor = j.optString("messageColor", defaults?.messageColor ?: ""),
+                    messageSize = j.optDouble("messageSize", defaults?.messageSize?.toDouble() ?: 16.0).toFloat(),
+                    borderRadius = j.optInt("borderRadius", defaults?.borderRadius ?: 16),
+                    borderWidth = j.optInt("borderWidth", defaults?.borderWidth ?: 0),
+                    borderColor = j.optString("borderColor", defaults?.borderColor ?: ""),
+                    contentPadding = j.optInt("contentPadding", defaults?.contentPadding ?: 20),
+                    titleAlignment = j.optInt("titleAlignment", defaults?.titleAlignment ?: 0),
+                    messageAlignment = j.optInt("messageAlignment", defaults?.messageAlignment ?: 0),
+                    mediaPosition = j.optInt("mediaPosition", defaults?.mediaPosition ?: 0),
+                    animationType = j.optInt("animationType", defaults?.animationType ?: 0),
+                    animationDuration = j.optInt("animationDuration", defaults?.animationDuration ?: 500),
+                    animationExit = j.optBoolean("animationExit", defaults?.animationExit ?: false),
+                    mediaTimeout = j.optInt("mediaTimeout", defaults?.mediaTimeout ?: 10),
+                    mediaRetries = j.optInt("mediaRetries", defaults?.mediaRetries ?: 3),
+                    maxPopups = j.optInt("maxPopups", defaults?.maxPopups ?: 1),
+                    popupLoadingBehavior = j.optInt("popupLoadingBehavior", defaults?.popupLoadingBehavior ?: 0),
+                    defaultBufferMs = j.optInt("defaultBufferMs", defaults?.defaultBufferMs ?: 0),
+                    mediaLoadingPlaceholder = j.optBoolean(
+                        "mediaLoadingPlaceholder",
+                        defaults?.mediaLoadingPlaceholder ?: false
+                    ),
+                    mediaFullBleed = j.optBoolean("mediaFullBleed", defaults?.mediaFullBleed ?: false),
+                    fullscreenUpscale = j.optBoolean("fullscreenUpscale", defaults?.fullscreenUpscale ?: false),
+                    liveBadge = j.optBoolean("liveBadge", defaults?.liveBadge ?: false),
+                    liveBadgePosition = j.optString("liveBadgePosition", defaults?.liveBadgePosition ?: "bottom_right"),
+                    appTheme = j.optInt("appTheme", defaults?.appTheme ?: 0),
+                    advancedMode = j.optBoolean("advancedMode", defaults?.advancedMode ?: false),
+                    moduleModes = mergedModes,
+                    updateChannel = j.optInt("updateChannel", defaults?.updateChannel ?: 0),
+                    updateInterval = j.optInt("updateInterval", defaults?.updateInterval ?: 4),
+                    updateNotificationStyle = j.optInt(
+                        "updateNotificationStyle",
+                        defaults?.updateNotificationStyle ?: 1
+                    ),
+                    lastUpdateCheck = j.optLong("lastUpdateCheck", defaults?.lastUpdateCheck ?: 0L),
+                    updateAvailableTag = j.optString("updateAvailableTag", defaults?.updateAvailableTag ?: ""),
+                    updateRepeat = j.optBoolean("updateRepeat", defaults?.updateRepeat ?: false),
+                    lastNotifiedTag = j.optString("lastNotifiedTag", defaults?.lastNotifiedTag ?: ""),
+                    pendingUpdateId = j.optLong("pendingUpdateId", defaults?.pendingUpdateId ?: -1L),
+                    pendingUpdateDigest = j.optString("pendingUpdateDigest", defaults?.pendingUpdateDigest ?: ""),
+                    pendingUpdateTagName = j.optString("pendingUpdateTagName", defaults?.pendingUpdateTagName ?: ""),
+                    language = j.optString("language", defaults?.language ?: "default"),
+                    moduleModeMedia = if (j.has("moduleModeMedia")) {
+                        j.getInt("moduleModeMedia")
+                    } else {
+                        defaults?.moduleModeMedia
+                    },
+                    webhookHeartbeat = j.optInt("webhookHeartbeat", defaults?.webhookHeartbeat ?: 0)
                 )
             }
         }

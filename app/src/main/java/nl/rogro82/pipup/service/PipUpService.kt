@@ -63,6 +63,7 @@ class PipUpService : Service() {
         private const val TAG = "PipUpService"
         private const val CHANNEL_ID = "pipup_service"
         private const val NOTIFICATION_ID = 1001
+        private const val MS_PER_SECOND = 1000L
         /** The port on which the internal WebServer listens. */
         const val SERVER_PORT = 7979
 
@@ -146,7 +147,7 @@ class PipUpService : Service() {
         handler.removeCallbacks(webhookHeartbeatRunnable)
         val intervalSec = settings.webhookHeartbeat
         if (intervalSec > 0 && !Pusher.url.isNullOrBlank()) {
-            handler.postDelayed(webhookHeartbeatRunnable, intervalSec * 1000L)
+            handler.postDelayed(webhookHeartbeatRunnable, intervalSec * MS_PER_SECOND)
         }
     }
 
@@ -608,44 +609,41 @@ class PipUpService : Service() {
                     val bodyText = String(session.inputStream.readExactBytes(length), Charsets.UTF_8)
                     val json = try {
                         org.json.JSONObject(bodyText)
-                    } catch (e: Exception) {
+                    } catch (e: org.json.JSONException) {
                         return invalidRequest(e.message)
+                    }
+                    val parsedHeartbeat = if (json.has("webhookHeartbeat")) {
+                        val rawHb = if (json.isNull("webhookHeartbeat")) {
+                            "0"
+                        } else {
+                            json.get("webhookHeartbeat").toString()
+                        }
+                        parseWebhookHeartbeat(rawHb)
+                            ?: return invalidRequest("webhookHeartbeat must be a non-negative integer")
+                    } else {
+                        null
+                    }
+                    if (json.has("webhook")) {
+                        val rawUrl = if (json.isNull("webhook")) "" else json.optString("webhook", "")
+                        applyWebhookUrl(rawUrl)?.let { return invalidRequest(it) }
                     }
                     val keys = buildSet { json.keys().forEach { add(it) } }
                     val isWebhookOnlyJson = keys.isNotEmpty() &&
                         keys.all { it == "webhook" || it == "webhookHeartbeat" }
                     if (isWebhookOnlyJson) {
-                        if (json.has("webhook")) {
-                            val rawUrl = if (json.isNull("webhook")) "" else json.optString("webhook", "")
-                            applyWebhookUrl(rawUrl)?.let { return invalidRequest(it) }
-                            webhookUpdated = true
-                        }
-                        if (json.has("webhookHeartbeat")) {
-                            val rawHb = if (json.isNull("webhookHeartbeat")) {
-                                "0"
-                            } else {
-                                json.get("webhookHeartbeat").toString()
-                            }
-                            applyWebhookHeartbeat(rawHb)?.let { return invalidRequest(it) }
-                            webhookUpdated = true
+                        if (parsedHeartbeat != null) {
+                            settings.webhookHeartbeat = parsedHeartbeat
                         }
                         rescheduleWebhookHeartbeat()
                         emit("settings")
                         return ok()
                     }
                     try {
-                        val parsed = AppSettings.SettingsData.fromJson(bodyText)
-                        val data = if (json.has("webhookHeartbeat")) {
-                            val rawHb = if (json.isNull("webhookHeartbeat")) {
-                                "0"
-                            } else {
-                                json.get("webhookHeartbeat").toString()
-                            }
-                            val normalized = parseWebhookHeartbeat(rawHb)
-                                ?: return invalidRequest("webhookHeartbeat must be a non-negative integer")
-                            parsed.copy(webhookHeartbeat = normalized)
+                        val parsed = AppSettings.SettingsData.fromJson(bodyText, defaults = settings.getAll())
+                        val data = if (parsedHeartbeat != null) {
+                            parsed.copy(webhookHeartbeat = parsedHeartbeat)
                         } else {
-                            parsed.copy(webhookHeartbeat = settings.webhookHeartbeat)
+                            parsed
                         }
                         handler.post {
                             settings.apply(data)
@@ -658,9 +656,6 @@ class PipUpService : Service() {
                                 putExtra("origin", "remote")
                             }
                             sendBroadcast(intent)
-                        }
-                        if (webhookUpdated) {
-                            rescheduleWebhookHeartbeat()
                         }
                         emit("settings")
                         ok()
@@ -681,22 +676,22 @@ class PipUpService : Service() {
 
     private fun applyWebhookUrl(raw: String): String? {
         val v = raw.trim()
-        if (v.isNotEmpty()) {
-            try {
-                val uri = URI(v)
-                if (uri.scheme !in setOf("http", "https") || uri.host.isNullOrBlank()) {
-                    return "webhook must be a valid http(s) URL"
-                }
-            } catch (_: Exception) {
-                return "webhook must be a valid http(s) URL"
-            }
-            settings.webhook = v
-            Pusher.url = v
-        } else {
+        if (v.isEmpty()) {
             settings.webhook = null
             Pusher.url = null
+            return null
         }
-        return null
+        val valid = try {
+            val uri = URI(v)
+            uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank()
+        } catch (_: java.net.URISyntaxException) {
+            false
+        }
+        if (valid) {
+            settings.webhook = v
+            Pusher.url = v
+        }
+        return if (valid) null else "webhook must be a valid http(s) URL"
     }
 
     private fun parseWebhookHeartbeat(raw: String): Int? {

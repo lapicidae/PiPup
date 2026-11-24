@@ -89,7 +89,7 @@ main() {
     exit $?
   fi
 
-  check_max_popups "${endpoint_base}" 4
+  ensure_min_max_popups "${endpoint_base}" 4
 
   printf "%b[STACKING] Deploying Dual-Axis L-Shape Stack to position %s (2 Horizontal, 2 Vertical)...%b\n" \
     "${CLR_HEADER}" "${position}" "${CLR_RESET}"

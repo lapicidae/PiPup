@@ -2,9 +2,11 @@ package nl.rogro82.pipup.core.modules
 
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
+import android.net.wifi.WifiManager
 import android.os.Build
 import android.util.Log
 import androidx.core.content.ContextCompat
+import java.net.Inet4Address
 import java.text.Normalizer
 import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.R
@@ -48,16 +50,20 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
     private var isResolving = false
     private val queueHandler = android.os.Handler(android.os.Looper.getMainLooper())
     private var currentRequest: ResolveRequest? = null
+    private var activeInfoCallback: Any? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     private val resolveTimeoutRunnable = Runnable {
-        currentRequest?.let { req ->
-            Log.w(TAG, "Resolve timed out for ${req.service.serviceName} (Try ${req.retries + 1}/3)")
-            if (req.retries < 2) {
-                req.retries++
-                synchronized(resolveQueue) { resolveQueue.add(req) }
+        val timedOut = currentRequest
+        if (timedOut != null) {
+            Log.w(TAG, "Resolve timed out for ${timedOut.service.serviceName} (Try ${timedOut.retries + 1}/3)")
+            unregisterActiveInfoCallback()
+            if (timedOut.retries < 2) {
+                timedOut.retries++
+                synchronized(resolveQueue) { resolveQueue.add(timedOut) }
             }
+            finishResolve(timedOut)
         }
-        finishResolve()
     }
 
     override fun onEnable(context: ModuleContext) {
@@ -71,6 +77,7 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
         Log.d(TAG, "Discovery module disabled, unregistering service")
         unregisterService()
         stopDiscovery()
+        multicastLock = null
         moduleContext = null
         nsdManager = null
     }
@@ -127,11 +134,13 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
         val nsd = nsdManager ?: return
         if (discoveryListener != null) stopDiscovery()
 
+        acquireMulticastLock()
         this.peerListener = listener
         discoveredDevices.clear()
 
         synchronized(resolveQueue) {
             resolveQueue.clear()
+            currentRequest = null
             isResolving = false
         }
 
@@ -145,7 +154,9 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
                 // Use contains because types might have trailing dots
                 if (service.serviceType.contains(SERVICE_TYPE)) {
                     synchronized(resolveQueue) {
-                        if (resolveQueue.none { it.service.serviceName == service.serviceName }) {
+                        val alreadyQueued = resolveQueue.any { it.service.serviceName == service.serviceName }
+                        val currentlyResolving = currentRequest?.service?.serviceName == service.serviceName
+                        if (!alreadyQueued && !currentlyResolving) {
                             resolveQueue.add(ResolveRequest(service))
                             processNextInQueue()
                         }
@@ -156,6 +167,14 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
             override fun onServiceLost(service: NsdServiceInfo) {
                 Log.d(TAG, "Service lost: ${service.serviceName}")
                 discoveredDevices.remove(service.serviceName)
+                synchronized(resolveQueue) {
+                    resolveQueue.removeAll { it.service.serviceName == service.serviceName }
+                    val active = currentRequest
+                    if (active?.service?.serviceName == service.serviceName) {
+                        unregisterActiveInfoCallback()
+                        finishResolve(active)
+                    }
+                }
                 peerListener?.onPeerLost(service.serviceName)
             }
 
@@ -182,7 +201,7 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
      */
     private fun processNextInQueue() {
         synchronized(resolveQueue) {
-            if (isResolving || resolveQueue.isEmpty()) return
+            if (isResolving || resolveQueue.isEmpty() || discoveryListener == null) return
 
             val nextRequest = resolveQueue.poll() ?: return
             currentRequest = nextRequest
@@ -191,48 +210,91 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
             Log.d(TAG, "Next in queue: ${nextRequest.service.serviceName} (Try ${nextRequest.retries + 1}), waiting 300ms...")
 
             queueHandler.postDelayed({
-                resolveServiceInternal(nextRequest.service)
+                resolveServiceInternal(nextRequest)
             }, 300)
         }
     }
 
-    private fun resolveServiceInternal(service: NsdServiceInfo) {
-        val nsd = nsdManager ?: return
-        val context = moduleContext?.androidContext ?: return
+    private fun resolveServiceInternal(request: ResolveRequest) {
+        if (currentRequest !== request || discoveryListener == null) return
+        val nsd = nsdManager
+        val context = moduleContext?.androidContext
+        if (nsd == null || context == null) return
+        val service = request.service
         Log.d(TAG, "Starting resolution for: ${service.serviceName}")
 
         // Start timeout watchdog (5s for slow emulators)
+        queueHandler.removeCallbacks(resolveTimeoutRunnable)
         queueHandler.postDelayed(resolveTimeoutRunnable, 5000)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            nsd.registerServiceInfoCallback(service, ContextCompat.getMainExecutor(context), object : NsdManager.ServiceInfoCallback {
-                override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
-                    onResolveFinished(serviceInfo)
-                    try { nsd.unregisterServiceInfoCallback(this) } catch (_: Exception) {}
+            unregisterActiveInfoCallback()
+            fun detach(cb: NsdManager.ServiceInfoCallback, unregister: Boolean = true) {
+                if (unregister) {
+                    try {
+                        nsd.unregisterServiceInfoCallback(cb)
+                    } catch (_: Exception) {}
                 }
-                override fun onServiceLost() { finishResolve() }
+                if (activeInfoCallback === cb) activeInfoCallback = null
+            }
+
+            val callback = object : NsdManager.ServiceInfoCallback {
+                override fun onServiceUpdated(serviceInfo: NsdServiceInfo) {
+                    if (currentRequest !== request || discoveryListener == null) {
+                        detach(this)
+                        return
+                    }
+                    if (serviceInfo.getHostAddress() == null) {
+                        return
+                    }
+                    detach(this)
+                    onResolveFinished(request, serviceInfo)
+                }
+
+                override fun onServiceLost() {
+                    detach(this)
+                    if (currentRequest === request) {
+                        finishResolve(request)
+                    }
+                }
+
                 override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
                     Log.e(TAG, "Callback registration failed: $errorCode")
-                    finishResolve()
+                    detach(this, unregister = false)
+                    finishResolve(request)
                 }
+
                 override fun onServiceInfoCallbackUnregistered() {}
-            })
+            }
+            activeInfoCallback = callback
+            try {
+                nsd.registerServiceInfoCallback(service, ContextCompat.getMainExecutor(context), callback)
+            } catch (e: IllegalArgumentException) {
+                Log.e(TAG, "Failed to register service info callback", e)
+                detach(callback, unregister = false)
+                finishResolve(request)
+            } catch (e: IllegalStateException) {
+                Log.e(TAG, "Failed to register service info callback", e)
+                detach(callback, unregister = false)
+                finishResolve(request)
+            }
         } else {
             @Suppress("DEPRECATION")
             nsd.resolveService(service, object : NsdManager.ResolveListener {
                 override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                     Log.e(TAG, "Resolve failed: $errorCode")
-                    finishResolve()
+                    finishResolve(request)
                 }
 
                 override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
-                    onResolveFinished(serviceInfo)
+                    onResolveFinished(request, serviceInfo)
                 }
             })
         }
     }
 
-    private fun onResolveFinished(serviceInfo: NsdServiceInfo) {
+    private fun onResolveFinished(request: ResolveRequest, serviceInfo: NsdServiceInfo) {
+        if (currentRequest !== request || discoveryListener == null) return
         val hostAddress = serviceInfo.getHostAddress()
         Log.d(TAG, "Service resolved successfully: ${serviceInfo.serviceName} -> $hostAddress")
         discoveredDevices[serviceInfo.serviceName] = serviceInfo
@@ -247,19 +309,68 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
             peerListener?.onPeerFound(peer)
         }
 
-        finishResolve()
+        finishResolve(request)
     }
 
-    private fun finishResolve() {
-        queueHandler.removeCallbacks(resolveTimeoutRunnable)
-        currentRequest = null
-        isResolving = false
-        processNextInQueue()
+    private fun finishResolve(request: ResolveRequest) {
+        synchronized(resolveQueue) {
+            if (currentRequest !== request) return
+            queueHandler.removeCallbacks(resolveTimeoutRunnable)
+            currentRequest = null
+            isResolving = false
+            processNextInQueue()
+        }
+    }
+
+    private fun unregisterActiveInfoCallback() {
+        val cb = activeInfoCallback ?: return
+        activeInfoCallback = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            try {
+                nsdManager?.unregisterServiceInfoCallback(cb as NsdManager.ServiceInfoCallback)
+            } catch (_: Exception) {}
+        }
+    }
+
+    private fun acquireMulticastLock() {
+        val ctx = moduleContext?.androidContext ?: return
+        try {
+            val wifiManager = ctx.applicationContext
+                .getSystemService(android.content.Context.WIFI_SERVICE) as? WifiManager
+            if (multicastLock == null && wifiManager != null) {
+                multicastLock = wifiManager.createMulticastLock("PiPupNsdDiscovery").apply {
+                    setReferenceCounted(false)
+                }
+            }
+            if (multicastLock?.isHeld == false) {
+                multicastLock?.acquire()
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Could not acquire MulticastLock: ${e.message}")
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "Could not acquire MulticastLock: ${e.message}")
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "Could not acquire MulticastLock: ${e.message}")
+        }
+    }
+
+    private fun releaseMulticastLock() {
+        try {
+            if (multicastLock?.isHeld == true) {
+                multicastLock?.release()
+            }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Could not release MulticastLock: ${e.message}")
+        } catch (e: IllegalStateException) {
+            Log.w(TAG, "Could not release MulticastLock: ${e.message}")
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "Could not release MulticastLock: ${e.message}")
+        }
     }
 
     private fun NsdServiceInfo.getHostAddress(): String? {
         return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            hostAddresses.firstOrNull()?.hostAddress
+            (hostAddresses.firstOrNull { it is Inet4Address } ?: hostAddresses.firstOrNull())?.hostAddress
         } else {
             @Suppress("DEPRECATION")
             host?.hostAddress
@@ -276,7 +387,9 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
     fun stopDiscovery() {
         synchronized(resolveQueue) {
             resolveQueue.clear()
-            queueHandler.removeCallbacks(resolveTimeoutRunnable)
+            queueHandler.removeCallbacksAndMessages(null)
+            unregisterActiveInfoCallback()
+            currentRequest = null
             isResolving = false
         }
         discoveryListener?.let {
@@ -288,6 +401,7 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
         }
         discoveryListener = null
         peerListener = null
+        releaseMulticastLock()
     }
 
     private fun sanitizeDeviceName(name: String): String {

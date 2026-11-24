@@ -16,7 +16,6 @@ readonly ADB_TIMEOUT_SEC=10
 
 # --- Global State ---
 TARGET_IP="${PIPUP_IP:-${DEFAULT_IP}}"
-ORIGINAL_MODE=""
 TMP_LOG=""
 
 #######################################
@@ -62,26 +61,17 @@ set_media_mode() {
 }
 
 #######################################
-# Unified cleanup trap for process termination and state restoration.
+# Cleanup hook for process termination and temporary log removal.
+# Original app settings are restored automatically by common.sh.
 #######################################
+# shellcheck disable=SC2329
 cleanup() {
-  local exit_code=$?
-  trap - EXIT INT TERM
-
   printf "\nCleaning up and exiting...\n" >&2
 
   pkill -9 -P $$ >/dev/null 2>&1 || true
   pkill -9 -f "${NOTIFY_SCRIPT}" >/dev/null 2>&1 || true
 
-  if [[ -n "${ORIGINAL_MODE:-}" && ${ORIGINAL_MODE} != 2 ]]; then
-    printf "Restoring original media mode (%s)...\n" "${ORIGINAL_MODE}" >&2
-    update_app_settings "http://${TARGET_IP}:${PORT}" "{\"moduleModes\":{\"media\":${ORIGINAL_MODE}}}"
-  fi
-
-  [[ -f "${TMP_LOG}" ]] && rm -f "${TMP_LOG}"
-
-  [[ ${exit_code} -eq 130 || ${exit_code} -eq 143 ]] && exit 130
-  exit "${exit_code}"
+  [[ -n "${TMP_LOG}" && -f "${TMP_LOG}" ]] && rm -f "${TMP_LOG}"
 }
 
 #######################################
@@ -222,8 +212,6 @@ run_test_type() {
 # Main execution function.
 #######################################
 main() {
-  trap cleanup EXIT INT TERM
-
   while getopts "d:h?" opt; do
     case "${opt}" in
       d) TARGET_IP="${OPTARG}" ;;
@@ -240,8 +228,8 @@ main() {
   adb_shell_safe am start -n "${APP_ACTIVITY}"
   sleep 4
 
-  ORIGINAL_MODE=$(api_request "GET" "/settings" | grep -o '"media":[0-9]*' | awk -F':' '{print $2}' || true)
-  ORIGINAL_MODE="${ORIGINAL_MODE:-2}"
+  backup_app_settings "http://${TARGET_IP}:${PORT}"
+  register_cleanup_hook cleanup
 
   local separator="------------------------------------------------------------------------------------------------"
   printf "Starting Systematic Leak & Recovery Test [Target IP: %s]...\n" "${TARGET_IP}"

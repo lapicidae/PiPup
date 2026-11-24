@@ -16,6 +16,8 @@ readonly SAMPLE_VIDEO_URL="https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/
 readonly SAMPLE_POSTER_URL="https://thumb.wikimedia.org/wikipedia/de/thumb/e/ea/Big_Buck_Bunny.svg/330px-Big_Buck_Bunny.svg.png"
 readonly CACHE_DIR="/tmp/pipup_test"
 
+SERVER_PID=""
+
 usage() {
   cat <<EOF
 Usage: ${0##*/} [-d ip] [-D delay_s] [-s speed_kb] [-b buf_ms] [-p pos] [-m mode] [-B badge_pos] [-C color] [-L] [-F] [-M] [-P] [-c]
@@ -163,6 +165,14 @@ EOF
   send_api_request "${endpoint_base}/notify" "${payload}" "Stream '${id}' (pos=${pos}, mode=${mode}, bleed=${bleed}, badge=${bpos})"
 }
 
+# shellcheck disable=SC2329
+cleanup_slow_stream() {
+  if [[ -n "${SERVER_PID:-}" ]]; then
+    kill -9 "${SERVER_PID}" 2>/dev/null || true
+    SERVER_PID=""
+  fi
+}
+
 main() {
   local target_ip="${DEFAULT_IP}" initial_delay="5" speed_kb="350" buffer_ms="2000" position="0"
   local poster_mode="fill" live_badge="true" badge_pos="bottom_right" badge_color="#B3261E"
@@ -203,26 +213,13 @@ main() {
   [[ "${multi_mode}" == "true" && "${speed_kb}" -lt 1200 ]] && effective_speed="1200"
   printf "%b[*] Starting throttled server on port %s (delay: %ss, speed: %s KB/s)...%b\n" \
     "${CLR_HEADER}" "${SERVER_PORT}" "${initial_delay}" "${effective_speed}" "${CLR_RESET}"
-  local server_pid restore_payload=""
-  server_pid=$(start_throttle_server "${initial_delay}" "${effective_speed}")
-
-  # shellcheck disable=SC2329
-  cleanup_slow_stream() {
-    kill -9 "${server_pid}" 2>/dev/null || true
-    if [[ -n "${restore_payload}" ]]; then
-      update_app_settings "${endpoint_base}" "${restore_payload}"
-    fi
-  }
-  trap cleanup_slow_stream EXIT INT TERM
+  SERVER_PID=$(start_throttle_server "${initial_delay}" "${effective_speed}")
+  register_cleanup_hook cleanup_slow_stream
 
   local ts
   ts=$(date +%s)
 
   if [[ "${multi_mode}" == "true" ]]; then
-    local orig_max orig_placeholder
-    orig_max=$(get_max_popups "${endpoint_base}")
-    orig_placeholder=$(get_media_placeholder "${endpoint_base}")
-    restore_payload="{\"maxPopups\": ${orig_max}, \"mediaLoadingPlaceholder\": ${orig_placeholder}}"
     update_app_settings "${endpoint_base}" '{"maxPopups": 5, "mediaLoadingPlaceholder": true}'
     cancel_all_popups "${endpoint_base}"
 
@@ -244,11 +241,9 @@ main() {
 
     sleep $(( initial_delay > 5 ? initial_delay + 16 : 21 ))
   else
-    local mode="${poster_mode}" orig_placeholder=""
+    local mode="${poster_mode}"
     if [[ "${omit_poster}" == "true" ]]; then
       mode="none"
-      orig_placeholder=$(get_media_placeholder "${endpoint_base}")
-      restore_payload="{\"mediaLoadingPlaceholder\": ${orig_placeholder}}"
       update_app_settings "${endpoint_base}" '{"mediaLoadingPlaceholder": true}'
     fi
     send_stream_popup "${endpoint_base}" "${media_host}" "slow_single" "${position}" \

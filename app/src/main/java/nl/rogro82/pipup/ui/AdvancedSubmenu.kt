@@ -126,6 +126,19 @@ class AdvancedSubmenu(
         val localId = settings.deviceId
         val myIp = getIpAddress()
 
+        fun refreshPeerList(emptyStateRes: Int) {
+            peerDisplayNames.clear()
+            if (peers.isEmpty()) {
+                peerDisplayNames.add(context.getString(emptyStateRes))
+            } else {
+                peers.forEach { p ->
+                    val displayName = p.name.removePrefix("PiPup ").trim()
+                    peerDisplayNames.add("$displayName (${p.address})")
+                }
+            }
+            adapter.notifyDataSetChanged()
+        }
+
         val peerListener = object : PeerDiscoveryProvider.Listener {
             override fun onPeerFound(peer: DiscoveredPeer) {
                 // 1. Filter out self (by unique ID or IP address)
@@ -134,16 +147,14 @@ class AdvancedSubmenu(
                 }
 
                 settingsActivity?.runOnUiThread {
-                    // 2. Filter duplicates by peer name to allow multiple mocks from one IP (stress test)
-                    if (peers.none { it.name == peer.name }) {
+                    // 2. Deduplicate/update by peer name to allow multiple mocks from one IP (stress test)
+                    val existingIndex = peers.indexOfFirst { it.name == peer.name }
+                    if (existingIndex != -1) {
+                        peers[existingIndex] = peer
+                    } else {
                         peers.add(peer)
-                        val displayName = peer.name.removePrefix("PiPup ").trim()
-                        peerDisplayNames.add("$displayName (${peer.address})")
-                        if (peerDisplayNames.getOrNull(0) == context.getString(R.string.settings_import_discover)) {
-                            peerDisplayNames.removeAt(0)
-                        }
-                        adapter.notifyDataSetChanged()
                     }
+                    refreshPeerList(R.string.settings_import_discover)
                 }
             }
 
@@ -152,11 +163,7 @@ class AdvancedSubmenu(
                     val index = peers.indexOfFirst { it.name == peerName }
                     if (index != -1) {
                         peers.removeAt(index)
-                        peerDisplayNames.removeAt(index)
-                        if (peerDisplayNames.isEmpty()) {
-                            peerDisplayNames.add(context.getString(R.string.settings_import_no_devices))
-                        }
-                        adapter.notifyDataSetChanged()
+                        refreshPeerList(R.string.settings_import_no_devices)
                     }
                 }
             }
@@ -165,9 +172,9 @@ class AdvancedSubmenu(
         val builder = AlertDialog.Builder(context)
         builder.setTitle(context.getString(R.string.settings_import_network, context.getString(R.string.app_name)))
         builder.setAdapter(adapter) { _: DialogInterface, which: Int ->
+            val host = peers.getOrNull(which)?.address ?: return@setAdapter
             discoveryProvider.stopPeerDiscovery()
-            val host = peers.getOrNull(which)?.address
-            host?.let { performNetworkImport(it) }
+            performNetworkImport(host)
         }
         builder.setNeutralButton(R.string.settings_import_manual) { d: DialogInterface, _: Int ->
             discoveryProvider.stopPeerDiscovery()
@@ -182,9 +189,8 @@ class AdvancedSubmenu(
         val dialog = builder.create()
 
         dialog.setOnShowListener {
-            if (peerDisplayNames.isEmpty()) {
-                peerDisplayNames.add(context.getString(R.string.settings_import_discover))
-                adapter.notifyDataSetChanged()
+            if (peers.isEmpty()) {
+                refreshPeerList(R.string.settings_import_discover)
             }
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
         }
@@ -221,7 +227,11 @@ class AdvancedSubmenu(
     }
 
     private fun performNetworkImport(ip: String) {
-        val urlString = if (ip.startsWith("http")) "$ip:7979/settings" else "http://$ip:7979/settings"
+        val urlString = when {
+            ip.startsWith("http") -> "$ip:7979/settings"
+            ip.contains(':') && !ip.startsWith("[") -> "http://[$ip]:7979/settings"
+            else -> "http://$ip:7979/settings"
+        }
         Thread {
             try {
                 val url = java.net.URL(urlString); val connection = url.openConnection() as java.net.HttpURLConnection
