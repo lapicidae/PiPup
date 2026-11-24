@@ -42,6 +42,7 @@ class PiPupAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
+    /** Static helpers for querying and triggering accessibility service actions. */
     companion object {
         const val LOG_TAG = "PiPupAccessibility"
         private var instance: PiPupAccessibilityService? = null
@@ -57,7 +58,10 @@ class PiPupAccessibilityService : AccessibilityService() {
 
         /** Checks if the service is enabled in the system accessibility settings. */
         fun isEnabledInSettings(context: Context): Boolean {
-            val enabledServices = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false
+            val enabledServices = Settings.Secure.getString(
+                context.contentResolver,
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES,
+            ) ?: return false
             return enabledServices.split(':').any { it.substringBefore('/') == context.packageName }
         }
 

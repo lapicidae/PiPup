@@ -26,7 +26,11 @@ class TextSubmenu(
         val colors = settingsActivity?.materialColors ?: emptyList()
 
         // Title Color
-        val titleAdapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_platinum))
+        val titleAdapter = SettingsActivity.ColorSpinnerAdapter(
+            context,
+            colors,
+            context.colorToHex(R.color.preset_platinum),
+        )
         setupSpinner(root, R.id.spinner_title_color, titleAdapter, 0) {
             val color = titleAdapter.colors[it].hex
             settings.titleColor = color
@@ -39,7 +43,11 @@ class TextSubmenu(
         }
 
         // Message Color
-        val msgAdapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_silver))
+        val msgAdapter = SettingsActivity.ColorSpinnerAdapter(
+            context,
+            colors,
+            context.colorToHex(R.color.preset_silver),
+        )
         setupSpinner(root, R.id.spinner_message_color, msgAdapter, 0) {
             val color = msgAdapter.colors[it].hex
             settings.messageColor = color
@@ -51,13 +59,38 @@ class TextSubmenu(
             settings.messageColor = it
         }
 
-        setupSeekBar(root, R.id.seekbar_title_size, R.id.text_title_size_value, (settings.titleSize - 10).toInt().coerceIn(0, 30)) { settings.titleSize = (it + 10).toFloat() }
-        setupSeekBar(root, R.id.seekbar_message_size, R.id.text_message_size_value, (settings.messageSize - 10).toInt().coerceIn(0, 30)) { settings.messageSize = (it + 10).toFloat() }
+        setupSeekBar(
+            root,
+            R.id.seekbar_title_size,
+            R.id.text_title_size_value,
+            (settings.titleSize - 10).toInt().coerceIn(0, 30),
+        ) {
+            settings.titleSize = (it + 10).toFloat()
+        }
+        setupSeekBar(
+            root,
+            R.id.seekbar_message_size,
+            R.id.text_message_size_value,
+            (settings.messageSize - 10).toInt().coerceIn(0, 30),
+        ) {
+            settings.messageSize = (it + 10).toFloat()
+        }
 
         val suffix = context.getString(R.string.settings_default_suffix)
-        val alignmentItems = context.resources.getStringArray(R.array.alignment_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_title_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.titleAlignment) { settings.titleAlignment = it }
-        setupSpinner(root, R.id.spinner_message_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.messageAlignment) { settings.messageAlignment = it }
+        val alignmentItems = context.resources.getStringArray(R.array.alignment_options)
+            .mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
+        val titleAlignAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        val msgAlignAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_title_alignment, titleAlignAdapter, settings.titleAlignment) {
+            settings.titleAlignment = it
+        }
+        setupSpinner(root, R.id.spinner_message_alignment, msgAlignAdapter, settings.messageAlignment) {
+            settings.messageAlignment = it
+        }
 
         renderModuleSettings(root as android.view.ViewGroup, SettingCategory.TEXT)
     }

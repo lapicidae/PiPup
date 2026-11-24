@@ -74,10 +74,12 @@ object Permissions {
     val activityVisible: Boolean
         get() = mVisibleActivities.get() > 0
 
+    /** Tracks that a PiPup activity entered the resumed state. */
     fun onActivityResumed() {
         Log.d(LOG_TAG, "Activity resumed, visibility counter: ${mVisibleActivities.incrementAndGet()}")
     }
 
+    /** Tracks that a PiPup activity left the resumed state. */
     fun onActivityPaused() {
         val count = mVisibleActivities.updateAndGet { if (it > 0) it - 1 else 0 }
         Log.d(LOG_TAG, "Activity paused, visibility counter: $count")
@@ -135,6 +137,7 @@ object Permissions {
         return null
     }
 
+    /** Returns the current [AppOpsManager] mode label for [op], or an unavailability reason. */
     fun opMode(context: Context, op: String): String = try {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         when (val mode = checkAppOp(ops, op, context)) {
@@ -179,6 +182,7 @@ object Permissions {
         else -> null
     }
 
+    /** Builds a summary map of current permission grant and fixability states for `/state`. */
     fun asMap(context: Context): Map<String, Any?> = mapOf(
         "overlay" to overlay(context),
         "installPackages" to installPackages(context),
@@ -198,7 +202,9 @@ object Permissions {
             KEY_OVERLAY -> "adb shell appops set --user current $pkg SYSTEM_ALERT_WINDOW allow"
             KEY_INSTALL -> "adb shell appops set --user current $pkg REQUEST_INSTALL_PACKAGES allow"
             KEY_ADMIN -> "adb shell dpm set-active-admin --user current $pkg/.service.AdminReceiver"
-            KEY_ACCESSIBILITY -> "adb shell settings put secure --user current enabled_accessibility_services $pkg/.service.PiPupAccessibilityService && adb shell settings put secure accessibility_enabled 1"
+            KEY_ACCESSIBILITY -> "adb shell settings put secure --user current " +
+                "enabled_accessibility_services $pkg/.service.PiPupAccessibilityService && " +
+                "adb shell settings put secure accessibility_enabled 1"
             KEY_AUTO_START -> {
                 if (autoStart(context) != null && !Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true)) {
                     "adb shell cmd appops set --user current $pkg $OP_TCL_AUTO_START allow"
@@ -217,13 +223,19 @@ object Permissions {
         KEY_INSTALL -> Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri())
         KEY_ADMIN -> Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
             putExtra(DevicePolicyManager.EXTRA_DEVICE_ADMIN, AdminReceiver.getComponentName(context))
-            putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, context.getString(R.string.permission_admin_explanation))
+            putExtra(
+                DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                context.getString(R.string.permission_admin_explanation),
+            )
         }
         KEY_ACCESSIBILITY -> Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
         KEY_AUTO_START -> {
             if (Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true)) {
                 Intent().apply {
-                    component = ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")
+                    component = ComponentName(
+                        "com.miui.securitycenter",
+                        "com.miui.permcenter.autostart.AutoStartManagementActivity",
+                    )
                 }
             } else null
         }
@@ -231,6 +243,7 @@ object Permissions {
         else -> null
     }
 
+    /** Resolves the target activity class name for [intent], or null if unresolvable. */
     fun resolvedActivity(context: Context, intent: Intent): String? = try {
         @Suppress("DEPRECATION")
         context.packageManager.resolveActivity(intent, 0)?.activityInfo?.name
@@ -239,9 +252,11 @@ object Permissions {
         null
     }
 
+    /** Returns true when [activity] belongs to an AOSP/TV stub placeholder handler. */
     fun isPlaceholder(activity: String?): Boolean =
         (activity != null) && PLACEHOLDER_MARKERS.any { activity.contains(it, ignoreCase = true) }
 
+    /** Returns true if the system AppOps mode explicitly blocks [key] from being granted via UI. */
     fun opBlocked(context: Context, key: String): Boolean {
         val op = when (key) {
             KEY_OVERLAY -> "android:system_alert_window"
@@ -266,6 +281,7 @@ object Permissions {
         return intent
     }
 
+    /** Returns true when PiPup is allowed to start an activity (foreground or overlay granted). */
     fun canLaunchActivity(context: Context): Boolean = activityVisible || overlay(context)
 
     /** Attempts to launch the system settings screen for the given permission key. */
@@ -372,7 +388,8 @@ object Permissions {
             context.startActivity(intent)
 
             Handler(Looper.getMainLooper()).postDelayed({
-                val isStillResumed = (context as? AppCompatActivity)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) ?: false
+                val isStillResumed = (context as? AppCompatActivity)?.lifecycle?.currentState
+                    ?.isAtLeast(Lifecycle.State.RESUMED) ?: false
                 if (isStillResumed) {
                     Log.w(LOG_TAG, "Energy menu likely blocked, falling back to App Info")
                     try {
@@ -402,8 +419,12 @@ object Permissions {
             KEY_POWER -> {
                 val sleepMethod = PowerController.getSleepMethod(context)
                 if (sleepMethod != null) {
-                    val methodLabel = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) context.getString(R.string.permission_admin) else context.getString(R.string.permission_accessibility)
-                    context.getString(R.string.settings_module_power) + " ($methodLabel)"
+                    val methodRes = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) {
+                        R.string.permission_admin
+                    } else {
+                        R.string.permission_accessibility
+                    }
+                    context.getString(R.string.settings_module_power) + " (${context.getString(methodRes)})"
                 } else {
                     context.getString(R.string.settings_module_power)
                 }
@@ -553,7 +574,10 @@ object Permissions {
             isFocusable = true
             isFocusableInTouchMode = true
             setOnClickListener { onClick() }
-            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
             params.bottomMargin = context.dpToPx(8)
             layoutParams = params
         }
@@ -576,6 +600,7 @@ object Permissions {
 
     private val handler = Handler(Looper.getMainLooper())
 
+    /** Launches [MainActivity] when background activity starts are permitted. */
     fun launchApp(context: Context): Boolean {
         if (!canLaunchActivity(context)) {
             record("app", ok = false, activity = "MainActivity", error = BLOCKED_ERROR)
@@ -591,6 +616,7 @@ object Permissions {
         }
     }
 
+    /** Returns the first missing fixable permission key, or null when all fixable ones are granted. */
     fun firstMissing(context: Context): String? = FIXABLE_KEYS.firstOrNull {
         granted(context, it) == false && fixIntent(context, it) != null
     }
@@ -605,6 +631,7 @@ object Permissions {
         )
     }
 
+    /** Builds a full diagnostic report of device permissions, AppOps modes, and fix screens. */
     fun diagnose(context: Context): Map<String, Any?> = mapOf(
         "sdk" to Build.VERSION.SDK_INT,
         "version" to BuildConfig.VERSION_NAME,

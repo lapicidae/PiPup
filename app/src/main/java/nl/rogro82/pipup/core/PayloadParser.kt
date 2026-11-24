@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class PayloadParser(private val context: Context) {
 
+    /** Payload size limits and asynchronous cache file cleanup helpers. */
     companion object {
         private const val TAG = "PayloadParser"
         private const val CLEANUP_THRESHOLD_MS = 60 * 60 * 1000L // 1 hour
@@ -83,7 +84,10 @@ class PayloadParser(private val context: Context) {
     private fun parseMultipart(session: NanoHTTPD.IHTTPSession): PopupProps? = try {
         val declaredLength = session.headers["content-length"]?.toLongOrNull() ?: 0L
         if (declaredLength > MAX_MULTIPART_BODY_BYTES) {
-            Log.w(TAG, "Rejecting multipart payload: body too large ($declaredLength bytes, max $MAX_MULTIPART_BODY_BYTES)")
+            Log.w(
+                TAG,
+                "Rejecting multipart payload: body too large ($declaredLength bytes, max $MAX_MULTIPART_BODY_BYTES)",
+            )
             throw IllegalArgumentException("body too large ($declaredLength bytes, max $MAX_MULTIPART_BODY_BYTES)")
         }
 

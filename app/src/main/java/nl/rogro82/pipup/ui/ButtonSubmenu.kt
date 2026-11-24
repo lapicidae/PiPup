@@ -23,10 +23,20 @@ class ButtonSubmenu(
 ) : SubmenuBase(context, settings, onSettingsChanged, previewArea) {
 
     override fun onBind(root: View) {
-        setupSeekBar(root, R.id.seekbar_button_size, R.id.text_button_size_value, (settings.defaultButtonSize - 10).toInt().coerceIn(0, 30)) {
+        setupSeekBar(
+            root,
+            R.id.seekbar_button_size,
+            R.id.text_button_size_value,
+            (settings.defaultButtonSize - 10).toInt().coerceIn(0, 30),
+        ) {
             settings.defaultButtonSize = (it + 10).toFloat()
         }
-        setupSeekBar(root, R.id.seekbar_button_radius, R.id.text_button_radius_value, settings.defaultButtonCornerRadius.toInt()) {
+        setupSeekBar(
+            root,
+            R.id.seekbar_button_radius,
+            R.id.text_button_radius_value,
+            settings.defaultButtonCornerRadius.toInt(),
+        ) {
             settings.defaultButtonCornerRadius = it.toFloat()
         }
 
@@ -67,7 +77,12 @@ class ButtonSubmenu(
             settings.defaultButtonFocusTextColor = color
             root.findViewById<Button>(R.id.btn_edit_button_focus_text_color_hex)?.text = color
         }
-        setSelectedColorInSpinner(root, R.id.spinner_button_focus_text_color, adapterFocusText, settings.defaultButtonFocusTextColor)
+        setSelectedColorInSpinner(
+            root,
+            R.id.spinner_button_focus_text_color,
+            adapterFocusText,
+            settings.defaultButtonFocusTextColor,
+        )
 
         val defaultBorderHex = context.colorToHex(R.color.preset_gunmetal)
         val adapterBorder = SettingsActivity.ColorSpinnerAdapter(context, colors, defaultBorderHex)
@@ -76,7 +91,12 @@ class ButtonSubmenu(
             settings.defaultButtonBorderColor = color
             root.findViewById<Button>(R.id.btn_edit_button_border_color_hex)?.text = color
         }
-        setSelectedColorInSpinner(root, R.id.spinner_button_border_color, adapterBorder, settings.defaultButtonBorderColor)
+        setSelectedColorInSpinner(
+            root,
+            R.id.spinner_button_border_color,
+            adapterBorder,
+            settings.defaultButtonBorderColor,
+        )
 
         setupHexColorButton(root, R.id.btn_edit_button_color_hex, settings.defaultButtonColor) {
             settings.defaultButtonColor = it

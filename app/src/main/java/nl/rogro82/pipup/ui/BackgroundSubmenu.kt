@@ -23,7 +23,11 @@ class BackgroundSubmenu(
 
     override fun onBind(root: View) {
         val colors = settingsActivity?.materialColors ?: emptyList()
-        val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_deep_slate))
+        val adapter = SettingsActivity.ColorSpinnerAdapter(
+            context,
+            colors,
+            context.colorToHex(R.color.preset_deep_slate),
+        )
         setupSpinner(root, R.id.spinner_bg_color, adapter, 0) {
             val color = adapter.colors[it].hex
             settings.backgroundColor = color

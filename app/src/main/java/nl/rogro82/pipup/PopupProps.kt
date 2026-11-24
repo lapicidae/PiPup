@@ -99,13 +99,15 @@ data class PopupProps(
         get() = media != null || !image.isNullOrEmpty()
 
     /**
-     * Effective stacking axis direction ("vertical" or "horizontal"), or null if stacking is not set or disabled by [coversScreen].
+     * Effective stacking axis direction ("vertical" or "horizontal"), or null if stacking is not set
+     * or disabled by [coversScreen].
      */
     val effectiveStack: String?
         get() = if (coversScreen) null else stack
 
     /**
-     * Resolves the effective [Media] object, wrapping legacy top-level [image]/[imageWidth] fields when [media] is null.
+     * Resolves the effective [Media] object, wrapping legacy top-level [image]/[imageWidth] fields
+     * when [media] is null.
      */
     fun resolveEffectiveMedia(): Media? {
         return media ?: image?.let {
@@ -123,7 +125,10 @@ data class PopupProps(
     @Transient
     var measuredSize: Pair<Int, Int>? = null
 
+    /** Action button definition displayed at the bottom of a popup. */
     data class Button(val id: String, val label: String)
+
+    /** Constants, defaults, and JSON/field parsing helpers for [PopupProps]. */
     companion object {
         private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
         private const val DEFAULT_BG_COLOR = "#CC000000"
@@ -247,7 +252,8 @@ data class PopupProps(
                 else -> null
             }
 
-            val resolvedPosition = parsePositionIndex(if (j.has("position") && !j.isNull("position")) j.get("position") else null)
+            val rawPosition = if (j.has("position") && !j.isNull("position")) j.get("position") else null
+            val resolvedPosition = parsePositionIndex(rawPosition)
 
             val resolvedFullscreenUpscale = when {
                 j.has("fullscreenUpscale") && !j.isNull("fullscreenUpscale") -> j.getBoolean("fullscreenUpscale")
@@ -267,7 +273,11 @@ data class PopupProps(
                 messageColor = j.optString("messageColor", DEFAULT_TEXT_COLOR) ?: DEFAULT_TEXT_COLOR,
                 backgroundColor = j.optString("backgroundColor", DEFAULT_BG_COLOR) ?: DEFAULT_BG_COLOR,
                 media = media,
-                mediaPosition = if (j.has("mediaPosition") && !j.isNull("mediaPosition")) j.getInt("mediaPosition") else null,
+                mediaPosition = if (j.has("mediaPosition") && !j.isNull("mediaPosition")) {
+                    j.getInt("mediaPosition")
+                } else {
+                    null
+                },
                 animationType = j.optInt("animationType", 0),
                 animationDuration = j.optInt("animationDuration", 500),
                 animationExit = j.optBoolean("animationExit", false),
@@ -301,11 +311,16 @@ data class PopupProps(
                 },
                 buttonsInline = j.optBoolean("buttonsInline", false),
                 isInternalUpdateAction = false,
-                stack = optNullableString("stack")?.trim()?.lowercase()?.takeIf { it == "vertical" || it == "horizontal" },
+                stack = optNullableString("stack")?.trim()?.lowercase()
+                    ?.takeIf { it == "vertical" || it == "horizontal" },
                 liveBadge = if (j.has("liveBadge") && !j.isNull("liveBadge")) j.getBoolean("liveBadge") else null,
                 liveBadgeColor = optNullableString("liveBadgeColor"),
                 liveBadgePosition = optNullableString("liveBadgePosition"),
-                mediaFullBleed = if (j.has("mediaFullBleed") && !j.isNull("mediaFullBleed")) j.getBoolean("mediaFullBleed") else null,
+                mediaFullBleed = if (j.has("mediaFullBleed") && !j.isNull("mediaFullBleed")) {
+                    j.getBoolean("mediaFullBleed")
+                } else {
+                    null
+                },
                 fullscreen = j.optBoolean("fullscreen", false),
                 fullscreenUpscale = resolvedFullscreenUpscale,
                 dismissOnBack = j.optBoolean("dismissOnBack", false),
@@ -525,7 +540,9 @@ data class PopupProps(
         FIT, FILL, STRETCH, CENTER
     }
 
+    /** Polymorphic media attachment displayed inside a popup notification. */
     sealed class Media {
+        /** Video stream media (RTSP, HLS, DASH, HTTP) rendered via Media3 ExoPlayer. */
         data class Video(
             val uri: String,
             val width: Int = 480,
@@ -538,6 +555,8 @@ data class PopupProps(
             val posterMode: String? = null,
             val explicitWidth: Boolean = false
         ) : Media()
+
+        /** Remote image media loaded and cached via Glide. */
         data class Image(
             val uri: String,
             val width: Int = 480,
@@ -545,6 +564,8 @@ data class PopupProps(
             val scale: Boolean = true,
             val explicitWidth: Boolean = false
         ) : Media()
+
+        /** Web page media rendered inside an embedded WebView. */
         data class Web(
             val uri: String,
             val width: Int = 640,
@@ -557,6 +578,8 @@ data class PopupProps(
             val explicitWidth: Boolean = false,
             val explicitHeight: Boolean = false
         ) : Media()
+
+        /** WebRTC WHEP live stream rendered via WebView bridge. */
         data class Whep(
             val uri: String,
             val width: Int = 640,
@@ -568,12 +591,16 @@ data class PopupProps(
             val muted: Boolean = true,
             val explicitWidth: Boolean = false
         ) : Media()
+
+        /** Local cached image file uploaded via multipart request. */
         data class LocalFile(
             val path: String,
             val width: Int = 480,
             val scale: Boolean = true,
             val explicitWidth: Boolean = false
         ) : Media()
+
+        /** In-memory bitmap attachment (used for live settings previews). */
         data class Bitmap(
             val bitmap: android.graphics.Bitmap,
             val width: Int = 480,
@@ -676,7 +703,10 @@ data class PopupProps(
         return if (scale) context.getScaledPixels(px) else px
     }
 
+    /** Returns the Android [android.view.Gravity] corresponding to [titleAlignment]. */
     fun getTitleGravity(): Int = mapAlignmentToGravity(titleAlignment)
+
+    /** Returns the Android [android.view.Gravity] corresponding to [messageAlignment]. */
     fun getMessageGravity(): Int = mapAlignmentToGravity(messageAlignment)
 
     private fun mapAlignmentToGravity(alignment: Int): Int {
@@ -687,15 +717,25 @@ data class PopupProps(
         }
     }
 
+    /** Parses [backgroundColor] to an ARGB color int, falling back to the default background. */
     fun getBackgroundColorInt(): Int = safeParseColor(backgroundColor, DEFAULT_BG_COLOR.toColorInt())
+
+    /** Parses [borderColor] to an ARGB color int, falling back to transparent. */
     fun getBorderColorInt(): Int = safeParseColor(borderColor, Color.TRANSPARENT)
+
+    /** Parses [titleColor] to an ARGB color int, falling back to white. */
     fun getTitleColorInt(): Int = safeParseColor(titleColor, Color.WHITE)
+
+    /** Parses [messageColor] to an ARGB color int, falling back to white. */
     fun getMessageColorInt(): Int = safeParseColor(messageColor, Color.WHITE)
 
     /**
      * Computes pre-inflation 2D layout metrics for this popup.
      */
-    fun calculateMetrics(context: android.content.Context, settings: AppSettings = PiPupApp.settings): PopupLayoutMetrics {
+    fun calculateMetrics(
+        context: android.content.Context,
+        settings: AppSettings = PiPupApp.settings,
+    ): PopupLayoutMetrics {
         return PopupLayoutMetrics.calculate(context, this, settings)
     }
 
@@ -707,13 +747,15 @@ data class PopupProps(
     }
 
     /**
-     * Pure data calculation component for popup width, height, and 2D bounding boxes using StaticLayout without UI inflation.
+     * Pure data calculation component for popup width, height, and 2D bounding boxes using
+     * StaticLayout without UI inflation.
      */
     data class PopupLayoutMetrics(
         val width: Int,
         val height: Int,
         val boundingBox: android.graphics.Rect
     ) {
+        /** Pure layout estimation helpers for [PopupLayoutMetrics]. */
         companion object {
             /**
              * Estimates multiline text height in pixels for a given target [width].
@@ -734,7 +776,11 @@ data class PopupProps(
             /**
              * Computes estimated dimensions and initial bounding box for [props] on the given [context] display.
              */
-            fun calculate(context: android.content.Context, props: PopupProps, settings: AppSettings): PopupLayoutMetrics {
+            fun calculate(
+                context: android.content.Context,
+                props: PopupProps,
+                settings: AppSettings,
+            ): PopupLayoutMetrics {
                 val screenWidth = context.resources.displayMetrics.widthPixels
                 val screenHeight = context.resources.displayMetrics.heightPixels
                 if (props.coversScreen) {

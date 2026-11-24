@@ -40,6 +40,7 @@ class Receiver : BroadcastReceiver() {
         }
     }
 
+    /** Companion constants for [Receiver]. */
     companion object {
         private const val TAG = "PiPupReceiver"
     }

@@ -47,9 +47,13 @@ class UpdateWorker(context: Context, params: WorkerParameters) : CoroutineWorker
         }
     }
 
+    /** Scheduling helpers for periodic update checks. */
     companion object {
         private const val WORK_NAME = "periodic_update_check"
 
+        /**
+         * Schedules or cancels the periodic update check worker based on [intervalMode].
+         */
         fun schedule(context: Context, intervalMode: Int) {
             val workManager = WorkManager.getInstance(context)
 

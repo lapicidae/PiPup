@@ -66,14 +66,17 @@ class PermissionsSubmenu(
         val sleepMethod = PowerController.getSleepMethod(context)
         val overlayGranted = Permissions.overlay(context)
         val installGranted = Permissions.installPackages(context)
-        val energyGranted = (context.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(context.packageName)
+        val energyGranted = (context.getSystemService(Context.POWER_SERVICE) as PowerManager)
+            .isIgnoringBatteryOptimizations(context.packageName)
         val accGranted = Permissions.granted(context, Permissions.KEY_ACCESSIBILITY) == true
 
         // Modular integration: Get permissions required by currently enabled modules
         val mm = (context.applicationContext as PiPupApp).moduleManager
         val modulePermissions = mm.getEnabledModules().flatMap { it.getRequiredPermissions() }.toSet()
 
-        val currentSignature = "pow:$sleepMethod|acc:$accGranted|ov:$overlayGranted|in:$installGranted|en:$energyGranted|mods:${modulePermissions.joinToString(",")}"
+        val currentSignature =
+            "pow:$sleepMethod|acc:$accGranted|ov:$overlayGranted|in:$installGranted|" +
+                "en:$energyGranted|mods:${modulePermissions.joinToString(",")}"
 
         if (submenuRoot.tag == currentSignature) return
         submenuRoot.tag = currentSignature
@@ -130,7 +133,10 @@ class PermissionsSubmenu(
             orientation = LinearLayout.VERTICAL
             setPadding(context.dpToPx(16), context.dpToPx(12), context.dpToPx(16), context.dpToPx(16))
             background = ContextCompat.getDrawable(context, R.drawable.focus_background)
-            val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
+            val params = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+            )
             params.bottomMargin = context.dpToPx(16)
             layoutParams = params
 
@@ -173,7 +179,15 @@ class PermissionsSubmenu(
 
         val why = Permissions.getWhyText(context, key)
 
-        if (why != null && (isNotSupported || !isGranted || key in setOf(Permissions.KEY_OVERLAY, Permissions.KEY_ENERGY, Permissions.KEY_INSTALL, Permissions.KEY_ADMIN, Permissions.KEY_ACCESSIBILITY, Permissions.KEY_POWER))) {
+        val alwaysExplainKeys = setOf(
+            Permissions.KEY_OVERLAY,
+            Permissions.KEY_ENERGY,
+            Permissions.KEY_INSTALL,
+            Permissions.KEY_ADMIN,
+            Permissions.KEY_ACCESSIBILITY,
+            Permissions.KEY_POWER,
+        )
+        if (why != null && (isNotSupported || !isGranted || key in alwaysExplainKeys)) {
             row.addView(TextView(context).apply {
                 text = if (isNotSupported) "This permission is not applicable to your hardware." else why
                 textSize = 14f

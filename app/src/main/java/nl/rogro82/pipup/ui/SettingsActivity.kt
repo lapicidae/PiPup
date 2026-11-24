@@ -79,29 +79,105 @@ class SettingsActivity : AppCompatActivity() {
      * Registry for module-specific submenu controllers.
      * New modules can "dock" by providing their layoutRes in ModuleMenuDefinition.
      */
-    private val moduleSubmenuFactories = mapOf<Int, (SettingsActivity, AppSettings, PiPupModule, (Boolean) -> Unit, ViewGroup) -> SubmenuController>(
+    private val moduleSubmenuFactories = mapOf<
+        Int,
+        (SettingsActivity, AppSettings, PiPupModule, (Boolean) -> Unit, ViewGroup) -> SubmenuController,
+        >(
         R.layout.submenu_vendor to ::VendorSubmenu,
-        R.layout.submenu_module_dynamic to ::ModuleSubmenu
+        R.layout.submenu_module_dynamic to ::ModuleSubmenu,
     )
 
     private val coreRailItems = listOf(
-        NavItem(R.id.nav_item_general, R.string.settings_nav_general, R.drawable.ic_general_style, 10, R.layout.submenu_general),
-        NavItem(R.id.nav_item_background, R.string.settings_nav_background, R.drawable.ic_bg, 20, R.layout.submenu_background),
-        NavItem(R.id.nav_item_text_style, R.string.settings_nav_text, R.drawable.ic_text_style, 30, R.layout.submenu_text),
-        NavItem(R.id.nav_item_border, R.string.settings_nav_border, R.drawable.ic_border_style, 40, R.layout.submenu_border),
-        NavItem(R.id.nav_item_button, R.string.settings_nav_button, R.drawable.ic_button_style, 45, R.layout.submenu_button),
-        NavItem(R.id.nav_item_media, R.string.settings_nav_media, R.drawable.ic_media, 47, R.layout.submenu_media),
-        NavItem(R.id.nav_item_animation, R.string.settings_nav_animation, R.drawable.ic_animation, 50, R.layout.submenu_animation),
-        NavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, 60, R.layout.submenu_updates),
-        NavItem(R.id.nav_item_modules, R.string.settings_nav_modules, R.drawable.ic_modules, 70, R.layout.submenu_modules),
-        NavItem(R.id.nav_item_permissions, R.string.settings_nav_permissions, R.drawable.ic_permissions, 80, R.layout.submenu_permissions),
-        NavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, 90, R.layout.submenu_advanced),
-        NavItem(R.id.nav_item_about, R.string.settings_nav_about, R.drawable.ic_about, 100, R.layout.submenu_about),
+        NavItem(
+            R.id.nav_item_general,
+            R.string.settings_nav_general,
+            R.drawable.ic_general_style,
+            10,
+            R.layout.submenu_general,
+        ),
+        NavItem(
+            R.id.nav_item_background,
+            R.string.settings_nav_background,
+            R.drawable.ic_bg,
+            20,
+            R.layout.submenu_background,
+        ),
+        NavItem(
+            R.id.nav_item_text_style,
+            R.string.settings_nav_text,
+            R.drawable.ic_text_style,
+            30,
+            R.layout.submenu_text,
+        ),
+        NavItem(
+            R.id.nav_item_border,
+            R.string.settings_nav_border,
+            R.drawable.ic_border_style,
+            40,
+            R.layout.submenu_border,
+        ),
+        NavItem(
+            R.id.nav_item_button,
+            R.string.settings_nav_button,
+            R.drawable.ic_button_style,
+            45,
+            R.layout.submenu_button,
+        ),
+        NavItem(
+            R.id.nav_item_media,
+            R.string.settings_nav_media,
+            R.drawable.ic_media,
+            47,
+            R.layout.submenu_media,
+        ),
+        NavItem(
+            R.id.nav_item_animation,
+            R.string.settings_nav_animation,
+            R.drawable.ic_animation,
+            50,
+            R.layout.submenu_animation,
+        ),
+        NavItem(
+            R.id.nav_item_updates,
+            R.string.settings_nav_updates,
+            R.drawable.ic_updates,
+            60,
+            R.layout.submenu_updates,
+        ),
+        NavItem(
+            R.id.nav_item_modules,
+            R.string.settings_nav_modules,
+            R.drawable.ic_modules,
+            70,
+            R.layout.submenu_modules,
+        ),
+        NavItem(
+            R.id.nav_item_permissions,
+            R.string.settings_nav_permissions,
+            R.drawable.ic_permissions,
+            80,
+            R.layout.submenu_permissions,
+        ),
+        NavItem(
+            R.id.nav_item_advanced,
+            R.string.settings_nav_advanced,
+            R.drawable.ic_advanced,
+            90,
+            R.layout.submenu_advanced,
+        ),
+        NavItem(
+            R.id.nav_item_about,
+            R.string.settings_nav_about,
+            R.drawable.ic_about,
+            100,
+            R.layout.submenu_about,
+        ),
     )
 
     private var dynamicRailItems = mutableListOf<NavItem>()
     private val allRailIds = mutableListOf<Int>()
 
+    /** Navigation rail entry linking an item view ID to its submenu layout or module. */
     data class NavItem(
         val id: Int,
         val labelRes: Int,
@@ -216,7 +292,14 @@ class SettingsActivity : AppCompatActivity() {
             .mapNotNull { it.getSettingsMenu()?.let { menu -> it to menu } }
             .map { (module, menu) ->
                 val existingId = dynamicRailItems.find { it.moduleId == module.id }?.id ?: View.generateViewId()
-                NavItem(existingId, menu.labelRes, menu.iconRes, menu.priority, layoutRes = menu.layoutRes, moduleId = module.id)
+                NavItem(
+                    existingId,
+                    menu.labelRes,
+                    menu.iconRes,
+                    menu.priority,
+                    layoutRes = menu.layoutRes,
+                    moduleId = module.id,
+                )
             }
 
         newDynamicItems.addAll(moduleItems)
@@ -240,7 +323,8 @@ class SettingsActivity : AppCompatActivity() {
             val module = (application as PiPupApp).moduleManager.getModule(item.moduleId)!!
             moduleControllers.getOrPut(item.moduleId) {
                 // Modular creation: Use factory from registry based on the requested layoutRes
-                val factory = moduleSubmenuFactories[item.layoutRes] ?: moduleSubmenuFactories[R.layout.submenu_module_dynamic]!!
+                val factory = moduleSubmenuFactories[item.layoutRes]
+                    ?: moduleSubmenuFactories[R.layout.submenu_module_dynamic]!!
                 factory(this, settings, module, { updatePreview(it) }, binding.previewArea)
             }
         } else {
@@ -470,22 +554,46 @@ class SettingsActivity : AppCompatActivity() {
         return submenuControllers.getOrPut(layoutRes) {
             when (layoutRes) {
                 R.layout.submenu_general -> GeneralSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_background -> BackgroundSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_background -> BackgroundSubmenu(
+                    this,
+                    settings,
+                    { updatePreview(it) },
+                    binding.previewArea,
+                )
                 R.layout.submenu_text -> TextSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_border -> BorderSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_button -> ButtonSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_media -> MediaSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_animation -> AnimationSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_animation -> AnimationSubmenu(
+                    this,
+                    settings,
+                    { updatePreview(it) },
+                    binding.previewArea,
+                )
                 R.layout.submenu_advanced -> AdvancedSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 R.layout.submenu_about -> AboutSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_performance -> PerformanceSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_performance -> PerformanceSubmenu(
+                    this,
+                    settings,
+                    { updatePreview(it) },
+                    binding.previewArea,
+                )
                 R.layout.submenu_updates -> UpdatesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_permissions -> PermissionsSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
+                R.layout.submenu_permissions -> PermissionsSubmenu(
+                    this,
+                    settings,
+                    { updatePreview(it) },
+                    binding.previewArea,
+                )
                 R.layout.submenu_modules -> ModulesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
                 else -> object : SubmenuController {
-                    override fun onBind(root: View) {}
+                    override fun onBind(root: View) {
+                        // No-op fallback controller for unknown submenu layouts.
+                    }
                     override fun onBackPress(): Boolean = false
-                    override fun updatePreviewPosition(v: View) {}
+                    override fun updatePreviewPosition(v: View) {
+                        // No-op fallback controller for unknown submenu layouts.
+                    }
                 }
             }
         }
@@ -719,6 +827,7 @@ class SettingsActivity : AppCompatActivity() {
         cachedPlaceholder = null
     }
 
+    /** Intent extras for [SettingsActivity]. */
     companion object {
         const val EXTRA_NAV_ID = "${PiPupApp.APP_PACKAGE}.extra.NAV_ID"
     }
@@ -731,7 +840,11 @@ class SettingsActivity : AppCompatActivity() {
     /**
      * Custom adapter for the color selection spinner in submenus.
      */
-    class ColorSpinnerAdapter(context: Context, val colors: List<ColorEntry>, val defaultHex: String) : ArrayAdapter<ColorEntry>(context, 0, colors) {
+    class ColorSpinnerAdapter(
+        context: Context,
+        val colors: List<ColorEntry>,
+        val defaultHex: String,
+    ) : ArrayAdapter<ColorEntry>(context, 0, colors) {
         override fun getView(p: Int, v: View?, g: ViewGroup): View = create(p, v, g)
         override fun getDropDownView(p: Int, v: View?, g: ViewGroup): View = create(p, v, g)
         private fun create(p: Int, v: View?, g: ViewGroup): View {
@@ -740,7 +853,8 @@ class SettingsActivity : AppCompatActivity() {
             res.findViewById<View>(R.id.color_preview).background.setTint(entry.hex.toColorInt())
             val label = res.findViewById<TextView>(R.id.color_name)
             val name = context.getString(entry.nameRes)
-            label.text = if (entry.hex.equals(other = defaultHex, ignoreCase = true)) "$name ${context.getString(R.string.settings_default_suffix)}" else name
+            val isDefault = entry.hex.equals(other = defaultHex, ignoreCase = true)
+            label.text = if (isDefault) "$name ${context.getString(R.string.settings_default_suffix)}" else name
             label.setTextColor(ContextCompat.getColor(context, R.color.colorOnSurface))
             return res
         }

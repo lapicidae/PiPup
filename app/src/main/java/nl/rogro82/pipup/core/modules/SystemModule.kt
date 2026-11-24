@@ -28,6 +28,7 @@ import nl.rogro82.pipup.showToast
 @OptIn(UnstableApi::class)
 class SystemModule : PiPupModule {
 
+    /** Logging constants for [SystemModule]. */
     companion object {
         private const val TAG = "SystemModule"
     }
@@ -61,7 +62,13 @@ class SystemModule : PiPupModule {
         val uri = session.uri.lowercase()
 
         return when (uri) {
-            "/permissions/diagnose" -> if (method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST) diagnoseResponse() else null
+            "/permissions/diagnose" -> if (
+                method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST
+            ) {
+                diagnoseResponse()
+            } else {
+                null
+            }
             "/permissions/fix" -> if (method == NanoHTTPD.Method.POST) fixResponse(session) else null
             "/update" -> if (method == NanoHTTPD.Method.POST) updateResponse() else null
             "/notify" -> if (method == NanoHTTPD.Method.POST) notifyResponse(session) else null
@@ -122,7 +129,8 @@ class SystemModule : PiPupModule {
                 Json.writeValueAsString(mapOf(
                     "what" to key,
                     "ok" to false,
-                    "reason" to "this device blocks granting this permission from its settings screen; grant it over adb instead",
+                    "reason" to "this device blocks granting this permission from its settings screen; " +
+                        "grant it over adb instead",
                     "granted" to Permissions.granted(context, key),
                     "adb" to Permissions.adbCommand(key, context)
                 ))
@@ -172,8 +180,16 @@ class SystemModule : PiPupModule {
         var props = try {
             parser.parse(session)
         } catch (e: IllegalArgumentException) {
-            return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: ${e.message}")
-        } ?: return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Failed to parse input")
+            return NanoHTTPD.newFixedLengthResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                "text/plain",
+                "invalid request: ${e.message}",
+            )
+        } ?: return NanoHTTPD.newFixedLengthResponse(
+            NanoHTTPD.Response.Status.BAD_REQUEST,
+            "text/plain",
+            "Failed to parse input",
+        )
 
         // Guard: Check if media module is required and enabled
         val isRichMedia = props.media is PopupProps.Media.Web || props.media is PopupProps.Media.Whep
@@ -181,9 +197,16 @@ class SystemModule : PiPupModule {
         if (isRichMedia) {
             if (mediaMode == ModuleMode.OFF) {
                 val localizedContext = context.getLocalizedContext(settings.language)
-                val msg = localizedContext.getString(R.string.error_module_disabled, localizedContext.getString(R.string.settings_module_media))
+                val msg = localizedContext.getString(
+                    R.string.error_module_disabled,
+                    localizedContext.getString(R.string.settings_module_media),
+                )
                 context.showToast(msg)
-                return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Media module is disabled")
+                return NanoHTTPD.newFixedLengthResponse(
+                    NanoHTTPD.Response.Status.FORBIDDEN,
+                    "text/plain",
+                    "Media module is disabled",
+                )
             }
 
             // If ECO mode, ensure module is activated

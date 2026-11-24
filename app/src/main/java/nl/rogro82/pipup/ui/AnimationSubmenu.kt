@@ -23,12 +23,21 @@ class AnimationSubmenu(
 
     override fun onBind(root: View) {
         val suffix = context.getString(R.string.settings_default_suffix)
-        val animItems = context.resources.getStringArray(R.array.animation_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_animation_type, ArrayAdapter(context, android.R.layout.simple_spinner_item, animItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.animationType) {
+        val animItems = context.resources.getStringArray(R.array.animation_options)
+            .mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
+        val animAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, animItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_animation_type, animAdapter, settings.animationType) {
             settings.animationType = it
         }
 
-        setupSeekBar(root, R.id.seekbar_animation_duration, R.id.text_animation_duration_value, settings.animationDuration) {
+        setupSeekBar(
+            root,
+            R.id.seekbar_animation_duration,
+            R.id.text_animation_duration_value,
+            settings.animationDuration,
+        ) {
             settings.animationDuration = it
         }
 

@@ -36,7 +36,9 @@ data class GitHubRelease(
     val body: String?,
     val assets: List<GitHubAsset>
 ) {
+    /** JSON deserialization helpers for [GitHubRelease]. */
     companion object {
+        /** Parses a GitHub release entry from JSON object [j]. */
         fun fromJsonObject(j: JSONObject): GitHubRelease {
             val assetList = mutableListOf<GitHubAsset>()
             val assetsArray = j.optJSONArray("assets")
@@ -65,7 +67,9 @@ data class GitHubAsset(
     val contentType: String,
     val digest: String? = null
 ) {
+    /** JSON deserialization helpers for [GitHubAsset]. */
     companion object {
+        /** Parses a GitHub release asset entry from JSON object [j]. */
         fun fromJsonObject(j: JSONObject): GitHubAsset {
             return GitHubAsset(
                 name = j.optString("name", ""),
@@ -111,7 +115,8 @@ class UpdateManager(context: Context) {
                         releases.add(GitHubRelease.fromJsonObject(rootArray.getJSONObject(i)))
                     }
                 } catch (_: Exception) {
-                    return@withContext Result.failure(Exception(appContext.getString(R.string.update_error_invalid_api)))
+                    val errorMsg = appContext.getString(R.string.update_error_invalid_api)
+                    return@withContext Result.failure(Exception(errorMsg))
                 }
 
                 val latest = if (includeBeta) {
@@ -128,7 +133,10 @@ class UpdateManager(context: Context) {
                         Log.i("UpdateManager", "New version available: ${latest.tagName}")
                         return@withContext Result.success(latest)
                     } else {
-                        Log.i("UpdateManager", "No update available. Current version matches or is newer than ${latest.tagName}")
+                        Log.i(
+                            "UpdateManager",
+                            "No update available. Current version matches or is newer than ${latest.tagName}",
+                        )
                         return@withContext Result.success(null)
                     }
                 } else {
@@ -278,7 +286,10 @@ class UpdateManager(context: Context) {
     fun handleDownloadComplete(downloadId: Long) {
         val appSettings = PiPupApp.settings
         if (appSettings.pendingUpdateId != downloadId) {
-            Log.d("UpdateManager", "Download ID mismatch (got $downloadId, expected ${appSettings.pendingUpdateId}). Ignoring.")
+            Log.d(
+                "UpdateManager",
+                "Download ID mismatch (got $downloadId, expected ${appSettings.pendingUpdateId}). Ignoring.",
+            )
             return
         }
 
@@ -460,6 +471,7 @@ class UpdateManager(context: Context) {
         receiverRegistered = true
     }
 
+    /** Static update status, version comparison, and configuration constants. */
     companion object {
         const val CONFIRM_POPUP_ID = "pipup_update_confirm"
 
@@ -475,7 +487,8 @@ class UpdateManager(context: Context) {
         @Volatile private var installStartedAt: Long = 0L
 
         var isInstalling: Boolean
-            get() = installStartedAt != 0L && (SystemClock.elapsedRealtime() - installStartedAt < 15 * 60 * 1000L) // 15 min timeout
+            get() = installStartedAt != 0L &&
+                (SystemClock.elapsedRealtime() - installStartedAt < 15 * 60 * 1000L) // 15 min timeout
             internal set(value) {
                 installStartedAt = if (value) SystemClock.elapsedRealtime() else 0L
             }

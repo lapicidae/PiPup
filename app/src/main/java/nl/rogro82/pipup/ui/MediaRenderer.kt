@@ -47,8 +47,11 @@ import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.request.transition.Transition
 import com.bumptech.glide.signature.ObjectKey
 import nl.rogro82.pipup.AppSettings
-import nl.rogro82.pipup.*
+import nl.rogro82.pipup.PopupProps
+import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.PayloadParser
+import nl.rogro82.pipup.getScaledPixels
+import nl.rogro82.pipup.isEmulator
 import java.io.File
 import java.lang.ref.WeakReference
 import kotlin.math.roundToInt
@@ -64,6 +67,7 @@ class MediaRenderer(
     private val appSettings: AppSettings,
     callback: Callback
 ) {
+    /** Shared WebView clients, animation constants, and aspect-ratio calculation helpers. */
     companion object {
         private val DUMMY_CLIENT = WebViewClient()
         private val DUMMY_CHROME = WebChromeClient()
@@ -202,14 +206,30 @@ class MediaRenderer(
         }
     }
 
+    /** Host callbacks invoked by [MediaRenderer] during media load, resize, and playback. */
     interface Callback {
+        /** Notifies the host that media is ready (or skipped) so the popup can be presented. */
         fun notifyReady()
+
+        /** Requests the host to recalculate text and scroll heights after media layout changes. */
         fun adjustHeights()
+
+        /** Returns true if the hosting popup view has already been cleaned up. */
         fun isCleanedUp(): Boolean
+
+        /** Returns true if [notifyReady] has already been invoked for the current popup. */
         fun isReadyCalled(): Boolean
+
+        /** Displays an error placeholder state with optional [error] detail text. */
         fun showPlaceholder(error: String?)
+
+        /** Reports updated media dimensions ([width] x [height]) in pixels to the host. */
         fun onDimensionsUpdated(width: Int, height: Int)
+
+        /** Schedules a WHEP connection retry or falls back to error state after [error]. */
         fun handleWhepRetry(error: String, retryCount: Int)
+
+        /** Reports elapsed time in milliseconds until the first stream frame rendered. */
         fun onFirstFrameRendered(firstFrameMs: Long)
     }
 
@@ -325,6 +345,7 @@ class MediaRenderer(
         return iv
     }
 
+    /** Initializes and renders the effective media declared in [props] into [frame]. */
     fun setup(
         uiContext: Context,
         frame: FrameLayout,
@@ -375,7 +396,15 @@ class MediaRenderer(
         }
 
         when (media) {
-            is PopupProps.Media.Image -> renderImage(uiContext, frame, media.uri, media.width, media.cache, media.scale, retryCount)
+            is PopupProps.Media.Image -> renderImage(
+                uiContext,
+                frame,
+                media.uri,
+                media.width,
+                media.cache,
+                media.scale,
+                retryCount,
+            )
             is PopupProps.Media.Video -> renderVideo(frame, media, retryCount, uiContext)
             is PopupProps.Media.Web -> renderWeb(uiContext, frame, media, retryCount)
             is PopupProps.Media.Whep -> renderWhep(frame, media, retryCount)
@@ -416,7 +445,11 @@ class MediaRenderer(
         }
         videoView?.let { tv ->
             val lp = tv.layoutParams as? FrameLayout.LayoutParams
-            if (lp != null && (lp.width != FrameLayout.LayoutParams.MATCH_PARENT || lp.height != FrameLayout.LayoutParams.MATCH_PARENT)) {
+            val needsMatchParent = lp != null && (
+                lp.width != FrameLayout.LayoutParams.MATCH_PARENT ||
+                    lp.height != FrameLayout.LayoutParams.MATCH_PARENT
+                )
+            if (needsMatchParent) {
                 lp.width = FrameLayout.LayoutParams.MATCH_PARENT
                 lp.height = FrameLayout.LayoutParams.MATCH_PARENT
                 lp.gravity = Gravity.CENTER
@@ -437,7 +470,14 @@ class MediaRenderer(
             alpha = 0.20f
             scaleType = ImageView.ScaleType.FIT_CENTER
         }
-        container.addView(iv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+        container.addView(
+            iv,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER,
+            ),
+        )
 
         // Circular loading indicator centered on top
         val indicatorSize = (48 * context.resources.displayMetrics.density).toInt()
@@ -496,6 +536,7 @@ class MediaRenderer(
         webView = null
     }
 
+    /** Releases active ExoPlayer, WebView, and pending handler callbacks. */
     fun cleanup() {
         mainHandler.removeCallbacksAndMessages(rendererToken)
         player?.let { it.stop(); it.release() }
@@ -505,6 +546,7 @@ class MediaRenderer(
         cleanupWebView()
     }
 
+    /** Clears all child media views, Glide requests, active players, and temporary local files. */
     fun fullCleanup(frame: FrameLayout, media: PopupProps.Media?) {
         val runnable = Runnable {
             mediaStarted = false
@@ -535,8 +577,17 @@ class MediaRenderer(
         }
     }
 
-    private fun renderImage(uiContext: Context, frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0) {
-        renderGlide(uiContext, frame, uri, width, scale, if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE, !cache, retryCount)
+    private fun renderImage(
+        uiContext: Context,
+        frame: FrameLayout,
+        uri: String,
+        width: Int,
+        cache: Boolean,
+        scale: Boolean,
+        retryCount: Int = 0,
+    ) {
+        val strategy = if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE
+        renderGlide(uiContext, frame, uri, width, scale, strategy, !cache, retryCount)
     }
 
     private fun resolvePosterScaleType(posterMode: String?): ImageView.ScaleType {
@@ -981,16 +1032,19 @@ class MediaRenderer(
         callback?.notifyReady()
     }
 
+    /** Starts playback and reveals the active video surface once the popup is shown. */
     fun startMedia() {
         mediaStarted = true
         videoView?.isVisible = true
         player?.play()
     }
 
+    /** Updates the CSS `object-fit` mode on an active WHEP video element in-place. */
     fun updateWhepVideoFit(videoFit: String) {
         webView?.evaluateJavascript("document.getElementById('v').style.objectFit = '$videoFit';", null)
     }
 
+    /** Reveals the active WHEP WebView once playback begins after [elapsedMs]. */
     fun onWhepReady(elapsedMs: Long) {
         webView?.let { wv ->
             (wv.parent as? FrameLayout)?.let { parent ->
@@ -999,6 +1053,7 @@ class MediaRenderer(
         }
     }
 
+    /** Forwards a WHEP playback error to the host retry handler. */
     fun onWhepError(error: String, retryCount: Int) {
         callback?.handleWhepRetry(error, retryCount)
     }
@@ -1318,6 +1373,7 @@ class MediaRenderer(
         }
     }
 
+    /** Updates media container sizing when WHEP reports its intrinsic video dimensions. */
     fun onWhepSourceDimensions(frame: FrameLayout?, tw: Int, srcWidth: Int, srcHeight: Int) {
         if (srcWidth <= 0 || srcHeight <= 0 || frame == null) return
         updateSourceDimensions(srcWidth, srcHeight)

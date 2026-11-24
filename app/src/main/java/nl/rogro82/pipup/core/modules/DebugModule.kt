@@ -23,6 +23,7 @@ import java.util.concurrent.TimeUnit
  */
 class DebugModule : PiPupModule {
 
+    /** Logging constants for [DebugModule]. */
     companion object {
         private const val TAG = "DebugModule"
     }
@@ -62,13 +63,21 @@ class DebugModule : PiPupModule {
 
     private fun handleSetIdle(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         val ms = session.parameters["ms"]?.firstOrNull()?.toLongOrNull()
-            ?: return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "Missing or invalid 'ms' parameter")
+            ?: return NanoHTTPD.newFixedLengthResponse(
+                NanoHTTPD.Response.Status.BAD_REQUEST,
+                "text/plain",
+                "Missing or invalid 'ms' parameter",
+            )
 
         val app = moduleContext?.androidContext?.applicationContext as? PiPupApp
         app?.moduleManager?.idleTimeoutMs = ms
 
         Log.i(TAG, "Debug: Updated idle timeout to $ms ms")
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "Idle timeout updated to $ms ms")
+        return NanoHTTPD.newFixedLengthResponse(
+            NanoHTTPD.Response.Status.OK,
+            "text/plain",
+            "Idle timeout updated to $ms ms",
+        )
     }
 
     private fun handleUnload(): NanoHTTPD.Response {
@@ -99,7 +108,11 @@ class DebugModule : PiPupModule {
             latch.await(3, TimeUnit.SECONDS)
         } catch (_: InterruptedException) {}
 
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "Forced module cleanup finished")
+        return NanoHTTPD.newFixedLengthResponse(
+            NanoHTTPD.Response.Status.OK,
+            "text/plain",
+            "Forced module cleanup finished",
+        )
     }
 
     private fun handleMemoryStats(): NanoHTTPD.Response {

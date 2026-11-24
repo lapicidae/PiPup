@@ -14,9 +14,15 @@ import androidx.core.content.ContextCompat
 import androidx.media3.common.util.UnstableApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import nl.rogro82.pipup.*
+import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.GitHubRelease
+import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
+import nl.rogro82.pipup.UpdateManager
+import nl.rogro82.pipup.UpdateWorker
 import nl.rogro82.pipup.core.SettingCategory
+import nl.rogro82.pipup.dpToPx
+import nl.rogro82.pipup.showToast
 
 /**
  * Settings submenu controller for managing GitHub release updates, check intervals, and installation workflows.
@@ -44,8 +50,14 @@ class UpdatesSubmenu(
 
         // Update Channel
         val defaultChannelIndex = if (settings.isBetaBuild) 1 else 0
-        val channelItems = listOf(context.getString(R.string.settings_update_stable), context.getString(R.string.settings_update_beta)).mapIndexed { i, s -> if (i == defaultChannelIndex) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_update_channel, ArrayAdapter(context, android.R.layout.simple_spinner_item, channelItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateChannel) {
+        val channelItems = listOf(
+            context.getString(R.string.settings_update_stable),
+            context.getString(R.string.settings_update_beta),
+        ).mapIndexed { i, s -> if (i == defaultChannelIndex) "$s $suffix" else s }
+        val channelAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, channelItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_update_channel, channelAdapter, settings.updateChannel) {
             settings.updateChannel = it
         }
 
@@ -55,9 +67,12 @@ class UpdatesSubmenu(
             context.getString(R.string.settings_update_on_open),
             context.getString(R.string.settings_update_daily),
             context.getString(R.string.settings_update_weekly),
-            context.getString(R.string.settings_update_monthly)
+            context.getString(R.string.settings_update_monthly),
         ).mapIndexed { i, s -> if (i == 4) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_update_interval, ArrayAdapter(context, android.R.layout.simple_spinner_item, intervalItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateInterval) {
+        val intervalAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, intervalItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_update_interval, intervalAdapter, settings.updateInterval) {
             settings.updateInterval = it
             UpdateWorker.schedule(context, it)
         }
@@ -66,9 +81,12 @@ class UpdatesSubmenu(
         val styleItems = listOf(
             context.getString(R.string.settings_update_style_silent),
             context.getString(R.string.settings_update_style_pipup, appName),
-            context.getString(R.string.settings_update_style_toast)
+            context.getString(R.string.settings_update_style_toast),
         ).mapIndexed { i, s -> if (i == 1) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_update_notification_style, ArrayAdapter(context, android.R.layout.simple_spinner_item, styleItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.updateNotificationStyle) {
+        val styleAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, styleItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_update_notification_style, styleAdapter, settings.updateNotificationStyle) {
             settings.updateNotificationStyle = it
         }
 
@@ -88,7 +106,9 @@ class UpdatesSubmenu(
     }
 
     private fun updateButtonText(btn: Button) {
-        btn.text = if (settings.updateAvailableTag.isNotEmpty() && UpdateManager.isNewer(context, settings.updateAvailableTag)) {
+        val hasUpdate = settings.updateAvailableTag.isNotEmpty() &&
+            UpdateManager.isNewer(context, settings.updateAvailableTag)
+        btn.text = if (hasUpdate) {
             context.getString(R.string.settings_update_to, settings.updateAvailableTag)
         } else {
             context.getString(R.string.settings_check_update)
@@ -173,7 +193,8 @@ class UpdatesSubmenu(
             .setTitle(R.string.settings_update_available)
             .setView(container)
             .setPositiveButton(R.string.settings_update_install) { _, _ ->
-                val scope = (context.applicationContext as? PiPupApp)?.applicationScope ?: kotlinx.coroutines.MainScope()
+                val scope = (context.applicationContext as? PiPupApp)?.applicationScope
+                    ?: kotlinx.coroutines.MainScope()
                 scope.launch(Dispatchers.Main) {
                     val mgr = UpdateManager(context)
                     context.showToast(context.getString(R.string.settings_update_verifying))

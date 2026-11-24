@@ -43,6 +43,7 @@ class NotificationManager(
     private val context: Context,
     private val windowManager: WindowManager
 ) {
+    /** Timing and layout constants for [NotificationManager]. */
     companion object {
         private const val TAG = "NotificationManager"
         private const val PREP_TIMEOUT_MS = 45000L
@@ -990,7 +991,11 @@ class NotificationManager(
 
         return containers.getOrPut(key) {
             PositionContainer(context).apply {
-                orientation = if (direction == PopupProps.StackDirection.HORIZONTAL) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
+                orientation = if (direction == PopupProps.StackDirection.HORIZONTAL) {
+                    LinearLayout.HORIZONTAL
+                } else {
+                    LinearLayout.VERTICAL
+                }
                 clipChildren = false
                 clipToPadding = false
                 gravity = if (direction == PopupProps.StackDirection.HORIZONTAL) {

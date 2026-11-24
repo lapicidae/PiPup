@@ -48,7 +48,8 @@ class AppSettings(context: Context) {
      * Retrieves the unique device ID, migrating from old storage if necessary.
      */
     val deviceId: String by lazy {
-        val idPrefs = appContext.createDeviceProtectedStorageContext().getSharedPreferences("pipup_id", Context.MODE_PRIVATE)
+        val idPrefs = appContext.createDeviceProtectedStorageContext()
+            .getSharedPreferences("pipup_id", Context.MODE_PRIVATE)
         idPrefs.getString("device_id", null) ?: run {
             val oldPrefs = appContext.getSharedPreferences("pipup_id", Context.MODE_PRIVATE)
             val oldId = oldPrefs.getString("device_id", null)
@@ -188,10 +189,22 @@ class AppSettings(context: Context) {
     // Default Button Styling
     var defaultButtonSize by FloatPref("default_button_size", 14f)
     var defaultButtonColor by StringPref("default_button_color", appContext.colorToHex(R.color.preset_gunmetal))
-    var defaultButtonFocusColor by StringPref("default_button_focus_color", appContext.colorToHex(R.color.preset_sky_blue))
-    var defaultButtonTextColor by StringPref("default_button_text_color", appContext.colorToHex(R.color.preset_platinum))
-    var defaultButtonFocusTextColor by StringPref("default_button_focus_text_color", appContext.colorToHex(R.color.preset_deep_slate))
-    var defaultButtonBorderColor by StringPref("default_button_border_color", appContext.colorToHex(R.color.preset_gunmetal))
+    var defaultButtonFocusColor by StringPref(
+        "default_button_focus_color",
+        appContext.colorToHex(R.color.preset_sky_blue),
+    )
+    var defaultButtonTextColor by StringPref(
+        "default_button_text_color",
+        appContext.colorToHex(R.color.preset_platinum),
+    )
+    var defaultButtonFocusTextColor by StringPref(
+        "default_button_focus_text_color",
+        appContext.colorToHex(R.color.preset_deep_slate),
+    )
+    var defaultButtonBorderColor by StringPref(
+        "default_button_border_color",
+        appContext.colorToHex(R.color.preset_gunmetal),
+    )
     var defaultButtonCornerRadius by FloatPref("default_button_corner_radius", 20f)
     /** The timeout in seconds for loading remote media. */
     var mediaTimeout by IntPref("media_timeout", 10)
@@ -333,6 +346,7 @@ class AppSettings(context: Context) {
         val moduleModeMedia: Int? = null,
         val webhookHeartbeat: Int = 0
     ) {
+        /** Serializes this settings snapshot into a [JSONObject]. */
         fun toJSONObject(): JSONObject {
             return JSONObject().apply {
                 put("positionIndex", positionIndex)
@@ -384,6 +398,7 @@ class AppSettings(context: Context) {
             }
         }
 
+        /** JSON deserialization helpers for [SettingsData]. */
         companion object {
             /**
              * Parses a JSON object into [SettingsData], preserving any omitted fields from
@@ -657,7 +672,11 @@ class AppSettings(context: Context) {
             else -> m
         }
         return props.copy(
-            backgroundColor = if (props.backgroundColor == "#CC000000") getFullBackgroundColor() else props.backgroundColor,
+            backgroundColor = if (props.backgroundColor == "#CC000000") {
+                getFullBackgroundColor()
+            } else {
+                props.backgroundColor
+            },
             borderColor = if (props.borderColor == "#00000000") borderColor else props.borderColor,
             borderRadius = if (props.borderRadius == 0) borderRadius else props.borderRadius,
             borderWidth = if (props.borderWidth == 0) borderWidth else props.borderWidth,
@@ -683,7 +702,11 @@ class AppSettings(context: Context) {
         )
     }
 
-    private class StringPref(val key: String, val defaultValue: String, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, String> {
+    private class StringPref(
+        val key: String,
+        val defaultValue: String,
+        val onSet: (() -> Unit)? = null,
+    ) : ReadWriteProperty<AppSettings, String> {
         override fun getValue(thisRef: AppSettings, property: KProperty<*>): String {
             return thisRef.prefs.getString(key, defaultValue) ?: defaultValue
         }
@@ -693,7 +716,11 @@ class AppSettings(context: Context) {
         }
     }
 
-    private class ColorPref(val key: String, val defaultValueRes: Int, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, String> {
+    private class ColorPref(
+        val key: String,
+        val defaultValueRes: Int,
+        val onSet: (() -> Unit)? = null,
+    ) : ReadWriteProperty<AppSettings, String> {
         override fun getValue(thisRef: AppSettings, property: KProperty<*>): String {
             val default = thisRef.appContext.colorToHex(defaultValueRes)
             return thisRef.prefs.getString(key, default) ?: default
@@ -704,7 +731,11 @@ class AppSettings(context: Context) {
         }
     }
 
-    private class IntPref(val key: String, val defaultValue: Int, val onSet: (() -> Unit)? = null) : ReadWriteProperty<AppSettings, Int> {
+    private class IntPref(
+        val key: String,
+        val defaultValue: Int,
+        val onSet: (() -> Unit)? = null,
+    ) : ReadWriteProperty<AppSettings, Int> {
         override fun getValue(thisRef: AppSettings, property: KProperty<*>): Int {
             return thisRef.prefs.getInt(key, defaultValue)
         }
@@ -745,6 +776,7 @@ class AppSettings(context: Context) {
         }
     }
 
+    /** Default settings constants and normalization helpers. */
     companion object {
         const val PREFS_NAME = "pipup_settings"
         const val DEFAULT_BG_ALPHA = 225

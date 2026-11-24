@@ -30,6 +30,7 @@ fun Context.colorToHex(colorRes: Int): String {
  * Singleton for shared JSON operations using native org.json.
  */
 object Json {
+    /** Serializes a [Map] or [List] to a JSON string using native `org.json`. */
     fun writeValueAsString(value: Any): String {
         return when (value) {
             is Map<*, *> -> JSONObject(value).toString()

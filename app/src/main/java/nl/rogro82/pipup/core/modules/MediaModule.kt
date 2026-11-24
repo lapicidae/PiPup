@@ -17,6 +17,7 @@ import nl.rogro82.pipup.core.SettingType
  */
 class MediaModule : PiPupModule {
 
+    /** Logging constants for [MediaModule]. */
     companion object {
         private const val TAG = "MediaModule"
     }
@@ -36,7 +37,9 @@ class MediaModule : PiPupModule {
             // Engine warming: Re-activate module when idle to ensure it stays in memory (if in ON mode)
             val settings = PiPupApp.settings
             if (settings.getModuleMode(id) == ModuleMode.ON) {
-                moduleContext?.let { (it.androidContext.applicationContext as? PiPupApp)?.moduleManager?.activateModule(id) }
+                moduleContext?.let {
+                    (it.androidContext.applicationContext as? PiPupApp)?.moduleManager?.activateModule(id)
+                }
             }
         }
     }

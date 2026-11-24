@@ -26,12 +26,22 @@ class PerformanceSubmenu(
         rootContainer = root.findViewById(R.id.performance_settings_container) ?: return
 
         // Max Popups (SeekBar 0..4 maps to values 1..5)
-        setupSeekBar(root, R.id.seekbar_max_popups, R.id.text_max_popups_value, (settings.maxPopups - 1).coerceIn(0, 4)) {
+        setupSeekBar(
+            root,
+            R.id.seekbar_max_popups,
+            R.id.text_max_popups_value,
+            (settings.maxPopups - 1).coerceIn(0, 4),
+        ) {
             settings.maxPopups = (it + 1).coerceIn(1, 5)
         }
 
         // Loading Behavior Toggle
-        setupSwitch(root, R.id.container_loading_behavior, R.id.switch_loading_behavior, settings.popupLoadingBehavior == 1) {
+        setupSwitch(
+            root,
+            R.id.container_loading_behavior,
+            R.id.switch_loading_behavior,
+            settings.popupLoadingBehavior == 1,
+        ) {
             settings.popupLoadingBehavior = if (it) 1 else 0
         }
 
@@ -68,6 +78,7 @@ class PerformanceSubmenu(
         settingsActivity?.setupSubmenuFocus()
     }
 
+    /** Visibility helpers for [PerformanceSubmenu]. */
     companion object {
         /**
          * Determines if this submenu has any visible settings to show.

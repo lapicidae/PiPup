@@ -20,6 +20,7 @@ class OkHttpLibraryGlideModule : LibraryGlideModule() {
         registry.replace(
             GlideUrl::class.java,
             InputStream::class.java,
-            OkHttpUrlLoader.Factory())
+            OkHttpUrlLoader.Factory()
+        )
     }
 }

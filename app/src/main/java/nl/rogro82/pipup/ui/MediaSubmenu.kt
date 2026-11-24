@@ -40,7 +40,12 @@ class MediaSubmenu(
             settings.mediaFullBleed = it
         }
 
-        setupSwitch(root, R.id.container_fullscreen_upscale, R.id.switch_fullscreen_upscale, settings.fullscreenUpscale) {
+        setupSwitch(
+            root,
+            R.id.container_fullscreen_upscale,
+            R.id.switch_fullscreen_upscale,
+            settings.fullscreenUpscale,
+        ) {
             settings.fullscreenUpscale = it
         }
 
@@ -64,7 +69,12 @@ class MediaSubmenu(
             settings.liveBadgePosition = liveBadgePosKeys.getOrElse(it) { "bottom_right" }
         }
 
-        setupSwitch(root, R.id.container_media_placeholder, R.id.switch_media_placeholder, settings.mediaLoadingPlaceholder) {
+        setupSwitch(
+            root,
+            R.id.container_media_placeholder,
+            R.id.switch_media_placeholder,
+            settings.mediaLoadingPlaceholder,
+        ) {
             settings.mediaLoadingPlaceholder = it
         }
     }

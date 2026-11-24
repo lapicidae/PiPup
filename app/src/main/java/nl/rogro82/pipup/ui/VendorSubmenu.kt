@@ -68,7 +68,8 @@ class VendorSubmenu(
         val statusView = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle, rootContainer, false)
         statusView.id = R.id.vendor_status_row
         statusView.findViewById<View>(R.id.setting_switch)?.visibility = View.GONE
-        statusView.findViewById<TextView>(R.id.setting_label)?.text = context.getString(R.string.settings_vendor_tcl_keepalive)
+        statusView.findViewById<TextView>(R.id.setting_label)?.text =
+            context.getString(R.string.settings_vendor_tcl_keepalive)
         statusView.isFocusable = false
 
         rootContainer.addView(statusView)
@@ -107,7 +108,11 @@ class VendorSubmenu(
             else -> R.color.status_red
         }
 
-        label.text = context.getString(R.string.settings_module_setting_format, context.getString(R.string.settings_vendor_tcl_keepalive), statusText)
+        label.text = context.getString(
+            R.string.settings_module_setting_format,
+            context.getString(R.string.settings_vendor_tcl_keepalive),
+            statusText,
+        )
         label.setTextColor(ContextCompat.getColor(context, color))
     }
 

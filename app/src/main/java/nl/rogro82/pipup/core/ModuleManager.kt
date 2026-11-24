@@ -13,6 +13,7 @@ import nl.rogro82.pipup.PiPupApp
  */
 class ModuleManager {
 
+    /** Companion constants for [ModuleManager]. */
     companion object {
         private const val TAG = "ModuleManager"
         private const val DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000L // 5 minutes

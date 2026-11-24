@@ -208,7 +208,10 @@ class MainActivity : AppCompatActivity() {
             area.visibility = View.VISIBLE
             area.text = getString(R.string.permission_missing, missing.joinToString(", "))
             area.setTextColor(ContextCompat.getColor(this, R.color.status_red))
-        } else if (appSettings.updateAvailableTag.isNotEmpty() && UpdateManager.isNewer(this, appSettings.updateAvailableTag)) {
+        } else if (
+            appSettings.updateAvailableTag.isNotEmpty() &&
+            UpdateManager.isNewer(this, appSettings.updateAvailableTag)
+        ) {
             // Priority 2: App Update Available (Informational only)
             area.visibility = View.VISIBLE
             area.text = getString(R.string.settings_update_found_indicator)

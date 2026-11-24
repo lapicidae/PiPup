@@ -25,6 +25,7 @@ class PiPupApp : Application() {
 
     val moduleManager = ModuleManager()
 
+    /** Application-wide constants and shared [AppSettings] accessor. */
     companion object {
         /** The base package name of the application. */
         const val APP_PACKAGE = BuildConfig.APPLICATION_ID

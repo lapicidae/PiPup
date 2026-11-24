@@ -115,7 +115,8 @@ fun Context.showHexInputDialog(initialHex: String, onSet: (String) -> Unit) {
 /**
  * Configures an [AlertDialog] for TV input:
  * 1. Shifts window to TOP initially so the virtual IME does not obscure or distort input fields.
- * 2. Monitors keyboard visibility via decor view insets / visible display frame and centers the dialog when IME dismisses.
+ * 2. Monitors keyboard visibility via decor view insets / visible display frame and centers
+ *    the dialog when IME dismisses.
  * 3. Handles D-pad navigation between input view and dialog action buttons.
  *
  * @param input The focused input view (typically an [EditText]).
@@ -124,7 +125,10 @@ fun AlertDialog.setupTvKeyboardAvoidance(input: View) {
     window?.apply {
         setGravity(Gravity.TOP or Gravity.CENTER_HORIZONTAL)
         attributes = attributes.apply { y = 100 }
-        setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)
+        setSoftInputMode(
+            WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or
+                WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING,
+        )
     }
     show()
 
@@ -145,7 +149,10 @@ fun AlertDialog.setupTvKeyboardAvoidance(input: View) {
             val screenHeight = decor.rootView.height
             val keypadHeight = screenHeight - r.bottom
             val isKeyboardVisible = (keypadHeight > screenHeight * 0.15) ||
-                    (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)
+                (
+                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+                        decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
+                    )
 
             if (isKeyboardVisible != wasKeyboardVisible) {
                 wasKeyboardVisible = isKeyboardVisible

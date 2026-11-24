@@ -21,6 +21,7 @@ class AdminReceiver : DeviceAdminReceiver() {
         context.showToast(context.getString(R.string.admin_disabled))
     }
 
+    /** Companion helpers for resolving [AdminReceiver]. */
     companion object {
         /**
          * Returns the [ComponentName] for this receiver.

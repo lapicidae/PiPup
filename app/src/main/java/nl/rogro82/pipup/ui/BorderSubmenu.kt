@@ -22,8 +22,12 @@ class BorderSubmenu(
 ) : SubmenuBase(context, settings, onSettingsChanged, previewArea) {
 
     override fun onBind(root: View) {
-        setupSeekBar(root, R.id.seekbar_radius, R.id.text_radius_value, settings.borderRadius) { settings.borderRadius = it }
-        setupSeekBar(root, R.id.seekbar_border_width, R.id.text_border_width_value, settings.borderWidth) { settings.borderWidth = it }
+        setupSeekBar(root, R.id.seekbar_radius, R.id.text_radius_value, settings.borderRadius) {
+            settings.borderRadius = it
+        }
+        setupSeekBar(root, R.id.seekbar_border_width, R.id.text_border_width_value, settings.borderWidth) {
+            settings.borderWidth = it
+        }
 
         val colors = settingsActivity?.materialColors ?: emptyList()
         val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_gunmetal))

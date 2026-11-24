@@ -121,7 +121,11 @@ abstract class SubmenuBase(
                     if (s?.id == R.id.seekbar_animation_duration) {
                         onSettingsChanged(false)
                         handler.removeCallbacksAndMessages(animationDebounceToken)
-                        handler.postAtTime({ onSettingsChanged(true) }, animationDebounceToken, android.os.SystemClock.uptimeMillis() + 800)
+                        handler.postAtTime(
+                            { onSettingsChanged(true) },
+                            animationDebounceToken,
+                            android.os.SystemClock.uptimeMillis() + 800,
+                        )
                     } else {
                         onSettingsChanged(false)
                     }
@@ -184,7 +188,11 @@ abstract class SubmenuBase(
     protected fun updateSliderValueDisplay(bar: SeekBar, textView: TextView?) {
         val format = when (bar.id) {
             R.id.seekbar_animation_duration -> "%d ms"
-            R.id.seekbar_media_timeout -> context.resources.getQuantityString(R.plurals.settings_media_timeout_seconds, bar.progress, bar.progress)
+            R.id.seekbar_media_timeout -> context.resources.getQuantityString(
+                R.plurals.settings_media_timeout_seconds,
+                bar.progress,
+                bar.progress,
+            )
             R.id.seekbar_close_button_size -> "%d dp"
             R.id.seekbar_close_button_timeout -> if (bar.progress == 0) {
                 context.getString(R.string.settings_close_button_off)
@@ -195,7 +203,11 @@ abstract class SubmenuBase(
                     bar.progress
                 )
             }
-            R.id.seekbar_media_retries -> context.resources.getQuantityString(R.plurals.settings_media_retries_count, bar.progress, bar.progress)
+            R.id.seekbar_media_retries -> context.resources.getQuantityString(
+                R.plurals.settings_media_retries_count,
+                bar.progress,
+                bar.progress,
+            )
             R.id.seekbar_max_popups -> "%d"
             R.id.seekbar_buffer_ms -> if (bar.progress == 0) context.getString(R.string.language_default) else "%d ms"
             R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -> "%d sp"
@@ -206,7 +218,9 @@ abstract class SubmenuBase(
             R.id.seekbar_close_button_size -> String.format(format, bar.progress + PopupProps.CLOSE_BUTTON_SIZE_MIN)
             R.id.seekbar_max_popups -> String.format(format, bar.progress + 1)
             R.id.seekbar_buffer_ms -> if (bar.progress == 0) format else String.format(format, bar.progress * 100)
-            R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -> String.format(format, bar.progress + 10)
+            R.id.seekbar_title_size,
+            R.id.seekbar_message_size,
+            R.id.seekbar_button_size -> String.format(format, bar.progress + 10)
             else -> format
         }
     }
@@ -239,7 +253,9 @@ abstract class SubmenuBase(
                 onChanged(pos)
                 onSettingsChanged(p?.id == R.id.spinner_animation_type)
             }
-            override fun onNothingSelected(p: AdapterView<*>?) {}
+            override fun onNothingSelected(p: AdapterView<*>?) {
+                // Spinners always keep a valid selection; nothing to reset.
+            }
         }
         val oldFocusListener = spinner.onFocusChangeListener
         spinner.onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
@@ -248,7 +264,12 @@ abstract class SubmenuBase(
         }
     }
 
-    protected fun setSelectedColorInSpinner(root: View, spinnerId: Int, adapter: SettingsActivity.ColorSpinnerAdapter, hex: String) {
+    protected fun setSelectedColorInSpinner(
+        root: View,
+        spinnerId: Int,
+        adapter: SettingsActivity.ColorSpinnerAdapter,
+        hex: String,
+    ) {
         val clean = hex.replace("#", "").let { if (it.length == 8) it.substring(2) else it }
         val idx = adapter.colors.indexOfFirst { it.hex.equals("#$clean", true) }
         if (idx != -1) root.findViewById<Spinner>(spinnerId)?.setSelection(idx)

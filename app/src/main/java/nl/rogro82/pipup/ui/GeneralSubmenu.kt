@@ -29,8 +29,12 @@ class GeneralSubmenu(
     override fun onBind(root: View) {
         val suffix = context.getString(R.string.settings_default_suffix)
 
-        val posItems = context.resources.getStringArray(R.array.position_options).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_position, ArrayAdapter(context, android.R.layout.simple_spinner_item, posItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.positionIndex) {
+        val posItems = context.resources.getStringArray(R.array.position_options)
+            .mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
+        val posAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, posItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_position, posAdapter, settings.positionIndex) {
             settings.positionIndex = it
         }
 
@@ -51,7 +55,10 @@ class GeneralSubmenu(
         }
         val currentLangIndex = langCodes.indexOf(settings.language).coerceAtLeast(0)
 
-        setupSpinner(root, R.id.spinner_language, ArrayAdapter(context, android.R.layout.simple_spinner_item, langItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, currentLangIndex) {
+        val langAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, langItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_language, langAdapter, currentLangIndex) {
             val newLang = langCodes[it]
             if (settings.language != newLang) {
                 settings.language = newLang
@@ -71,8 +78,14 @@ class GeneralSubmenu(
         }
 
         // App Theme
-        val themeItems = listOf(context.getString(R.string.settings_theme_dark), context.getString(R.string.settings_theme_light)).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
-        setupSpinner(root, R.id.spinner_app_theme, ArrayAdapter(context, android.R.layout.simple_spinner_item, themeItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.appTheme) {
+        val themeItems = listOf(
+            context.getString(R.string.settings_theme_dark),
+            context.getString(R.string.settings_theme_light),
+        ).mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
+        val themeAdapter = ArrayAdapter(context, android.R.layout.simple_spinner_item, themeItems).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
+        setupSpinner(root, R.id.spinner_app_theme, themeAdapter, settings.appTheme) {
             if (settings.appTheme != it) {
                 settings.appTheme = it
                 val mode = if (it == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO

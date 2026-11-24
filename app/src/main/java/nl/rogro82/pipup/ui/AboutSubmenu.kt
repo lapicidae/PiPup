@@ -35,8 +35,11 @@ class AboutSubmenu(
     override fun onBind(root: View) {
         val versionRes = if (BuildConfig.DEBUG) R.string.version_number_debug else R.string.version_number
         val versionString = context.getString(versionRes, BuildConfig.VERSION_NAME)
-        root.findViewById<TextView>(R.id.text_about_version)?.text =
-            context.getString(R.string.settings_about_version_format, context.getString(R.string.app_name), versionString)
+        root.findViewById<TextView>(R.id.text_about_version)?.text = context.getString(
+            R.string.settings_about_version_format,
+            context.getString(R.string.app_name),
+            versionString,
+        )
 
         val translatorCredits = context.getString(R.string.translator_credits).trim()
         root.findViewById<View>(R.id.container_about_translators)?.isVisible = translatorCredits.isNotEmpty()
@@ -186,6 +189,7 @@ class AboutSubmenu(
         return sections.joinToString("\n\n")
     }
 
+    /** Layout dimension constants for About dialogs. */
     companion object {
         private const val LIST_DIALOG_WIDTH_FRACTION = 0.62f
         private const val DETAIL_DIALOG_WIDTH_FRACTION = 0.72f

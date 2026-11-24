@@ -14,7 +14,9 @@ class WebServer(port: Int, private val handler: Handler) : NanoHTTPD(port) {
         setAsyncRunner(poolRunner)
     }
 
+    /** Callback interface for handling incoming HTTP requests. */
     interface Handler {
+        /** Processes an incoming HTTP [session] and returns the response. */
         fun handleRequest(session: IHTTPSession): Response
     }
 

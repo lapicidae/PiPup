@@ -15,6 +15,7 @@ import nl.rogro82.pipup.core.PowerController
  */
 class PowerModule : PiPupModule {
 
+    /** Companion constants for [PowerModule]. */
     companion object {
         private const val TAG = "PowerModule"
     }

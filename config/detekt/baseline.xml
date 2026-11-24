@@ -3,7 +3,7 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>ComplexCondition:NotificationManager.kt$NotificationManager$keyA != keyB &amp;&amp; !sharesContainer(propsA, propsB) &amp;&amp; rectB != null &amp;&amp; rectsOverlapWithGap(rectA, rectB)</ID>
-    <ID>ComplexCondition:PermissionsSubmenu.kt$PermissionsSubmenu$why != null &amp;&amp; (isNotSupported || !isGranted || key in setOf(Permissions.KEY_OVERLAY, Permissions.KEY_ENERGY, Permissions.KEY_INSTALL, Permissions.KEY_ADMIN, Permissions.KEY_ACCESSIBILITY, Permissions.KEY_POWER))</ID>
+    <ID>ComplexCondition:PermissionsSubmenu.kt$PermissionsSubmenu$why != null &amp;&amp; (isNotSupported || !isGranted || key in alwaysExplainKeys)</ID>
     <ID>ComplexCondition:PopupProps.kt$PopupProps.Companion$bId.isNotEmpty() &amp;&amp; bLabel.isNotEmpty() &amp;&amp; bId != "null" &amp;&amp; bLabel != "null"</ID>
     <ID>CyclomaticComplexMethod:AppSettings.kt$AppSettings$fun applyDefaults(props: PopupProps): PopupProps</ID>
     <ID>CyclomaticComplexMethod:AppSettings.kt$AppSettings.SettingsData.Companion$fun fromJson(jsonStr: String, defaults: SettingsData? = null): SettingsData</ID>
@@ -26,7 +26,7 @@
     <ID>CyclomaticComplexMethod:PopupAnimator.kt$PopupAnimator$fun animateOut(props: PopupProps, completion: () -&gt; Unit)</ID>
     <ID>CyclomaticComplexMethod:PopupProps.kt$PopupProps$fun toJson(): String</ID>
     <ID>CyclomaticComplexMethod:PopupProps.kt$PopupProps.Companion$fun fromJson(jsonStr: String): PopupProps</ID>
-    <ID>CyclomaticComplexMethod:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$fun calculate(context: android.content.Context, props: PopupProps, settings: AppSettings): PopupLayoutMetrics</ID>
+    <ID>CyclomaticComplexMethod:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$fun calculate( context: android.content.Context, props: PopupProps, settings: AppSettings, ): PopupLayoutMetrics</ID>
     <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun applyHeightConstraints(notifyCallback: Boolean)</ID>
     <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun isMediaContentSame(m1: PopupProps.Media?, m2: PopupProps.Media?): Boolean</ID>
     <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun reorderViews()</ID>
@@ -46,19 +46,17 @@
     <ID>DestructuringDeclarationWithTooManyEntries:MediaRenderer.kt$MediaRenderer$(minBuf, maxBuf, playbackBuf, rebufferBuf)</ID>
     <ID>DestructuringDeclarationWithTooManyEntries:NotificationManager.kt$NotificationManager$(key, _, width, height)</ID>
     <ID>DestructuringDeclarationWithTooManyEntries:PayloadParserTest.kt$PayloadParserTest$val (minBuf, maxBuf, startBuf, rebuf) = nl.rogro82.pipup.ui.MediaRenderer.lowLatencyBufferDurations(250)!!</ID>
-    <ID>EmptyFunctionBlock:DiscoveryModule.kt$DiscoveryModule.&lt;no name provided&gt;${}</ID>
-    <ID>EmptyFunctionBlock:PopupView.kt$PopupView.&lt;no name provided&gt;${}</ID>
-    <ID>EmptyFunctionBlock:SettingsActivity.kt$SettingsActivity.&lt;no name provided&gt;${}</ID>
-    <ID>EmptyFunctionBlock:SubmenuBase.kt$SubmenuBase.&lt;no name provided&gt;${}</ID>
     <ID>ExplicitGarbageCollectionCall:CoreUtils.kt$gc()</ID>
     <ID>ExplicitGarbageCollectionCall:CoreUtils.kt$runFinalization()</ID>
     <ID>ImplicitDefaultLocale:AppSettings.kt$AppSettings$String.format("%02X", backgroundAlpha)</ID>
     <ID>ImplicitDefaultLocale:CoreUtils.kt$String.format("#%06X", 0xFFFFFF and color)</ID>
     <ID>LargeClass:MediaRenderer.kt$MediaRenderer</ID>
     <ID>LargeClass:NotificationManager.kt$NotificationManager</ID>
+    <ID>LargeClass:PipUpService.kt$PipUpService : Service</ID>
     <ID>LargeClass:PopupView.kt$PopupView : FrameLayout</ID>
     <ID>LongMethod:AppSettings.kt$AppSettings.SettingsData.Companion$fun fromJson(jsonStr: String, defaults: SettingsData? = null): SettingsData</ID>
     <ID>LongMethod:ButtonSubmenu.kt$ButtonSubmenu$override fun onBind(root: View)</ID>
+    <ID>LongMethod:GeneralSubmenu.kt$GeneralSubmenu$override fun onBind(root: View)</ID>
     <ID>LongMethod:MediaRenderer.kt$MediaRenderer$@SuppressLint("SetJavaScriptEnabled") private fun renderWhep(frame: FrameLayout, whep: PopupProps.Media.Whep, retryCount: Int = 0)</ID>
     <ID>LongMethod:MediaRenderer.kt$MediaRenderer$private fun renderVideo( frame: FrameLayout, video: PopupProps.Media.Video, retryCount: Int = 0, videoContext: Context )</ID>
     <ID>LongMethod:NotificationManager.kt$NotificationManager$private fun computeSimulatedLayout(items: List&lt;LayoutItem&gt;): Map&lt;String, Rect&gt;</ID>
@@ -71,17 +69,21 @@
     <ID>LongMethod:PipUpService.kt$PipUpService$private fun buildState(): MutableMap&lt;String, Any?&gt;</ID>
     <ID>LongMethod:PipUpService.kt$PipUpService$private fun handleLandingPage(): NanoHTTPD.Response</ID>
     <ID>LongMethod:PipUpService.kt$PipUpService$private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
+    <ID>LongMethod:PopupAnimator.kt$PopupAnimator$fun animateIn(props: PopupProps)</ID>
+    <ID>LongMethod:PopupAnimator.kt$PopupAnimator$fun animateOut(props: PopupProps, completion: () -&gt; Unit)</ID>
     <ID>LongMethod:PopupProps.kt$PopupProps$fun toJson(): String</ID>
     <ID>LongMethod:PopupProps.kt$PopupProps.Companion$fun fromJson(jsonStr: String): PopupProps</ID>
-    <ID>LongMethod:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$fun calculate(context: android.content.Context, props: PopupProps, settings: AppSettings): PopupLayoutMetrics</ID>
+    <ID>LongMethod:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$fun calculate( context: android.content.Context, props: PopupProps, settings: AppSettings, ): PopupLayoutMetrics</ID>
     <ID>LongMethod:PopupView.kt$PopupView$private fun applyHeightConstraints(notifyCallback: Boolean)</ID>
     <ID>LongMethod:PopupView.kt$PopupView$private fun updateButtons()</ID>
     <ID>LongMethod:PopupView.kt$PopupView$private fun updateVisuals()</ID>
     <ID>LongMethod:SettingsActivity.kt$SettingsActivity$private fun updatePreview(animate: Boolean = false)</ID>
+    <ID>LongMethod:TextSubmenu.kt$TextSubmenu$override fun onBind(root: View)</ID>
+    <ID>LongMethod:UiUtils.kt$fun AlertDialog.setupTvKeyboardAvoidance(input: View)</ID>
     <ID>LongMethod:UpdatesSubmenu.kt$UpdatesSubmenu$private fun showUpdateDialog(targetRelease: GitHubRelease)</ID>
     <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, props: PopupProps, retryCount: Int = 0, targetWidth: Int = 0, targetHeight: Int = 0 )</ID>
     <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, source: Any, width: Int, scale: Boolean, diskCache: DiskCacheStrategy, skipMemory: Boolean, retryCount: Int )</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$(uiContext: Context, frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0)</ID>
+    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0, )</ID>
     <ID>LongParameterList:MediaRenderer.kt$MediaRenderer.Companion$( availW: Int, availH: Int, sourceW: Int, sourceH: Int, pixelWidthHeightRatio: Float = 1f, upscale: Boolean = false, requestedW: Int? = null, requestedH: Int? = null )</ID>
     <ID>LongParameterList:MediaRenderer.kt$MediaRenderer.GlideRequestListener$( renderer: MediaRenderer, private val frame: WeakReference&lt;FrameLayout&gt;, private val iv: WeakReference&lt;ImageView&gt;, private val source: Any, private val width: Int, private val scale: Boolean, private val diskCache: DiskCacheStrategy, private val skipMemory: Boolean, private val retryCount: Int, private val tw: Int, uiContext: Context )</ID>
     <ID>LongParameterList:MediaRenderer.kt$MediaRenderer.VideoPlayerListener$( renderer: MediaRenderer, private val frame: WeakReference&lt;FrameLayout&gt;, private val tw: Int, private val th: Int, private val video: PopupProps.Media.Video, private val retryCount: Int, uiContext: Context )</ID>
@@ -229,175 +231,6 @@
     <ID>MagicNumber:VendorSubmenu.kt$VendorSubmenu$24</ID>
     <ID>MagicNumber:VendorSubmenu.kt$VendorSubmenu$8</ID>
     <ID>MagicNumber:WakeActivity.kt$WakeActivity$1500</ID>
-    <ID>MaxLineLength:AboutSubmenu.kt$AboutSubmenu$context.getString(R.string.settings_about_version_format, context.getString(R.string.app_name), versionString)</ID>
-    <ID>MaxLineLength:AdvancedSubmenu.kt$AdvancedSubmenu$androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(androidx.core.os.LocaleListCompat.getEmptyLocaleList())</ID>
-    <ID>MaxLineLength:AdvancedSubmenu.kt$AdvancedSubmenu$androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)</ID>
-    <ID>MaxLineLength:AdvancedSubmenu.kt$AdvancedSubmenu$context.showToast(context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), true)</ID>
-    <ID>MaxLineLength:AdvancedSubmenu.kt$AdvancedSubmenu$context.showToast(context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), true)</ID>
-    <ID>MaxLineLength:AdvancedSubmenu.kt$AdvancedSubmenu$val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager</ID>
-    <ID>MaxLineLength:AnimationSubmenu.kt$AnimationSubmenu$setupSeekBar</ID>
-    <ID>MaxLineLength:AnimationSubmenu.kt$AnimationSubmenu$setupSpinner</ID>
-    <ID>MaxLineLength:AnimationSubmenu.kt$AnimationSubmenu$val animItems = context.resources.getStringArray(R.array.animation_options).mapIndexed { i, s -&gt; if (i == 0) "$s $suffix" else s }</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings$backgroundColor = if (props.backgroundColor == "#CC000000") getFullBackgroundColor() else props.backgroundColor</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings$val idPrefs = appContext.createDeviceProtectedStorageContext().getSharedPreferences("pipup_id", Context.MODE_PRIVATE)</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings$var defaultButtonBorderColor by StringPref("default_button_border_color", appContext.colorToHex(R.color.preset_gunmetal))</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings$var defaultButtonFocusColor by StringPref("default_button_focus_color", appContext.colorToHex(R.color.preset_sky_blue))</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings$var defaultButtonFocusTextColor by StringPref("default_button_focus_text_color", appContext.colorToHex(R.color.preset_deep_slate))</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings$var defaultButtonTextColor by StringPref("default_button_text_color", appContext.colorToHex(R.color.preset_platinum))</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings.ColorPref$private</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings.IntPref$private</ID>
-    <ID>MaxLineLength:AppSettings.kt$AppSettings.StringPref$private</ID>
-    <ID>MaxLineLength:BackgroundSubmenu.kt$BackgroundSubmenu$val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_deep_slate))</ID>
-    <ID>MaxLineLength:BorderSubmenu.kt$BorderSubmenu$setupSeekBar(root, R.id.seekbar_border_width, R.id.text_border_width_value, settings.borderWidth) { settings.borderWidth = it }</ID>
-    <ID>MaxLineLength:BorderSubmenu.kt$BorderSubmenu$setupSeekBar(root, R.id.seekbar_radius, R.id.text_radius_value, settings.borderRadius) { settings.borderRadius = it }</ID>
-    <ID>MaxLineLength:ButtonSubmenu.kt$ButtonSubmenu$setSelectedColorInSpinner(root, R.id.spinner_button_border_color, adapterBorder, settings.defaultButtonBorderColor)</ID>
-    <ID>MaxLineLength:ButtonSubmenu.kt$ButtonSubmenu$setSelectedColorInSpinner(root, R.id.spinner_button_focus_text_color, adapterFocusText, settings.defaultButtonFocusTextColor)</ID>
-    <ID>MaxLineLength:ButtonSubmenu.kt$ButtonSubmenu$setupSeekBar</ID>
-    <ID>MaxLineLength:DebugModule.kt$DebugModule$?:</ID>
-    <ID>MaxLineLength:DebugModule.kt$DebugModule$return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "Forced module cleanup finished")</ID>
-    <ID>MaxLineLength:DebugModule.kt$DebugModule$return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "Idle timeout updated to $ms ms")</ID>
-    <ID>MaxLineLength:DiscoveryModule.kt$DiscoveryModule$Log.d(TAG, "Next in queue: ${nextRequest.service.serviceName} (Try ${nextRequest.retries + 1}), waiting 300ms...")</ID>
-    <ID>MaxLineLength:DiscoveryModule.kt$DiscoveryModule$return</ID>
-    <ID>MaxLineLength:GeneralSubmenu.kt$GeneralSubmenu$setupSpinner</ID>
-    <ID>MaxLineLength:GeneralSubmenu.kt$GeneralSubmenu$val posItems = context.resources.getStringArray(R.array.position_options).mapIndexed { i, s -&gt; if (i == 0) "$s $suffix" else s }</ID>
-    <ID>MaxLineLength:GeneralSubmenu.kt$GeneralSubmenu$val themeItems = listOf(context.getString(R.string.settings_theme_dark), context.getString(R.string.settings_theme_light)).mapIndexed { i, s -&gt; if (i == 0) "$s $suffix" else s }</ID>
-    <ID>MaxLineLength:MainActivity.kt$MainActivity$}</ID>
-    <ID>MaxLineLength:MediaModule.kt$MediaModule$moduleContext?.let { (it.androidContext.applicationContext as? PiPupApp)?.moduleManager?.activateModule(id) }</ID>
-    <ID>MaxLineLength:MediaRenderer.kt$MediaRenderer$container.addView(iv, FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT, Gravity.CENTER))</ID>
-    <ID>MaxLineLength:MediaRenderer.kt$MediaRenderer$if</ID>
-    <ID>MaxLineLength:MediaRenderer.kt$MediaRenderer$is PopupProps.Media.Image -&gt; renderImage(uiContext, frame, media.uri, media.width, media.cache, media.scale, retryCount)</ID>
-    <ID>MaxLineLength:MediaRenderer.kt$MediaRenderer$private</ID>
-    <ID>MaxLineLength:MediaRenderer.kt$MediaRenderer$renderGlide(uiContext, frame, uri, width, scale, if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE, !cache, retryCount)</ID>
-    <ID>MaxLineLength:MediaSubmenu.kt$MediaSubmenu$setupSwitch</ID>
-    <ID>MaxLineLength:NotificationManager.kt$NotificationManager$orientation = if (direction == PopupProps.StackDirection.HORIZONTAL) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL</ID>
-    <ID>MaxLineLength:PayloadParser.kt$PayloadParser$Log.w(TAG, "Rejecting multipart payload: body too large ($declaredLength bytes, max $MAX_MULTIPART_BODY_BYTES)")</ID>
-    <ID>MaxLineLength:PerformanceSubmenu.kt$PerformanceSubmenu$setupSeekBar</ID>
-    <ID>MaxLineLength:PerformanceSubmenu.kt$PerformanceSubmenu$setupSwitch</ID>
-    <ID>MaxLineLength:Permissions.kt$Permissions$KEY_ACCESSIBILITY -&gt; "adb shell settings put secure --user current enabled_accessibility_services $pkg/.service.PiPupAccessibilityService &amp;&amp; adb shell settings put secure accessibility_enabled 1"</ID>
-    <ID>MaxLineLength:Permissions.kt$Permissions$component = ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")</ID>
-    <ID>MaxLineLength:Permissions.kt$Permissions$putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION, context.getString(R.string.permission_admin_explanation))</ID>
-    <ID>MaxLineLength:Permissions.kt$Permissions$val isStillResumed = (context as? AppCompatActivity)?.lifecycle?.currentState?.isAtLeast(Lifecycle.State.RESUMED) ?: false</ID>
-    <ID>MaxLineLength:Permissions.kt$Permissions$val methodLabel = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) context.getString(R.string.permission_admin) else context.getString(R.string.permission_accessibility)</ID>
-    <ID>MaxLineLength:Permissions.kt$Permissions$val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)</ID>
-    <ID>MaxLineLength:PermissionsSubmenu.kt$PermissionsSubmenu$if</ID>
-    <ID>MaxLineLength:PermissionsSubmenu.kt$PermissionsSubmenu$val currentSignature = "pow:$sleepMethod|acc:$accGranted|ov:$overlayGranted|in:$installGranted|en:$energyGranted|mods:${modulePermissions.joinToString(",")}"</ID>
-    <ID>MaxLineLength:PermissionsSubmenu.kt$PermissionsSubmenu$val energyGranted = (context.getSystemService(Context.POWER_SERVICE) as PowerManager).isIgnoringBatteryOptimizations(context.packageName)</ID>
-    <ID>MaxLineLength:PermissionsSubmenu.kt$PermissionsSubmenu$val params = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)</ID>
-    <ID>MaxLineLength:PiPupAccessibilityService.kt$PiPupAccessibilityService.Companion$val enabledServices = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES) ?: return false</ID>
-    <ID>MaxLineLength:PipUpService.kt$PipUpService$.</ID>
-    <ID>MaxLineLength:PipUpService.kt$PipUpService$NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json).apply { setGzipEncoding(false) }</ID>
-    <ID>MaxLineLength:PipUpService.kt$PipUpService$NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "image/svg+xml", stream, stream.available().toLong())</ID>
-    <ID>MaxLineLength:PipUpService.kt$PipUpService$else -&gt; NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")</ID>
-    <ID>MaxLineLength:PipUpService.kt$PipUpService$return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: ${message ?: "unknown error"}")</ID>
-    <ID>MaxLineLength:PipUpService.kt$PipUpService$}</ID>
-    <ID>MaxLineLength:PipUpService.kt$PipUpService.&lt;no name provided&gt;$override fun getString(resId: Int, vararg formatArgs: Any): String</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$2 -&gt; { view.alpha = 1f; applySlide(); view.animate().translationX(0f).translationY(0f).setDuration(duration).withEndAction { resetAnimationProps(props) }.start() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$2, 3, 9 -&gt; view.animate().translationX(getSlideX()).translationY(getSlideY()).setDuration(duration).withEndAction(completion).start()</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$3 -&gt; { view.alpha = 1f; applySlide(); view.animate().translationX(0f).translationY(0f).setInterpolator(OvershootInterpolator(1.5f)).setDuration(duration).withEndAction { resetAnimationProps(props) }.start() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$4 -&gt; { view.scaleX = 0f; view.scaleY = 0f; view.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(duration).withEndAction { resetAnimationProps(props) }.start() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$4, 5, 6 -&gt; view.animate().alpha(0f).scaleX(0f).scaleY(0f).setDuration(duration).withEndAction(completion).start()</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$5 -&gt; { view.scaleX = 0f; view.scaleY = 0f; view.animate().alpha(1f).scaleX(1f).scaleY(1f).setInterpolator(OvershootInterpolator(1.5f)).setDuration(duration).withEndAction { resetAnimationProps(props) }.start() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$6 -&gt; { view.scaleX = 0f; view.scaleY = 0f; view.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(duration).withEndAction { executeTaDa(); resetAnimationProps(props) }.start() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$7 -&gt; view.animate().translationX(getSlideX()).translationY(getSlideY()).scaleX(0.5f).scaleY(0.5f).setDuration(duration).withEndAction(completion).start()</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$7 -&gt; { view.alpha = 1f; view.scaleX = 0.5f; view.scaleY = 0.5f; applySlide(); view.animate().translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(duration).withEndAction { resetAnimationProps(props) }.start() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$8 -&gt; view.animate().translationX(getSlideX()).translationY(getSlideY()).rotationY(-90f).setDuration(duration).withEndAction(completion).start()</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$8 -&gt; { view.alpha = 1f; view.rotationY = -90f; applySlide(); view.animate().translationX(0f).translationY(0f).rotationY(0f).setDuration(duration).withEndAction { resetAnimationProps() }.start() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$9 -&gt; { view.alpha = 1f; applySlide(); view.animate().translationX(0f).translationY(0f).setDuration(duration).withEndAction { executeTaDa() }.start() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.BottomCenter -&gt; { view.translationX = 0f; view.translationY = metrics.heightPixels.toFloat() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.BottomLeft -&gt; { view.translationX = -metrics.widthPixels.toFloat(); view.translationY = metrics.heightPixels.toFloat() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.BottomRight -&gt; { view.translationX = metrics.widthPixels.toFloat(); view.translationY = metrics.heightPixels.toFloat() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.CenterLeft -&gt; { view.translationX = -metrics.widthPixels.toFloat(); view.translationY = 0f }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.CenterRight -&gt; { view.translationX = metrics.widthPixels.toFloat(); view.translationY = 0f }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.TopCenter -&gt; { view.translationX = 0f; view.translationY = -metrics.heightPixels.toFloat() }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.TopLeft -&gt; { view.translationX = -metrics.widthPixels.toFloat(); view.translationY = -500f }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft, PopupProps.Position.CenterLeft -&gt; -(view.width + margin + 100f)</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.TopLeft, PopupProps.Position.BottomLeft, PopupProps.Position.CenterLeft -&gt; view.translationX = -viewWidth</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.TopRight -&gt; { view.translationX = metrics.widthPixels.toFloat(); view.translationY = -500f }</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.TopRight, PopupProps.Position.BottomRight, PopupProps.Position.CenterRight -&gt; view.translationX = viewWidth</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$PopupProps.Position.TopRight, PopupProps.Position.BottomRight, PopupProps.Position.CenterRight -&gt; view.width + margin + 100f</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$android.util.Log.d("PopupAnimator", "[LIFECYCLE] '${it.title ?: it.id}' ANIMATE_IN_END at ${System.currentTimeMillis()}ms")</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$val viewHeight = (if (view.height &gt; 0) view.height.toFloat() else view.context.dpToPx(300).toFloat()) + margin + 100f</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$val viewWidth = (if (view.width &gt; 0) view.width.toFloat() else view.context.dpToPx(400).toFloat()) + margin + 100f</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$view.animate().alpha(0f).translationX(tx).translationY(ty).scaleX(0f).scaleY(0f).setDuration(duration).withEndAction(completion).start()</ID>
-    <ID>MaxLineLength:PopupAnimator.kt$PopupAnimator$view.animate().alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f).setDuration(duration).withEndAction { resetAnimationProps() }.start()</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps$* Effective stacking axis direction ("vertical" or "horizontal"), or null if stacking is not set or disabled by [coversScreen].</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps$* Resolves the effective [Media] object, wrapping legacy top-level [image]/[imageWidth] fields when [media] is null.</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps$fun</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps.Companion$mediaFullBleed = if (j.has("mediaFullBleed") &amp;&amp; !j.isNull("mediaFullBleed")) j.getBoolean("mediaFullBleed") else null</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps.Companion$mediaPosition = if (j.has("mediaPosition") &amp;&amp; !j.isNull("mediaPosition")) j.getInt("mediaPosition") else null</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps.Companion$stack = optNullableString("stack")?.trim()?.lowercase()?.takeIf { it == "vertical" || it == "horizontal" }</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps.Companion$val resolvedPosition = parsePositionIndex(if (j.has("position") &amp;&amp; !j.isNull("position")) j.get("position") else null)</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps.PopupLayoutMetrics$* Pure data calculation component for popup width, height, and 2D bounding boxes using StaticLayout without UI inflation.</ID>
-    <ID>MaxLineLength:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$fun</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$(if (binding.popupMediaFrame.isVisible) (if (targetMediaHeight &gt; 0) targetMediaHeight else binding.popupMediaFrame.measuredHeight) else 0)</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$// Handle property-only updates (e.g. WHEP videoFit, fullscreenUpscale, or liveBadge config) without full reload</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$if</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$is PopupProps.Media.Image -&gt; (m2 as PopupProps.Media.Image).let { m1.uri == it.uri &amp;&amp; m1.cache == it.cache &amp;&amp; m1.scale == it.scale }</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$is PopupProps.Media.Video -&gt; media.height?.let { props.scaleValue(context, it) } ?: ((targetMediaWidth * 9) / 16)</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$is PopupProps.Media.Web -&gt; (m2 as PopupProps.Media.Web).let { m1.uri == it.uri &amp;&amp; m1.cache == it.cache &amp;&amp; m1.scale == it.scale }</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$is PopupProps.Media.Whep -&gt; media.height?.let { props.scaleValue(context, it) } ?: ((targetMediaWidth * 9) / 16)</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$private</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$val</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$val firstHeight = if (first == binding.popupMediaContainer &amp;&amp; targetMediaHeight &gt; 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$val firstWidth = if (first == binding.popupMediaContainer &amp;&amp; targetMediaWidth &gt; 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$val focusTextColor = parseColorOrDefault(props.buttonFocusTextColor ?: settings.defaultButtonFocusTextColor, "#FFFFFF")</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$val normalTextColor = parseColorOrDefault(props.buttonTextColor ?: settings.defaultButtonTextColor, "#FFFFFF")</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$val radiusPx = if (props.scale) context.getScaledPixels(props.borderRadius).toFloat() else props.borderRadius.toFloat()</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$val secondHeight = if (second == binding.popupMediaContainer &amp;&amp; targetMediaHeight &gt; 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView$val secondWidth = if (second == binding.popupMediaContainer &amp;&amp; targetMediaWidth &gt; 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView.&lt;no name provided&gt;$val msgH = if (binding.popupMessage.height &gt; 0) binding.popupMessage.height else binding.popupMessage.measuredHeight</ID>
-    <ID>MaxLineLength:PopupView.kt$PopupView.&lt;no name provided&gt;$val scrollH = if (binding.popupScrollView.height &gt; 0) binding.popupScrollView.height else binding.popupScrollView.measuredHeight</ID>
-    <ID>MaxLineLength:Pusher.kt$Pusher$Log.w(LOG_TAG, "push queue full ($MAX_PENDING): dropping oldest (${dropped.event}) and further overflow")</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_advanced, R.string.settings_nav_advanced, R.drawable.ic_advanced, 90, R.layout.submenu_advanced)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_animation, R.string.settings_nav_animation, R.drawable.ic_animation, 50, R.layout.submenu_animation)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_background, R.string.settings_nav_background, R.drawable.ic_bg, 20, R.layout.submenu_background)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_border, R.string.settings_nav_border, R.drawable.ic_border_style, 40, R.layout.submenu_border)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_button, R.string.settings_nav_button, R.drawable.ic_button_style, 45, R.layout.submenu_button)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_general, R.string.settings_nav_general, R.drawable.ic_general_style, 10, R.layout.submenu_general)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_modules, R.string.settings_nav_modules, R.drawable.ic_modules, 70, R.layout.submenu_modules)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_permissions, R.string.settings_nav_permissions, R.drawable.ic_permissions, 80, R.layout.submenu_permissions)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_text_style, R.string.settings_nav_text, R.drawable.ic_text_style, 30, R.layout.submenu_text)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(R.id.nav_item_updates, R.string.settings_nav_updates, R.drawable.ic_updates, 60, R.layout.submenu_updates)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$NavItem(existingId, menu.labelRes, menu.iconRes, menu.priority, layoutRes = menu.layoutRes, moduleId = module.id)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$R.layout.submenu_animation -&gt; AnimationSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$R.layout.submenu_background -&gt; BackgroundSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$R.layout.submenu_performance -&gt; PerformanceSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$R.layout.submenu_permissions -&gt; PermissionsSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$private</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity$val factory = moduleSubmenuFactories[item.layoutRes] ?: moduleSubmenuFactories[R.layout.submenu_module_dynamic]!!</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity.ColorSpinnerAdapter$class</ID>
-    <ID>MaxLineLength:SettingsActivity.kt$SettingsActivity.ColorSpinnerAdapter$label.text = if (entry.hex.equals(other = defaultHex, ignoreCase = true)) "$name ${context.getString(R.string.settings_default_suffix)}" else name</ID>
-    <ID>MaxLineLength:SubmenuBase.kt$SubmenuBase$R.id.seekbar_media_retries -&gt; context.resources.getQuantityString(R.plurals.settings_media_retries_count, bar.progress, bar.progress)</ID>
-    <ID>MaxLineLength:SubmenuBase.kt$SubmenuBase$R.id.seekbar_media_timeout -&gt; context.resources.getQuantityString(R.plurals.settings_media_timeout_seconds, bar.progress, bar.progress)</ID>
-    <ID>MaxLineLength:SubmenuBase.kt$SubmenuBase$R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -&gt; String.format(format, bar.progress + 10)</ID>
-    <ID>MaxLineLength:SubmenuBase.kt$SubmenuBase$protected</ID>
-    <ID>MaxLineLength:SubmenuBase.kt$SubmenuBase.&lt;no name provided&gt;$handler.postAtTime({ onSettingsChanged(true) }, animationDebounceToken, android.os.SystemClock.uptimeMillis() + 800)</ID>
-    <ID>MaxLineLength:SystemModule.kt$SystemModule$"/permissions/diagnose" -&gt; if (method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST) diagnoseResponse() else null</ID>
-    <ID>MaxLineLength:SystemModule.kt$SystemModule$"reason" to "this device blocks granting this permission from its settings screen; grant it over adb instead"</ID>
-    <ID>MaxLineLength:SystemModule.kt$SystemModule$return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: ${e.message}")</ID>
-    <ID>MaxLineLength:SystemModule.kt$SystemModule$return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.FORBIDDEN, "text/plain", "Media module is disabled")</ID>
-    <ID>MaxLineLength:SystemModule.kt$SystemModule$val msg = localizedContext.getString(R.string.error_module_disabled, localizedContext.getString(R.string.settings_module_media))</ID>
-    <ID>MaxLineLength:SystemModule.kt$SystemModule$}</ID>
-    <ID>MaxLineLength:TextSubmenu.kt$TextSubmenu$setupSeekBar(root, R.id.seekbar_message_size, R.id.text_message_size_value, (settings.messageSize - 10).toInt().coerceIn(0, 30)) { settings.messageSize = (it + 10).toFloat() }</ID>
-    <ID>MaxLineLength:TextSubmenu.kt$TextSubmenu$setupSeekBar(root, R.id.seekbar_title_size, R.id.text_title_size_value, (settings.titleSize - 10).toInt().coerceIn(0, 30)) { settings.titleSize = (it + 10).toFloat() }</ID>
-    <ID>MaxLineLength:TextSubmenu.kt$TextSubmenu$setupSpinner(root, R.id.spinner_message_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.messageAlignment) { settings.messageAlignment = it }</ID>
-    <ID>MaxLineLength:TextSubmenu.kt$TextSubmenu$setupSpinner(root, R.id.spinner_title_alignment, ArrayAdapter(context, android.R.layout.simple_spinner_item, alignmentItems).apply { setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item) }, settings.titleAlignment) { settings.titleAlignment = it }</ID>
-    <ID>MaxLineLength:TextSubmenu.kt$TextSubmenu$val alignmentItems = context.resources.getStringArray(R.array.alignment_options).mapIndexed { i, s -&gt; if (i == 0) "$s $suffix" else s }</ID>
-    <ID>MaxLineLength:TextSubmenu.kt$TextSubmenu$val msgAdapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_silver))</ID>
-    <ID>MaxLineLength:TextSubmenu.kt$TextSubmenu$val titleAdapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(R.color.preset_platinum))</ID>
-    <ID>MaxLineLength:UiUtils.kt$(Build.VERSION.SDK_INT &gt;= Build.VERSION_CODES.R &amp;&amp; decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true)</ID>
-    <ID>MaxLineLength:UiUtils.kt$*</ID>
-    <ID>MaxLineLength:UiUtils.kt$setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_VISIBLE or WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING)</ID>
-    <ID>MaxLineLength:UpdateManager.kt$UpdateManager$Log.d("UpdateManager", "Download ID mismatch (got $downloadId, expected ${appSettings.pendingUpdateId}). Ignoring.")</ID>
-    <ID>MaxLineLength:UpdateManager.kt$UpdateManager$Log.i("UpdateManager", "No update available. Current version matches or is newer than ${latest.tagName}")</ID>
-    <ID>MaxLineLength:UpdateManager.kt$UpdateManager$return@withContext Result.failure(Exception(appContext.getString(R.string.update_error_invalid_api)))</ID>
-    <ID>MaxLineLength:UpdateManager.kt$UpdateManager.Companion$get() = installStartedAt != 0L &amp;&amp; (SystemClock.elapsedRealtime() - installStartedAt &lt; 15 * 60 * 1000L) // 15 min timeout</ID>
-    <ID>MaxLineLength:UpdatesSubmenu.kt$UpdatesSubmenu$btn.text</ID>
-    <ID>MaxLineLength:UpdatesSubmenu.kt$UpdatesSubmenu$setupSpinner</ID>
-    <ID>MaxLineLength:UpdatesSubmenu.kt$UpdatesSubmenu$val channelItems = listOf(context.getString(R.string.settings_update_stable), context.getString(R.string.settings_update_beta)).mapIndexed { i, s -&gt; if (i == defaultChannelIndex) "$s $suffix" else s }</ID>
-    <ID>MaxLineLength:UpdatesSubmenu.kt$UpdatesSubmenu$val scope = (context.applicationContext as? PiPupApp)?.applicationScope ?: kotlinx.coroutines.MainScope()</ID>
-    <ID>MaxLineLength:VendorSubmenu.kt$VendorSubmenu$label.text = context.getString(R.string.settings_module_setting_format, context.getString(R.string.settings_vendor_tcl_keepalive), statusText)</ID>
-    <ID>MaxLineLength:VendorSubmenu.kt$VendorSubmenu$statusView.findViewById&lt;TextView&gt;(R.id.setting_label)?.text = context.getString(R.string.settings_vendor_tcl_keepalive)</ID>
     <ID>NestedBlockDepth:MediaRenderer.kt$MediaRenderer$@SuppressLint("SetJavaScriptEnabled") private fun renderWhep(frame: FrameLayout, whep: PopupProps.Media.Whep, retryCount: Int = 0)</ID>
     <ID>NestedBlockDepth:NotificationManager.kt$NotificationManager$private fun adjustDualAxisContainerMargins(position: PopupProps.Position)</ID>
     <ID>NestedBlockDepth:NotificationManager.kt$NotificationManager$private fun computeSimulatedLayout(items: List&lt;LayoutItem&gt;): Map&lt;String, Rect&gt;</ID>
@@ -406,7 +239,6 @@
     <ID>NestedBlockDepth:PayloadParser.kt$PayloadParser$private fun parseMultipart(session: NanoHTTPD.IHTTPSession): PopupProps?</ID>
     <ID>NestedBlockDepth:PipUpService.kt$PipUpService$private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
     <ID>NestedBlockDepth:UpdateManager.kt$UpdateManager$@SuppressLint("RequestInstallPackagesPolicy") private fun installApk(installContext: Context)</ID>
-    <ID>NewLineAtEndOfFile:OkHttpLibraryGlideModule.kt$nl.rogro82.pipup.OkHttpLibraryGlideModule.kt</ID>
     <ID>ReturnCount:MainActivity.kt$MainActivity$private fun checkAndShowPermissionNag()</ID>
     <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.GlideRequestListener$override fun onLoadFailed( e: GlideException?, model: Any?, target: Target&lt;Drawable&gt;, isFirstResource: Boolean ): Boolean</ID>
     <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.GlideRequestListener$override fun onResourceReady( resource: Drawable, model: Any, target: Target&lt;Drawable&gt;?, dataSource: DataSource, isFirstResource: Boolean ): Boolean</ID>
@@ -464,96 +296,5 @@
     <ID>TooManyFunctions:SettingsActivity.kt$SettingsActivity : AppCompatActivity</ID>
     <ID>TooManyFunctions:SubmenuBase.kt$SubmenuBase : SubmenuController</ID>
     <ID>TooManyFunctions:UpdateManager.kt$UpdateManager</ID>
-    <ID>UndocumentedPublicClass:AboutSubmenu.kt$AboutSubmenu$Companion</ID>
-    <ID>UndocumentedPublicClass:AdminReceiver.kt$AdminReceiver$Companion</ID>
-    <ID>UndocumentedPublicClass:AppSettings.kt$AppSettings$Companion</ID>
-    <ID>UndocumentedPublicClass:AppSettings.kt$AppSettings.SettingsData$Companion</ID>
-    <ID>UndocumentedPublicClass:DebugModule.kt$DebugModule$Companion</ID>
-    <ID>UndocumentedPublicClass:DiscoveryModule.kt$DiscoveryModule$Companion</ID>
-    <ID>UndocumentedPublicClass:MediaModule.kt$MediaModule$Companion</ID>
-    <ID>UndocumentedPublicClass:MediaRenderer.kt$MediaRenderer$Callback</ID>
-    <ID>UndocumentedPublicClass:MediaRenderer.kt$MediaRenderer$Companion</ID>
-    <ID>UndocumentedPublicClass:ModuleManager.kt$ModuleManager$Companion</ID>
-    <ID>UndocumentedPublicClass:NotificationManager.kt$NotificationManager$Companion</ID>
-    <ID>UndocumentedPublicClass:PayloadParser.kt$PayloadParser$Companion</ID>
-    <ID>UndocumentedPublicClass:PerformanceSubmenu.kt$PerformanceSubmenu$Companion</ID>
-    <ID>UndocumentedPublicClass:PiPupAccessibilityService.kt$PiPupAccessibilityService$Companion</ID>
-    <ID>UndocumentedPublicClass:PiPupApp.kt$PiPupApp$Companion</ID>
-    <ID>UndocumentedPublicClass:PipUpService.kt$PipUpService$Companion</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps$Button</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps$Companion</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps$Media</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps.Media$Bitmap : Media</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps.Media$Image : Media</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps.Media$LocalFile : Media</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps.Media$Video : Media</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps.Media$Web : Media</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps.Media$Whep : Media</ID>
-    <ID>UndocumentedPublicClass:PopupProps.kt$PopupProps.PopupLayoutMetrics$Companion</ID>
-    <ID>UndocumentedPublicClass:PowerModule.kt$PowerModule$Companion</ID>
-    <ID>UndocumentedPublicClass:Pusher.kt$Pusher</ID>
-    <ID>UndocumentedPublicClass:Receiver.kt$Receiver$Companion</ID>
-    <ID>UndocumentedPublicClass:SettingsActivity.kt$SettingsActivity$Companion</ID>
-    <ID>UndocumentedPublicClass:SettingsActivity.kt$SettingsActivity$NavItem</ID>
-    <ID>UndocumentedPublicClass:SystemModule.kt$SystemModule$Companion</ID>
-    <ID>UndocumentedPublicClass:UpdateManager.kt$GitHubAsset$Companion</ID>
-    <ID>UndocumentedPublicClass:UpdateManager.kt$GitHubRelease$Companion</ID>
-    <ID>UndocumentedPublicClass:UpdateManager.kt$UpdateManager$Companion</ID>
-    <ID>UndocumentedPublicClass:UpdateWorker.kt$UpdateWorker$Companion</ID>
-    <ID>UndocumentedPublicClass:VendorModule.kt$VendorModule$Companion</ID>
-    <ID>UndocumentedPublicClass:WebServer.kt$WebServer$Handler</ID>
-    <ID>UndocumentedPublicFunction:AppSettings.kt$AppSettings.SettingsData$fun toJSONObject(): JSONObject</ID>
-    <ID>UndocumentedPublicFunction:CoreUtils.kt$Json$fun writeValueAsString(value: Any): String</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer$fun cleanup()</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer$fun fullCleanup(frame: FrameLayout, media: PopupProps.Media?)</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer$fun onWhepError(error: String, retryCount: Int)</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer$fun onWhepReady(elapsedMs: Long)</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer$fun onWhepSourceDimensions(frame: FrameLayout?, tw: Int, srcWidth: Int, srcHeight: Int)</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer$fun setup( uiContext: Context, frame: FrameLayout, props: PopupProps, retryCount: Int = 0, targetWidth: Int = 0, targetHeight: Int = 0 )</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer$fun startMedia()</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer$fun updateWhepVideoFit(videoFit: String)</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer.Callback$fun adjustHeights()</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer.Callback$fun handleWhepRetry(error: String, retryCount: Int)</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer.Callback$fun isCleanedUp(): Boolean</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer.Callback$fun isReadyCalled(): Boolean</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer.Callback$fun notifyReady()</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer.Callback$fun onDimensionsUpdated(width: Int, height: Int)</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer.Callback$fun onFirstFrameRendered(firstFrameMs: Long)</ID>
-    <ID>UndocumentedPublicFunction:MediaRenderer.kt$MediaRenderer.Callback$fun showPlaceholder(error: String?)</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun asMap(context: Context): Map&lt;String, Any?&gt;</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun canLaunchActivity(context: Context): Boolean</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun diagnose(context: Context): Map&lt;String, Any?&gt;</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun firstMissing(context: Context): String?</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun isPlaceholder(activity: String?): Boolean</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun launchApp(context: Context): Boolean</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun onActivityPaused()</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun onActivityResumed()</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun opBlocked(context: Context, key: String): Boolean</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun opMode(context: Context, op: String): String</ID>
-    <ID>UndocumentedPublicFunction:Permissions.kt$Permissions$fun resolvedActivity(context: Context, intent: Intent): String?</ID>
-    <ID>UndocumentedPublicFunction:PiPupModule.kt$PeerDiscoveryProvider.Listener$fun onPeerFound(peer: DiscoveredPeer)</ID>
-    <ID>UndocumentedPublicFunction:PiPupModule.kt$PeerDiscoveryProvider.Listener$fun onPeerLost(peerName: String)</ID>
-    <ID>UndocumentedPublicFunction:PipUpService.kt$PipUpService$fun cancelAllPopups()</ID>
-    <ID>UndocumentedPublicFunction:PipUpService.kt$PipUpService$fun handleButtonClick(props: PopupProps, btn: PopupProps.Button, slotKey: String? = null)</ID>
-    <ID>UndocumentedPublicFunction:PipUpService.kt$PipUpService$fun notifyLocalStateChange()</ID>
-    <ID>UndocumentedPublicFunction:PipUpService.kt$PipUpService.Companion$fun getInstance(): PipUpService?</ID>
-    <ID>UndocumentedPublicFunction:PopupProps.kt$PopupProps$fun getBackgroundColorInt(): Int</ID>
-    <ID>UndocumentedPublicFunction:PopupProps.kt$PopupProps$fun getBorderColorInt(): Int</ID>
-    <ID>UndocumentedPublicFunction:PopupProps.kt$PopupProps$fun getMessageColorInt(): Int</ID>
-    <ID>UndocumentedPublicFunction:PopupProps.kt$PopupProps$fun getMessageGravity(): Int</ID>
-    <ID>UndocumentedPublicFunction:PopupProps.kt$PopupProps$fun getTitleColorInt(): Int</ID>
-    <ID>UndocumentedPublicFunction:PopupProps.kt$PopupProps$fun getTitleGravity(): Int</ID>
-    <ID>UndocumentedPublicFunction:PopupView.kt$PopupView.Companion$fun build(context: Context, props: PopupProps, listener: ReadyListener? = null): PopupView</ID>
-    <ID>UndocumentedPublicFunction:Pusher.kt$Pusher$fun push(event: String, body: String)</ID>
-    <ID>UndocumentedPublicFunction:SubmenuController.kt$SubmenuController$fun onBackPress(): Boolean</ID>
-    <ID>UndocumentedPublicFunction:SubmenuController.kt$SubmenuController$fun onBind(root: View)</ID>
-    <ID>UndocumentedPublicFunction:SubmenuController.kt$SubmenuController$fun updatePreviewPosition(v: View)</ID>
-    <ID>UndocumentedPublicFunction:UpdateManager.kt$GitHubAsset.Companion$fun fromJsonObject(j: JSONObject): GitHubAsset</ID>
-    <ID>UndocumentedPublicFunction:UpdateManager.kt$GitHubRelease.Companion$fun fromJsonObject(j: JSONObject): GitHubRelease</ID>
-    <ID>UndocumentedPublicFunction:UpdateWorker.kt$UpdateWorker.Companion$fun schedule(context: Context, intervalMode: Int)</ID>
-    <ID>UndocumentedPublicFunction:WebServer.kt$WebServer.Handler$fun handleRequest(session: IHTTPSession): Response</ID>
-    <ID>WildcardImport:AdvancedSubmenu.kt$import nl.rogro82.pipup.*</ID>
-    <ID>WildcardImport:MediaRenderer.kt$import nl.rogro82.pipup.*</ID>
-    <ID>WildcardImport:UpdatesSubmenu.kt$import nl.rogro82.pipup.*</ID>
   </CurrentIssues>
 </SmellBaseline>

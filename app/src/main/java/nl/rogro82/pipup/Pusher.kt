@@ -5,14 +5,16 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.concurrent.Executors
 
-/// Push of state changes to a controller (0.24.0).
-///
-/// A controller (the Home Assistant integration) sets a webhook URL through
-/// `POST /settings?webhook=...`; from then on every state change is POSTed there as
-/// the `/state` JSON plus `event` (and `reason` for a removal). That replaces a
-/// controller polling `/state` on a timer. One thread, in order, fire and forget:
-/// a failed POST is retried once after 2 s and then dropped. The controller reads
-/// `/state` itself when it (re)connects, so a dropped push is not lost state.
+/**
+ * Push of state changes to a controller.
+ *
+ * A controller (the Home Assistant integration) sets a webhook URL through
+ * `POST /settings?webhook=...`; from then on every state change is POSTed there as
+ * the `/state` JSON plus `event` (and `reason` for a removal). That replaces a
+ * controller polling `/state` on a timer. One thread, in order, fire and forget:
+ * a failed POST is retried once after 2 s and then dropped. The controller reads
+ * `/state` itself when it (re)connects, so a dropped push is not lost state.
+ */
 object Pusher {
     private const val LOG_TAG = "PiPupPush"
     private const val TIMEOUT_MS = 5000
@@ -38,6 +40,9 @@ object Pusher {
     @Volatile var lastError: String? = null
         private set
 
+    /**
+     * Enqueues a state-change webhook delivery for [event] with JSON [body].
+     */
     fun push(event: String, body: String) {
         val target = url?.takeIf { it.isNotBlank() } ?: return
         synchronized(pending) {
@@ -45,7 +50,10 @@ object Pusher {
                 val dropped = pending.removeFirst()
                 if (!overflowLogged) {
                     overflowLogged = true
-                    Log.w(LOG_TAG, "push queue full ($MAX_PENDING): dropping oldest (${dropped.event}) and further overflow")
+                    Log.w(
+                        LOG_TAG,
+                        "push queue full ($MAX_PENDING): dropping oldest (${dropped.event}) and further overflow",
+                    )
                 }
             }
             pending.addLast(Pending(target, event, body))

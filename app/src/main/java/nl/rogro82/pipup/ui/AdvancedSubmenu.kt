@@ -8,14 +8,22 @@ import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.view.inputmethod.InputMethodManager
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.os.LocaleListCompat
 import androidx.media3.common.util.UnstableApi
-import nl.rogro82.pipup.*
+import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.PiPupApp
+import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.DiscoveredPeer
 import nl.rogro82.pipup.core.PeerDiscoveryProvider
 import nl.rogro82.pipup.core.SettingCategory
+import nl.rogro82.pipup.getIpAddress
 import nl.rogro82.pipup.service.PipUpService
+import nl.rogro82.pipup.setupTvKeyboardAvoidance
+import nl.rogro82.pipup.showToast
 
 /**
  * Settings submenu controller for expert configuration, backup/restore, migration, and diagnostics.
@@ -89,8 +97,8 @@ class AdvancedSubmenu(
                 settings.resetToDefaults()
 
                 // 2. Reset system components immediately using default values from the recently cleared settings
-                androidx.appcompat.app.AppCompatDelegate.setApplicationLocales(androidx.core.os.LocaleListCompat.getEmptyLocaleList())
-                androidx.appcompat.app.AppCompatDelegate.setDefaultNightMode(androidx.appcompat.app.AppCompatDelegate.MODE_NIGHT_YES)
+                AppCompatDelegate.setApplicationLocales(LocaleListCompat.getEmptyLocaleList())
+                AppCompatDelegate.setDefaultNightMode(AppCompatDelegate.MODE_NIGHT_YES)
 
                 // 3. Notify all components about the global state change
                 // Use "reset" origin so MainActivity doesn't trigger a redundant recreate()
@@ -209,7 +217,7 @@ class AdvancedSubmenu(
             isSingleLine = true
             onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
                 if (hasFocus) {
-                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+                    val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
                     imm.showSoftInput(v, 0)
                 }
             }
@@ -252,12 +260,20 @@ class AdvancedSubmenu(
                     }
                 } else {
                     settingsActivity?.runOnUiThread {
-                        context.showToast(context.getString(R.string.settings_import_error, "HTTP ${connection.responseCode}"), true)
+                        val errorMsg = context.getString(
+                            R.string.settings_import_error,
+                            "HTTP ${connection.responseCode}",
+                        )
+                        context.showToast(errorMsg, true)
                     }
                 }
             } catch (e: Exception) {
                 settingsActivity?.runOnUiThread {
-                    context.showToast(context.getString(R.string.settings_import_error, e.message ?: "Unknown error"), true)
+                    val errorMsg = context.getString(
+                        R.string.settings_import_error,
+                        e.message ?: "Unknown error",
+                    )
+                    context.showToast(errorMsg, true)
                 }
             }
         }.start()

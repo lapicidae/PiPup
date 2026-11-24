@@ -17,6 +17,7 @@ import nl.rogro82.pipup.core.ModuleSettingDefinition
  */
 class VendorModule : PiPupModule {
 
+    /** Companion constants for [VendorModule]. */
     companion object {
         private const val TAG = "VendorModule"
     }

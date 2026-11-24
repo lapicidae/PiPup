@@ -22,6 +22,7 @@ import nl.rogro82.pipup.core.PiPupModule
  */
 class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
 
+    /** Logging and NSD service type constants for [DiscoveryModule]. */
     companion object {
         private const val TAG = "DiscoveryModule"
         private const val SERVICE_TYPE = "_pipup._tcp."
@@ -207,7 +208,10 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
             currentRequest = nextRequest
             isResolving = true
 
-            Log.d(TAG, "Next in queue: ${nextRequest.service.serviceName} (Try ${nextRequest.retries + 1}), waiting 300ms...")
+            Log.d(
+                TAG,
+                "Next in queue: ${nextRequest.service.serviceName} (Try ${nextRequest.retries + 1}), waiting 300ms...",
+            )
 
             queueHandler.postDelayed({
                 resolveServiceInternal(nextRequest)
@@ -264,7 +268,9 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
                     finishResolve(request)
                 }
 
-                override fun onServiceInfoCallbackUnregistered() {}
+                override fun onServiceInfoCallbackUnregistered() {
+                    // Unregistration completes asynchronously; state is already cleared in detach().
+                }
             }
             activeInfoCallback = callback
             try {
@@ -413,8 +419,10 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
 
     private fun getDeviceName(): String {
         val context = moduleContext?.androidContext ?: return Build.MODEL
-        return android.provider.Settings.Global.getString(context.contentResolver, android.provider.Settings.Global.DEVICE_NAME)
-            ?: Build.MODEL
+        return android.provider.Settings.Global.getString(
+            context.contentResolver,
+            android.provider.Settings.Global.DEVICE_NAME,
+        ) ?: Build.MODEL
     }
 
     override fun augmentState(state: MutableMap<String, Any?>) {

@@ -59,6 +59,7 @@ import nl.rogro82.pipup.showToast
 @OptIn(UnstableApi::class)
 class PipUpService : Service() {
 
+    /** Service constants and singleton accessor. */
     companion object {
         private const val TAG = "PipUpService"
         private const val CHANNEL_ID = "pipup_service"
@@ -69,6 +70,8 @@ class PipUpService : Service() {
 
         @SuppressLint("StaticFieldLeak")
         private var instance: PipUpService? = null
+
+        /** Returns the currently running [PipUpService] instance, or null if stopped. */
         fun getInstance(): PipUpService? = instance
     }
 
@@ -162,7 +165,8 @@ class PipUpService : Service() {
         override fun getPackageName(): String = this@PipUpService.packageName
         override fun showToast(message: String) = this@PipUpService.showToast(message)
         override fun getString(resId: Int): String = this@PipUpService.getString(resId)
-        override fun getString(resId: Int, vararg formatArgs: Any): String = this@PipUpService.getString(resId, *formatArgs)
+        override fun getString(resId: Int, vararg formatArgs: Any): String =
+            this@PipUpService.getString(resId, *formatArgs)
     }
 
     private val settingsReceiver = object : BroadcastReceiver() {
@@ -202,7 +206,14 @@ class PipUpService : Service() {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE,
+                )
+            )
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -273,6 +284,7 @@ class PipUpService : Service() {
 
     val isDisplaying: Boolean get() = notificationManager.isDisplaying()
 
+    /** Broadcasts a local popup state change intent to in-app listeners. */
     fun notifyLocalStateChange() {
         val intent = Intent(PiPupApp.ACTION_POPUP_STATE_CHANGED).apply {
             setPackage(PiPupApp.APP_PACKAGE)
@@ -280,6 +292,7 @@ class PipUpService : Service() {
         sendBroadcast(intent)
     }
 
+    /** Dismisses all active and queued popups. */
     fun cancelAllPopups() {
         notificationManager.cancelAll()
     }
@@ -329,7 +342,13 @@ class PipUpService : Service() {
                 "/state" -> {
                     if (method == NanoHTTPD.Method.GET || method == NanoHTTPD.Method.POST) {
                         stateResponse()
-                    } else NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
+                    } else {
+                        NanoHTTPD.newFixedLengthResponse(
+                            NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED,
+                            "text/plain",
+                            "Method Not Allowed",
+                        )
+                    }
                 }
                 "/settings" -> handleSettingsRequest(session)
                 "/favicon.svg", "/favicon.ico" -> handleFavicon()
@@ -344,7 +363,12 @@ class PipUpService : Service() {
     private fun handleFavicon(): NanoHTTPD.Response {
         return try {
             val stream = assets.open("logo.svg")
-            NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "image/svg+xml", stream, stream.available().toLong())
+            NanoHTTPD.newFixedLengthResponse(
+                NanoHTTPD.Response.Status.OK,
+                "image/svg+xml",
+                stream,
+                stream.available().toLong(),
+            )
         } catch (_: Exception) {
             NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, "text/plain", "")
         }
@@ -591,7 +615,11 @@ class PipUpService : Service() {
         return when (session.method) {
             NanoHTTPD.Method.GET -> {
                 val json = settings.getAll().toJSONObject().toString()
-                NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "application/json", json).apply { setGzipEncoding(false) }
+                NanoHTTPD.newFixedLengthResponse(
+                    NanoHTTPD.Response.Status.OK,
+                    "application/json",
+                    json,
+                ).apply { setGzipEncoding(false) }
             }
             NanoHTTPD.Method.POST -> {
                 var webhookUpdated = false
@@ -670,7 +698,11 @@ class PipUpService : Service() {
                     invalidRequest("Empty")
                 }
             }
-            else -> NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED, "text/plain", "Method Not Allowed")
+            else -> NanoHTTPD.newFixedLengthResponse(
+                NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED,
+                "text/plain",
+                "Method Not Allowed",
+            )
         }
     }
 
@@ -722,7 +754,14 @@ class PipUpService : Service() {
             .setSmallIcon(R.mipmap.ic_launcher)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
-            .setContentIntent(PendingIntent.getActivity(this, 0, Intent(this, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE))
+            .setContentIntent(
+                PendingIntent.getActivity(
+                    this,
+                    0,
+                    Intent(this, MainActivity::class.java),
+                    PendingIntent.FLAG_IMMUTABLE,
+                )
+            )
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
@@ -743,6 +782,7 @@ class PipUpService : Service() {
         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "OK")
     }
 
+    /** Handles an interactive popup action button click, firing webhook and optional callback. */
     fun handleButtonClick(props: PopupProps, btn: PopupProps.Button, slotKey: String? = null) {
         val targetId = props.id ?: slotKey
         Log.i(TAG, "Popup button pressed: ${btn.id} (${btn.label}) for popup $targetId")
@@ -801,6 +841,10 @@ class PipUpService : Service() {
     }
 
     private fun invalidRequest(message: String?): NanoHTTPD.Response {
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.BAD_REQUEST, "text/plain", "invalid request: ${message ?: "unknown error"}")
+        return NanoHTTPD.newFixedLengthResponse(
+            NanoHTTPD.Response.Status.BAD_REQUEST,
+            "text/plain",
+            "invalid request: ${message ?: "unknown error"}",
+        )
     }
 }

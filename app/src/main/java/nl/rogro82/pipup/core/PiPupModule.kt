@@ -121,7 +121,9 @@ interface PeerDiscoveryProvider {
      * Listener callback for discovered peers.
      */
     interface Listener {
+        /** Invoked when a PiPup peer is discovered or updated on the network. */
         fun onPeerFound(peer: DiscoveredPeer)
+        /** Invoked when a previously discovered peer is no longer reachable. */
         fun onPeerLost(peerName: String)
     }
 
