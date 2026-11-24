@@ -15,6 +15,7 @@ This file serves as the central "Source of Truth" for all AI agents (Gemini, Cur
 - **Style:** Use idiomatic Kotlin. Follow Android Studio's default formatting and import layouts.
 - **Package Name:** Never hardcode the package name `nl.rogro82.pipup`. Always use `PiPupApp.APP_PACKAGE` (which refers to `BuildConfig.APPLICATION_ID`) for dynamic resolution in code, and relative class names (e.g., `.service.PipUpService`) in the `AndroidManifest.xml`.
 - **Settings:** When adding or modifying app settings, follow the pattern established in `AppSettings.kt` using the custom property delegates (e.g., `IntPref`, `ColorPref`).
+- **Single Source of Truth (Limits & Defaults):** Define shared API/UI bounds and defaults as named constants in `PopupProps.Companion` (or `AppSettings.Companion`) and reuse them across parsers, settings, views, and programmatic `SeekBar.max` binding instead of duplicating numeric literals in Kotlin or layout XML.
 - **UI/UX:** Ensure all UI changes are optimized for Android TV (high contrast, readable font sizes, D-pad navigation support). Use the project's preset color resources.
 - **Documentation:** Use KDoc for all public-facing methods and classes.
 
@@ -35,11 +36,18 @@ Before proposing architectural changes, adding new features, or implementing mod
 - **[Module Development Guide](docs/module-development.md)**: Blueprint and recipe for adding new modular features.
 - **[HTTP API Reference](docs/api.md)**: Precision specification for remote requests.
 
+## Testing & Verification
+
+- **Preserve Emulator/Device State:** Do NOT run `:app:connectedDebugAndroidTest` on a local emulator/device unless explicitly requested — AGP's teardown uninstalls both the app and test APKs, wiping all `SharedPreferences` (settings) and granted permissions. Instead, install with `:app:installDebug :app:installDebugAndroidTest` and run tests via `adb shell am instrument -w -e class <TestClass[#method]> nl.rogro82.pipup.test/nl.rogro82.pipup.PiPupTestRunner`.
+- **Restore Mutated Settings:** Any instrumented test that modifies `AppSettings` (directly, via `/settings`, or through UI controls) MUST capture the previous state and restore it in a `finally` block.
+- **Detekt Baseline & Enforcement:** `:app:detekt` enforces all rules strictly (`ignoreFailures = false`) against the project-wide baseline in `config/detekt/baseline.xml`. Fix any reported violation in new or modified code — do NOT regenerate `config/detekt/baseline.xml` to silence new findings.
+
 ## Interaction Guidelines
 
 - **Language:** All instructions, code comments, and technical documentation within the codebase MUST be in English.
 - **Efficiency:** Be concise and succinct in all interactions and code to minimize token usage.
 - **Git Workflow:** When generating commit messages, analyze actual Git changes (e.g., `git diff`, `git status`) and ignore conversation history. Strictly follow the format and requirements in [.gitmessage](.gitmessage).
+- **GitHub & External Communication:** NEVER post, edit, or close public GitHub content (issue comments, PR comments, reviews, issues, PRs, releases) without first presenting the exact draft to the user for review and receiving explicit approval.
 - **Scope & Scope Creep:** Strictly restrict code modifications to what was explicitly requested. Do NOT refactor, reformat, clean up, or modify unrelated files or lines of code unless explicitly instructed or approved.
 - **Decision Making:** Always prioritize consistency with the existing architecture. If a proposed change deviates significantly or requires adjustments beyond the original scope, ask for clarification and approval first.
 - **Workflow:** For all tasks, present a plan for review before implementation. Wait for explicit approval before modifying any files.

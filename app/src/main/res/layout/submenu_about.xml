@@ -22,7 +22,7 @@
         android:textColor="@color/colorOnSurface"
         android:textSize="20sp"
         android:textStyle="bold"
-        tools:text="PiPup v0.14.2"/>
+        tools:text="PiPup v0.12.3" />
 
     <TextView
         android:layout_width="match_parent"

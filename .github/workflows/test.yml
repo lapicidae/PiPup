@@ -69,7 +69,26 @@ jobs:
             --warning-mode all \
             -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
 
-      # Step 7: Persist the generated APK as a workflow artifact
+      # Step 7: Run Detekt static analysis against the project baseline (warn-only in CI)
+      - name: Run Detekt
+        id: detekt
+        continue-on-error: true
+        run: |
+          if ! ./gradlew :app:detekt --no-daemon; then
+            echo "::warning::Detekt reported new findings outside config/detekt/baseline.xml — inspect the detekt-report artifact."
+            exit 1
+          fi
+
+      # Step 8: Upload Detekt report when new findings are detected
+      - name: Upload Detekt Report
+        if: steps.detekt.outcome == 'failure'
+        uses: actions/upload-artifact@v7
+        with:
+          name: detekt-report
+          path: app/build/reports/detekt/
+          retention-days: 7
+
+      # Step 9: Persist the generated APK as a workflow artifact
       # Artifacts are stored for 7 days to conserve storage while allowing review.
       - name: Upload APK artifact
         uses: actions/upload-artifact@v7
@@ -78,7 +97,7 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           retention-days: 7
 
-      # Step 8: Export Gradle Problem Reports
+      # Step 10: Export Gradle Problem Reports
       # This step runs even if the build fails ('always()') to aid in debugging.
       - name: Upload Problems Report
         if: always()
