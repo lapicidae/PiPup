@@ -37,20 +37,17 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.json.JSONException
-import org.json.JSONObject
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.URISyntaxException
 import java.util.Locale
 import nl.rogro82.pipup.applyAppLocaleAndTheme
-import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.NotificationManager
 import nl.rogro82.pipup.core.PowerController
 import nl.rogro82.pipup.core.WebServer
 import nl.rogro82.pipup.getLocalizedContext
-import nl.rogro82.pipup.readExactBytes
 import nl.rogro82.pipup.registerProtectedReceiver
 import nl.rogro82.pipup.showToast
 
@@ -161,7 +158,20 @@ class PipUpService : Service() {
         }
     }
 
-    private var cachedLandingPage: String? = null
+    private val landingPageRenderer by lazy { LandingPageRenderer(this, settings) }
+
+    private val settingsApiHandler by lazy {
+        SettingsApiHandler(
+            context = this,
+            settings = settings,
+            mainHandler = handler,
+            onSettingsApplied = { data ->
+                if (data != null) applyGlobalSettings(data)
+                rescheduleWebhookHeartbeat()
+            },
+            onEmitSettings = { emit("settings") },
+        )
+    }
 
     /** Concrete implementation of [ModuleContext] for the background service. */
     private val moduleContextImpl = object : ModuleContext {
@@ -180,7 +190,7 @@ class PipUpService : Service() {
         override fun onReceive(context: Context, intent: Intent) {
             if (intent.action == PiPupApp.ACTION_SETTINGS_CHANGED) {
                 Log.d(TAG, "Settings change detected, applying global states")
-                cachedLandingPage = null
+                landingPageRenderer.invalidateCache()
 
                 // 1. Re-apply Locale & Theme
                 applyAppLocaleAndTheme(settings.language, settings.appTheme)
@@ -341,10 +351,8 @@ class PipUpService : Service() {
             when (uri) {
                 "/" -> {
                     if (method == NanoHTTPD.Method.GET) {
-                        handleLandingPage()
+                        landingPageRenderer.renderResponse()
                     } else {
-                        // Forward to /notify logic via ModuleManager if possible,
-                        // but root is a special case.
                         NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, "text/plain", "Not Found")
                     }
                 }
@@ -359,8 +367,8 @@ class PipUpService : Service() {
                         )
                     }
                 }
-                "/settings" -> handleSettingsRequest(session)
-                "/favicon.svg", "/favicon.ico" -> handleFavicon()
+                "/settings" -> settingsApiHandler.handleRequest(session)
+                "/favicon.svg", "/favicon.ico" -> landingPageRenderer.renderFaviconResponse()
                 else -> NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, "text/plain", "Not Found")
             }
         } catch (e: IOException) {
@@ -372,20 +380,6 @@ class PipUpService : Service() {
         } catch (e: IllegalArgumentException) {
             Log.e(TAG, "Request error", e)
             invalidRequest(e.message)
-        }
-    }
-
-    private fun handleFavicon(): NanoHTTPD.Response {
-        return try {
-            val stream = assets.open("logo.svg")
-            NanoHTTPD.newFixedLengthResponse(
-                NanoHTTPD.Response.Status.OK,
-                "image/svg+xml",
-                stream,
-                stream.available().toLong(),
-            )
-        } catch (_: Exception) {
-            NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.NOT_FOUND, "text/plain", "")
         }
     }
 
@@ -539,249 +533,9 @@ class PipUpService : Service() {
             ?: Build.MODEL
     }
 
-    private data class LandingPalette(
-        val bg: String,
-        val cardBg: String,
-        val primary: String,
-        val text: String,
-        val textSecondary: String,
-        val accent: String,
-        val outline: String,
-        val statusGreen: String,
-    )
-
-    private fun handleLandingPage(): NanoHTTPD.Response {
-        val html = cachedLandingPage ?: buildLandingHtml().also { cachedLandingPage = it }
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/html", html).apply {
-            setGzipEncoding(false)
-            addHeader("Cache-Control", "no-cache, no-store, must-revalidate")
-            addHeader("Pragma", "no-cache")
-            addHeader("Expires", "0")
-        }
-    }
-
-    private fun loadLandingLogoSvg(): String = try {
-        assets.open("logo.svg").bufferedReader().use { it.readText() }
-            .replace(Regex("<\\?xml.*?\\?>"), "") // Remove XML header
-            .replace(Regex("<!DOCTYPE.*?>", RegexOption.DOT_MATCHES_ALL), "") // Remove Doctype
-    } catch (_: Exception) {
-        ""
-    }
-
-    private fun resolveLandingPalette(): LandingPalette {
-        val themedContext = getLocalizedContext(settings.language, settings.appTheme)
-        return LandingPalette(
-            bg = themedContext.colorToHex(R.color.colorSurface),
-            cardBg = themedContext.colorToHex(R.color.colorSurfaceVariant),
-            primary = themedContext.colorToHex(R.color.colorPrimary),
-            text = themedContext.colorToHex(R.color.colorOnSurface),
-            textSecondary = themedContext.colorToHex(R.color.colorOnSurfaceVariant),
-            accent = themedContext.colorToHex(R.color.colorOnPrimaryContainer),
-            outline = themedContext.colorToHex(R.color.colorOutline),
-            statusGreen = themedContext.colorToHex(R.color.status_green),
-        )
-    }
-
-    private fun buildLandingHtml(): String {
-        val appName = getString(R.string.app_name)
-        val versionName = try {
-            packageManager.getPackageInfo(packageName, 0).versionName
-        } catch (_: Exception) {
-            "Unknown"
-        }
-        val logoSvg = loadLandingLogoSvg()
-        val p = resolveLandingPalette()
-        Log.d(TAG, "Generating landing page. Theme: ${settings.appTheme}, Resolved BG: ${p.bg}")
-        val headingHtml = if (logoSvg.isNotEmpty()) {
-            "<div class=\"logo-container\">$logoSvg</div>"
-        } else {
-            "<h1>$appName</h1>"
-        }
-
-        return """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-                <title>${getString(R.string.server_landing_title, appName)}</title>
-                <style>
-                    body { font-family: sans-serif; background-color: ${p.bg}; color: ${p.text}; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-                    .card { background-color: ${p.cardBg}; padding: 2.5rem; border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.4); text-align: center; max-width: 450px; border: 1px solid ${p.outline}; }
-                    .logo-container { width: 120px; height: auto; margin: 0 auto 1.5rem; }
-                    .logo-container svg { width: 100%; height: auto; display: block; }
-                    .logo-container .currentColor { color: ${p.primary} !important; }
-                    h1 { color: ${p.primary}; margin: 0.5rem 0; font-size: 2.5rem; letter-spacing: -1px; }
-                    p { color: ${p.textSecondary}; line-height: 1.6; font-size: 1.1rem; }
-                    code { background-color: ${p.bg}; padding: 2px 6px; border-radius: 4px; color: ${p.accent}; font-family: monospace; border: 1px solid ${p.outline}; }
-                    .status { display: inline-flex; align-items: center; padding: 6px 14px; background-color: ${p.bg}; color: ${p.statusGreen}; border-radius: 20px; font-size: 0.85rem; font-weight: bold; margin-bottom: 1rem; border: 1px solid ${p.statusGreen}; }
-                    .status::before { content: ""; width: 8px; height: 8px; background-color: ${p.statusGreen}; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 8px ${p.statusGreen}; }
-                    .version { font-size: 0.8rem; color: ${p.textSecondary}; margin-top: 2.5rem; border-top: 1px solid ${p.outline}; paddingTop: 1.5rem; }
-                    a { color: ${p.accent}; text-decoration: none; font-weight: 500; }
-                    a:hover { text-decoration: underline; color: ${p.primary}; }
-                </style>
-            </head>
-            <body>
-                <div class="card">
-                    <div class="status">${getString(R.string.server_landing_status)}</div>
-                    $headingHtml
-                    <p>${getString(R.string.server_landing_description)}</p>
-                    <p><a href="https://github.com/lapicidae/PiPup" target="_blank">${getString(R.string.server_landing_docs)}</a></p>
-                    <div class="version">
-                        $appName v$versionName<br>
-                        ${getString(R.string.server_landing_running_on, Build.MODEL, Build.VERSION.RELEASE)}
-                    </div>
-                </div>
-            </body>
-            </html>
-        """.trimIndent()
-    }
-
-    private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response = when (session.method) {
-        NanoHTTPD.Method.GET -> {
-            val json = settings.getAll().toJSONObject().toString()
-            NanoHTTPD.newFixedLengthResponse(
-                NanoHTTPD.Response.Status.OK,
-                "application/json",
-                json,
-            ).apply { setGzipEncoding(false) }
-        }
-        NanoHTTPD.Method.POST -> handleSettingsPost(session)
-        else -> NanoHTTPD.newFixedLengthResponse(
-            NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED,
-            "text/plain",
-            "Method Not Allowed",
-        )
-    }
-
-    private fun handleSettingsPost(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        val (webhookUpdated, queryError) = applyWebhookQueryParams(session)
-        if (queryError != null) return invalidRequest(queryError)
-
-        val length = session.headers["content-length"]?.toIntOrNull() ?: 0
-        return when {
-            length > 0 -> applySettingsJsonBody(String(session.inputStream.readExactBytes(length), Charsets.UTF_8))
-            webhookUpdated -> {
-                rescheduleWebhookHeartbeat()
-                emit("settings")
-                ok()
-            }
-            else -> invalidRequest("Empty")
-        }
-    }
-
-    private fun applyWebhookQueryParams(session: NanoHTTPD.IHTTPSession): Pair<Boolean, String?> {
-        var updated = false
-        var error: String? = null
-        session.parameters["webhook"]?.firstOrNull()?.let { raw ->
-            error = applyWebhookUrl(raw)
-            updated = true
-        }
-        if (error == null) {
-            session.parameters["webhookHeartbeat"]?.firstOrNull()?.let { raw ->
-                error = applyWebhookHeartbeat(raw)
-                updated = true
-            }
-        }
-        return updated to error
-    }
-
-    private fun applySettingsJsonBody(bodyText: String): NanoHTTPD.Response {
-        val json = try {
-            JSONObject(bodyText)
-        } catch (e: JSONException) {
-            return invalidRequest(e.message)
-        }
-
-        val (parsedHeartbeat, webhookError) = validateJsonWebhookFields(json)
-        val keys = buildSet { json.keys().forEach { add(it) } }
-        val isWebhookOnlyJson = keys.isNotEmpty() && keys.all { it == "webhook" || it == "webhookHeartbeat" }
-        return when {
-            webhookError != null -> invalidRequest(webhookError)
-            isWebhookOnlyJson -> {
-                if (parsedHeartbeat != null) settings.webhookHeartbeat = parsedHeartbeat
-                rescheduleWebhookHeartbeat()
-                emit("settings")
-                ok()
-            }
-            else -> applyFullSettingsJson(bodyText, parsedHeartbeat)
-        }
-    }
-
-    private fun validateJsonWebhookFields(json: JSONObject): Pair<Int?, String?> {
-        var parsedHeartbeat: Int? = null
-        var error: String? = null
-        if (json.has("webhookHeartbeat")) {
-            val rawHb = if (json.isNull("webhookHeartbeat")) "0" else json.get("webhookHeartbeat").toString()
-            parsedHeartbeat = parseWebhookHeartbeat(rawHb)
-            if (parsedHeartbeat == null) error = "webhookHeartbeat must be a non-negative integer"
-        }
-        if (error == null && json.has("webhook")) {
-            val rawUrl = if (json.isNull("webhook")) "" else json.optString("webhook", "")
-            error = applyWebhookUrl(rawUrl)
-        }
-        return parsedHeartbeat to error
-    }
-
-    private fun applyFullSettingsJson(bodyText: String, parsedHeartbeat: Int?): NanoHTTPD.Response = try {
-        val parsed = AppSettings.SettingsData.fromJson(bodyText, defaults = settings.getAll())
-        val data = if (parsedHeartbeat != null) parsed.copy(webhookHeartbeat = parsedHeartbeat) else parsed
-        handler.post {
-            settings.apply(data)
-            applyGlobalSettings(data)
-            rescheduleWebhookHeartbeat()
-
-            // Notify UI about settings change
-            val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
-                setPackage(PiPupApp.APP_PACKAGE)
-                putExtra("origin", "remote")
-            }
-            sendBroadcast(intent)
-        }
-        emit("settings")
-        ok()
-    } catch (e: JSONException) {
-        invalidRequest(e.message)
-    } catch (e: IllegalArgumentException) {
-        invalidRequest(e.message)
-    }
-
-    private fun applyWebhookUrl(raw: String): String? {
-        val v = raw.trim()
-        if (v.isEmpty()) {
-            settings.webhook = null
-            Pusher.url = null
-            return null
-        }
-        val valid = try {
-            val uri = URI(v)
-            uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank()
-        } catch (_: URISyntaxException) {
-            false
-        }
-        if (valid) {
-            settings.webhook = v
-            Pusher.url = v
-        }
-        return if (valid) null else "webhook must be a valid http(s) URL"
-    }
-
-    private fun parseWebhookHeartbeat(raw: String): Int? {
-        val parsed = raw.trim().toIntOrNull() ?: return null
-        return AppSettings.normalizeWebhookHeartbeat(parsed)
-    }
-
-    private fun applyWebhookHeartbeat(raw: String): String? {
-        val normalized = parseWebhookHeartbeat(raw)
-            ?: return "webhookHeartbeat must be a non-negative integer"
-        settings.webhookHeartbeat = normalized
-        return null
-    }
-
     private fun applyGlobalSettings(data: AppSettings.SettingsData) {
         // Invalidate cache to ensure the latest theme/language is used for landing page
-        cachedLandingPage = null
+        landingPageRenderer.invalidateCache()
 
         // Update Foreground Notification (respects current language settings)
         updateForegroundNotification(data.language)
@@ -816,11 +570,6 @@ class PipUpService : Service() {
         val channel = NotificationChannel(CHANNEL_ID, "PiPup Service", AndroidNotificationManager.IMPORTANCE_LOW)
         val manager = getSystemService(NOTIFICATION_SERVICE) as AndroidNotificationManager
         manager.createNotificationChannel(channel)
-    }
-
-    private fun ok(): NanoHTTPD.Response {
-        Log.d(TAG, "Response OK")
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "OK")
     }
 
     /** Handles an interactive popup action button click, firing webhook and optional callback. */

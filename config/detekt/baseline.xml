@@ -4,7 +4,6 @@
   <CurrentIssues>
     <ID>LargeClass:MediaRenderer.kt$MediaRenderer</ID>
     <ID>LargeClass:NotificationManager.kt$NotificationManager</ID>
-    <ID>LargeClass:PipUpService.kt$PipUpService : Service</ID>
     <ID>LargeClass:PopupView.kt$PopupView : FrameLayout</ID>
     <ID>TooManyFunctions:Permissions.kt$Permissions</ID>
   </CurrentIssues>
