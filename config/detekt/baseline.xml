@@ -2,7 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>LargeClass:NotificationManager.kt$NotificationManager</ID>
     <ID>TooManyFunctions:Permissions.kt$Permissions</ID>
   </CurrentIssues>
 </SmellBaseline>
