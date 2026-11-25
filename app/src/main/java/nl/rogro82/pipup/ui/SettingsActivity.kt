@@ -75,6 +75,25 @@ class SettingsActivity : AppCompatActivity() {
     private val moduleControllers = mutableMapOf<String, SubmenuController>()
     private val inflatedSubmenus = mutableMapOf<Int, View>()
 
+    private val coreSubmenuFactories = mapOf<
+        Int,
+        (SettingsActivity, AppSettings, (Boolean) -> Unit, FrameLayout) -> SubmenuController,
+        >(
+        R.layout.submenu_general to ::GeneralSubmenu,
+        R.layout.submenu_background to ::BackgroundSubmenu,
+        R.layout.submenu_text to ::TextSubmenu,
+        R.layout.submenu_border to ::BorderSubmenu,
+        R.layout.submenu_button to ::ButtonSubmenu,
+        R.layout.submenu_media to ::MediaSubmenu,
+        R.layout.submenu_animation to ::AnimationSubmenu,
+        R.layout.submenu_advanced to ::AdvancedSubmenu,
+        R.layout.submenu_about to ::AboutSubmenu,
+        R.layout.submenu_performance to ::PerformanceSubmenu,
+        R.layout.submenu_updates to ::UpdatesSubmenu,
+        R.layout.submenu_permissions to ::PermissionsSubmenu,
+        R.layout.submenu_modules to ::ModulesSubmenu,
+    )
+
     /**
      * Registry for module-specific submenu controllers.
      * New modules can "dock" by providing their layoutRes in ModuleMenuDefinition.
@@ -494,26 +513,8 @@ class SettingsActivity : AppCompatActivity() {
         updatePreview(animate = false)
     }
 
-    private fun getStubIdForNavItem(item: NavItem): Int {
-        return if (item.moduleId != null) {
-            R.id.stub_module_dynamic
-        } else when (item.id) {
-            R.id.nav_item_general -> R.id.stub_general
-            R.id.nav_item_background -> R.id.stub_background
-            R.id.nav_item_text_style -> R.id.stub_text
-            R.id.nav_item_border -> R.id.stub_border
-            R.id.nav_item_button -> R.id.stub_button
-            R.id.nav_item_media -> R.id.stub_media
-            R.id.nav_item_animation -> R.id.stub_animation
-            R.id.nav_item_updates -> R.id.stub_updates
-            R.id.nav_item_modules -> R.id.stub_modules
-            R.id.nav_item_permissions -> R.id.stub_permissions
-            R.id.nav_item_advanced -> R.id.stub_advanced
-            R.id.nav_item_about -> R.id.stub_about
-            R.id.nav_item_performance -> R.id.stub_performance
-            else -> R.id.stub_module_dynamic
-        }
-    }
+    private fun getStubIdForNavItem(item: NavItem): Int =
+        if (item.moduleId != null) R.id.stub_module_dynamic else NAV_STUB_IDS[item.id] ?: R.id.stub_module_dynamic
 
     /**
      * Resets the UI state of the settings activity by restarting the application task.
@@ -552,50 +553,8 @@ class SettingsActivity : AppCompatActivity() {
      */
     fun getController(layoutRes: Int): SubmenuController {
         return submenuControllers.getOrPut(layoutRes) {
-            when (layoutRes) {
-                R.layout.submenu_general -> GeneralSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_background -> BackgroundSubmenu(
-                    this,
-                    settings,
-                    { updatePreview(it) },
-                    binding.previewArea,
-                )
-                R.layout.submenu_text -> TextSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_border -> BorderSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_button -> ButtonSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_media -> MediaSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_animation -> AnimationSubmenu(
-                    this,
-                    settings,
-                    { updatePreview(it) },
-                    binding.previewArea,
-                )
-                R.layout.submenu_advanced -> AdvancedSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_about -> AboutSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_performance -> PerformanceSubmenu(
-                    this,
-                    settings,
-                    { updatePreview(it) },
-                    binding.previewArea,
-                )
-                R.layout.submenu_updates -> UpdatesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                R.layout.submenu_permissions -> PermissionsSubmenu(
-                    this,
-                    settings,
-                    { updatePreview(it) },
-                    binding.previewArea,
-                )
-                R.layout.submenu_modules -> ModulesSubmenu(this, settings, { updatePreview(it) }, binding.previewArea)
-                else -> object : SubmenuController {
-                    override fun onBind(root: View) {
-                        // No-op fallback controller for unknown submenu layouts.
-                    }
-                    override fun onBackPress(): Boolean = false
-                    override fun updatePreviewPosition(v: View) {
-                        // No-op fallback controller for unknown submenu layouts.
-                    }
-                }
-            }
+            coreSubmenuFactories[layoutRes]?.invoke(this, settings, { updatePreview(it) }, binding.previewArea)
+                ?: NoOpSubmenuController
         }
     }
 
@@ -619,18 +578,18 @@ class SettingsActivity : AppCompatActivity() {
         return result
     }
 
+    private fun resolveSubmenuContainer(navId: Int): ViewGroup? {
+        val item = if (navId != -1) (coreRailItems + dynamicRailItems).find { it.id == navId } else null
+        return item?.let { inflatedSubmenus[getStubIdForNavItem(it)] as? ViewGroup }
+    }
+
     /**
      * Configures the focus navigation between the navigation rail and the submenu content.
      * @param targetNavId The ID of the currently active navigation rail item. Defaults to current if -1.
      */
     fun setupSubmenuFocus(targetNavId: Int = -1) {
         val navId = if (targetNavId == -1) currentNavId else targetNavId
-        if (navId == -1) return
-
-        val item = (coreRailItems + dynamicRailItems).find { it.id == navId } ?: return
-        val stubId = getStubIdForNavItem(item)
-        val container = inflatedSubmenus[stubId] as? ViewGroup ?: return
-
+        val container = resolveSubmenuContainer(navId) ?: return
         val focusableChildren = findFocusableChildrenRecursive(container)
 
         if (focusableChildren.isNotEmpty()) {
@@ -638,48 +597,48 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         focusableChildren.forEachIndexed { i, child ->
-            // Ensure child has a valid ID for focus mapping
             if (child.id == View.NO_ID) child.id = View.generateViewId()
+            val prevId = if (i > 0) focusableChildren[i - 1].id else child.id
+            val nextId = if (i < focusableChildren.size - 1) focusableChildren[i + 1].id else child.id
+            configureSubmenuChildFocus(child, navId, prevId, nextId)
+        }
+    }
 
-            child.nextFocusLeftId = navId
-            child.nextFocusRightId = child.id
-            child.nextFocusUpId = if (i > 0) focusableChildren[i - 1].id else child.id
-            child.nextFocusDownId = if (i < focusableChildren.size - 1) focusableChildren[i + 1].id else child.id
+    private fun configureSubmenuChildFocus(child: View, navId: Int, prevId: Int, nextId: Int) {
+        child.nextFocusLeftId = navId
+        child.nextFocusRightId = child.id
+        child.nextFocusUpId = prevId
+        child.nextFocusDownId = nextId
 
-            // Trap focus on the right side to prevent it from disappearing.
-            if (child !is SeekBar) {
-                child.setOnKeyListener { _, keyCode, event ->
-                    if (event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) {
-                        return@setOnKeyListener true
-                    }
-                    false
-                }
-            }
-
-            val old = child.onFocusChangeListener
-            child.setOnFocusChangeListener { v, f ->
-                if (f) {
-                    // Gold Standard: Smooth Focus Centering (Pivot Scrolling)
-                    val scroll = binding.settingsScroll
-                    val c = binding.submenuContainer
-
-                    val rect = Rect()
-                    v.getDrawingRect(rect)
-                    scroll.offsetDescendantRectToMyCoords(v, rect)
-
-                    val viewportHeight = scroll.height
-                    if (viewportHeight > 0) {
-                        // Pivot at 30% from the top
-                        val pivotY = viewportHeight * 0.3f
-                        val targetScrollY = (rect.top - pivotY).toInt()
-                        val maxScroll = (c.height - viewportHeight).coerceAtLeast(0)
-                        scroll.smoothScrollTo(0, targetScrollY.coerceIn(0, maxScroll))
-                    }
-                }
-                old?.onFocusChange(v, f)
-                if (f) getControllerForNav(currentNavId).updatePreviewPosition(v)
+        // Trap focus on the right side to prevent it from disappearing.
+        if (child !is SeekBar) {
+            child.setOnKeyListener { _, keyCode, event ->
+                event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
             }
         }
+
+        val old = child.onFocusChangeListener
+        child.setOnFocusChangeListener { v, hasFocus ->
+            if (hasFocus) scrollSubmenuToPivot(v)
+            old?.onFocusChange(v, hasFocus)
+            if (hasFocus) getControllerForNav(currentNavId).updatePreviewPosition(v)
+        }
+    }
+
+    private fun scrollSubmenuToPivot(v: View) {
+        // Gold Standard: Smooth Focus Centering (Pivot Scrolling)
+        val scroll = binding.settingsScroll
+        val viewportHeight = scroll.height
+        if (viewportHeight <= 0) return
+
+        val rect = Rect()
+        v.getDrawingRect(rect)
+        scroll.offsetDescendantRectToMyCoords(v, rect)
+
+        val pivotY = viewportHeight * PIVOT_SCROLL_RATIO
+        val targetScrollY = (rect.top - pivotY).toInt()
+        val maxScroll = (binding.submenuContainer.height - viewportHeight).coerceAtLeast(0)
+        scroll.smoothScrollTo(0, targetScrollY.coerceIn(0, maxScroll))
     }
 
     /**
@@ -693,123 +652,140 @@ class SettingsActivity : AppCompatActivity() {
      * Focuses the first focusable child in the currently active submenu.
      */
     fun focusFirstInSubmenu() {
-        val item = (coreRailItems + dynamicRailItems).find { it.id == currentNavId } ?: return
-        val stubId = getStubIdForNavItem(item)
-        val container = inflatedSubmenus[stubId] as? ViewGroup ?: return
-
+        val container = resolveSubmenuContainer(currentNavId) ?: return
         findFocusableChildrenRecursive(container).firstOrNull()?.requestFocus()
     }
 
     private fun updatePreview(animate: Boolean = false) {
         handler.removeCallbacksAndMessages(null)
         handler.postDelayed({
-            val placeholder = cachedPlaceholder ?: createBitmap(320, 180).applyCanvas {
-                drawColor(ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_bg))
-                val paint = Paint().apply {
-                    color = ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_text)
-                    textSize = 40f
-                    textAlign = Paint.Align.CENTER
-                }
-                drawText(getString(R.string.settings_preview_media), 160f, 100f, paint)
-            }.also { cachedPlaceholder = it }
-
-            val sampleButtons = if (currentNavId == R.id.nav_item_button) {
-                listOf(
-                    PopupProps.Button("preview_1", getString(android.R.string.ok)),
-                    PopupProps.Button("preview_2", getString(android.R.string.cancel))
-                )
-            } else emptyList()
-
-            val props = PopupProps(
-                title = getString(R.string.settings_preview_title),
-                message = getString(R.string.settings_preview_message),
-                backgroundColor = settings.getFullBackgroundColor(),
-                borderRadius = settings.borderRadius,
-                borderWidth = settings.borderWidth,
-                borderColor = settings.borderColor,
-                contentPadding = settings.contentPadding,
-                titleColor = settings.titleColor,
-                titleSize = settings.titleSize,
-                messageColor = settings.messageColor,
-                messageSize = settings.messageSize,
-                titleAlignment = settings.titleAlignment,
-                messageAlignment = settings.messageAlignment,
-                mediaPosition = settings.mediaPosition,
-                mediaFullBleed = settings.mediaFullBleed,
-                liveBadge = settings.liveBadge,
-                liveBadgePosition = settings.liveBadgePosition,
-                animationType = settings.animationType,
-                animationDuration = settings.animationDuration,
-                animationExit = settings.animationExit,
-                media = PopupProps.Media.Bitmap(placeholder, 180),
-                buttons = sampleButtons,
-                buttonSize = settings.defaultButtonSize,
-                buttonColor = settings.defaultButtonColor,
-                buttonFocusColor = settings.defaultButtonFocusColor,
-                buttonTextColor = settings.defaultButtonTextColor,
-                buttonFocusTextColor = settings.defaultButtonFocusTextColor,
-                buttonBorderColor = settings.defaultButtonBorderColor,
-                buttonCornerRadius = settings.defaultButtonCornerRadius,
-                closeButton = settings.closeButton,
-                closeButtonSize = settings.closeButtonSize,
-                isPreview = true
-            )
-
-            // Optimized update: Check if preview already exists and update it instead of re-creation
+            val props = buildPreviewProps()
             val existingPreview = binding.previewArea.getChildAt(0) as? PopupView
-
             if (existingPreview != null && !animate) {
-                existingPreview.updateFromProps(props)
-                val focus = currentFocus
-                if (focus != null && focus.id != View.NO_ID && focus.id !in allRailIds) {
-                    getControllerForNav(currentNavId).updatePreviewPosition(focus)
-                } else {
-                    // Ensure default position when focused on the navigation rail
-                    (existingPreview.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
-                        val defaultGravity = Gravity.BOTTOM or Gravity.END
-                        if (params.gravity != defaultGravity) {
-                            params.gravity = defaultGravity
-                            val m = (resources.displayMetrics.density * PREVIEW_MARGIN_DP).toInt()
-                            params.setMargins(0, m, m, m)
-                            existingPreview.layoutParams = params
-                        }
-                    }
-                }
+                updateExistingPreview(existingPreview, props)
             } else {
-                binding.previewArea.removeAllViews()
-                val preview = PopupView.build(this, props)
-
-                var initialGravity = Gravity.BOTTOM or Gravity.END
-                currentFocus?.let { v ->
-                    if (v.id !in allRailIds) {
-                        val location = IntArray(SCREEN_LOCATION_COORDS)
-                        v.getLocationOnScreen(location)
-                        if (location[1] > resources.displayMetrics.heightPixels * PREVIEW_FLIP_THRESHOLD) {
-                            initialGravity = Gravity.TOP or Gravity.END
-                        }
-                    }
-                }
-
-                binding.previewArea.addView(
-                    preview,
-                    FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.WRAP_CONTENT,
-                        FrameLayout.LayoutParams.WRAP_CONTENT
-                    ).apply {
-                        gravity = initialGravity
-                        val m = (resources.displayMetrics.density * PREVIEW_MARGIN_DP).toInt()
-                        setMargins(0, m, m, m)
-                    }
-                )
-
-                if (animate && props.animationType != 0) {
-                    preview.postDelayed(
-                        { if (preview.parent != null) preview.animateIn() },
-                        PREVIEW_ANIMATE_DELAY_MS
-                    )
-                }
+                recreatePreview(props, animate)
             }
         }, PREVIEW_UPDATE_DELAY_MS)
+    }
+
+    private fun getOrCreatePreviewPlaceholder(): Bitmap {
+        return cachedPlaceholder ?: createBitmap(PREVIEW_PLACEHOLDER_WIDTH, PREVIEW_PLACEHOLDER_HEIGHT).applyCanvas {
+            drawColor(ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_bg))
+            val paint = Paint().apply {
+                color = ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_text)
+                textSize = PREVIEW_PLACEHOLDER_TEXT_SIZE
+                textAlign = Paint.Align.CENTER
+            }
+            drawText(
+                getString(R.string.settings_preview_media),
+                PREVIEW_PLACEHOLDER_TEXT_X,
+                PREVIEW_PLACEHOLDER_TEXT_Y,
+                paint,
+            )
+        }.also { cachedPlaceholder = it }
+    }
+
+    private fun buildPreviewProps(): PopupProps {
+        val placeholder = getOrCreatePreviewPlaceholder()
+        val sampleButtons = if (currentNavId == R.id.nav_item_button) {
+            listOf(
+                PopupProps.Button("preview_1", getString(android.R.string.ok)),
+                PopupProps.Button("preview_2", getString(android.R.string.cancel)),
+            )
+        } else {
+            emptyList()
+        }
+        return PopupProps(
+            title = getString(R.string.settings_preview_title),
+            message = getString(R.string.settings_preview_message),
+            backgroundColor = settings.getFullBackgroundColor(),
+            borderRadius = settings.borderRadius,
+            borderWidth = settings.borderWidth,
+            borderColor = settings.borderColor,
+            contentPadding = settings.contentPadding,
+            titleColor = settings.titleColor,
+            titleSize = settings.titleSize,
+            messageColor = settings.messageColor,
+            messageSize = settings.messageSize,
+            titleAlignment = settings.titleAlignment,
+            messageAlignment = settings.messageAlignment,
+            mediaPosition = settings.mediaPosition,
+            mediaFullBleed = settings.mediaFullBleed,
+            liveBadge = settings.liveBadge,
+            liveBadgePosition = settings.liveBadgePosition,
+            animationType = settings.animationType,
+            animationDuration = settings.animationDuration,
+            animationExit = settings.animationExit,
+            media = PopupProps.Media.Bitmap(placeholder, PREVIEW_MEDIA_WIDTH),
+            buttons = sampleButtons,
+            buttonSize = settings.defaultButtonSize,
+            buttonColor = settings.defaultButtonColor,
+            buttonFocusColor = settings.defaultButtonFocusColor,
+            buttonTextColor = settings.defaultButtonTextColor,
+            buttonFocusTextColor = settings.defaultButtonFocusTextColor,
+            buttonBorderColor = settings.defaultButtonBorderColor,
+            buttonCornerRadius = settings.defaultButtonCornerRadius,
+            closeButton = settings.closeButton,
+            closeButtonSize = settings.closeButtonSize,
+            isPreview = true,
+        )
+    }
+
+    private fun updateExistingPreview(existingPreview: PopupView, props: PopupProps) {
+        existingPreview.updateFromProps(props)
+        val focus = currentFocus
+        if (focus != null && focus.id != View.NO_ID && focus.id !in allRailIds) {
+            getControllerForNav(currentNavId).updatePreviewPosition(focus)
+            return
+        }
+        // Ensure default position when focused on the navigation rail
+        (existingPreview.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
+            val defaultGravity = Gravity.BOTTOM or Gravity.END
+            if (params.gravity != defaultGravity) {
+                params.gravity = defaultGravity
+                val m = (resources.displayMetrics.density * PREVIEW_MARGIN_DP).toInt()
+                params.setMargins(0, m, m, m)
+                existingPreview.layoutParams = params
+            }
+        }
+    }
+
+    private fun recreatePreview(props: PopupProps, animate: Boolean) {
+        binding.previewArea.removeAllViews()
+        val preview = PopupView.build(this, props)
+        val initialGravity = resolvePreviewGravity()
+
+        binding.previewArea.addView(
+            preview,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = initialGravity
+                val m = (resources.displayMetrics.density * PREVIEW_MARGIN_DP).toInt()
+                setMargins(0, m, m, m)
+            },
+        )
+
+        if (animate && props.animationType != 0) {
+            preview.postDelayed(
+                { if (preview.parent != null) preview.animateIn() },
+                PREVIEW_ANIMATE_DELAY_MS,
+            )
+        }
+    }
+
+    private fun resolvePreviewGravity(): Int {
+        val focus = currentFocus
+        val isFlipped = if (focus != null && focus.id !in allRailIds) {
+            val location = IntArray(SCREEN_LOCATION_COORDS)
+            focus.getLocationOnScreen(location)
+            location[1] > resources.displayMetrics.heightPixels * PREVIEW_FLIP_THRESHOLD
+        } else {
+            false
+        }
+        return if (isFlipped) Gravity.TOP or Gravity.END else Gravity.BOTTOM or Gravity.END
     }
 
     override fun onResume() {
@@ -842,6 +818,39 @@ class SettingsActivity : AppCompatActivity() {
         private const val PREVIEW_MARGIN_DP = 10
         private const val SCREEN_LOCATION_COORDS = 2
         private const val PREVIEW_FLIP_THRESHOLD = 0.4
+        private const val PIVOT_SCROLL_RATIO = 0.3f
+        private const val PREVIEW_PLACEHOLDER_WIDTH = 320
+        private const val PREVIEW_PLACEHOLDER_HEIGHT = 180
+        private const val PREVIEW_PLACEHOLDER_TEXT_SIZE = 40f
+        private const val PREVIEW_PLACEHOLDER_TEXT_X = 160f
+        private const val PREVIEW_PLACEHOLDER_TEXT_Y = 100f
+        private const val PREVIEW_MEDIA_WIDTH = 180
+
+        private val NAV_STUB_IDS = mapOf(
+            R.id.nav_item_general to R.id.stub_general,
+            R.id.nav_item_background to R.id.stub_background,
+            R.id.nav_item_text_style to R.id.stub_text,
+            R.id.nav_item_border to R.id.stub_border,
+            R.id.nav_item_button to R.id.stub_button,
+            R.id.nav_item_media to R.id.stub_media,
+            R.id.nav_item_animation to R.id.stub_animation,
+            R.id.nav_item_updates to R.id.stub_updates,
+            R.id.nav_item_modules to R.id.stub_modules,
+            R.id.nav_item_permissions to R.id.stub_permissions,
+            R.id.nav_item_advanced to R.id.stub_advanced,
+            R.id.nav_item_about to R.id.stub_about,
+            R.id.nav_item_performance to R.id.stub_performance,
+        )
+
+        private val NoOpSubmenuController = object : SubmenuController {
+            override fun onBind(root: View) {
+                // No-op fallback controller for unknown submenu layouts.
+            }
+            override fun onBackPress(): Boolean = false
+            override fun updatePreviewPosition(v: View) {
+                // No-op fallback controller for unknown submenu layouts.
+            }
+        }
     }
 
     /**

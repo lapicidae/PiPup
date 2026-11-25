@@ -41,85 +41,74 @@ class ButtonSubmenu(
             settings.defaultButtonCornerRadius = it.toFloat()
         }
 
+        bindButtonColorControls(root)
+        bindCloseButtonControls(root)
+    }
+
+    private data class ColorControlSpec(
+        val defaultColorRes: Int,
+        val spinnerId: Int,
+        val hexButtonId: Int,
+        val currentColor: String,
+        val onColorSelected: (String) -> Unit,
+    )
+
+    private fun bindButtonColorControls(root: View) {
         val colors = settingsActivity?.materialColors ?: emptyList()
-        val defaultFillHex = context.colorToHex(R.color.preset_gunmetal)
-        val defaultFocusHex = context.colorToHex(R.color.preset_sky_blue)
-
-        val adapterColor = SettingsActivity.ColorSpinnerAdapter(context, colors, defaultFillHex)
-        setupSpinner(root, R.id.spinner_button_color, adapterColor, 0) {
-            val color = adapterColor.colors[it].hex
-            settings.defaultButtonColor = color
-            root.findViewById<Button>(R.id.btn_edit_button_color_hex)?.text = color
-        }
-        setSelectedColorInSpinner(root, R.id.spinner_button_color, adapterColor, settings.defaultButtonColor)
-
-        val adapterFocus = SettingsActivity.ColorSpinnerAdapter(context, colors, defaultFocusHex)
-        setupSpinner(root, R.id.spinner_button_focus_color, adapterFocus, 0) {
-            val color = adapterFocus.colors[it].hex
-            settings.defaultButtonFocusColor = color
-            root.findViewById<Button>(R.id.btn_edit_button_focus_color_hex)?.text = color
-        }
-        setSelectedColorInSpinner(root, R.id.spinner_button_focus_color, adapterFocus, settings.defaultButtonFocusColor)
-
-        val defaultTextHex = context.colorToHex(R.color.preset_platinum)
-        val defaultFocusTextHex = context.colorToHex(R.color.preset_deep_slate)
-
-        val adapterText = SettingsActivity.ColorSpinnerAdapter(context, colors, defaultTextHex)
-        setupSpinner(root, R.id.spinner_button_text_color, adapterText, 0) {
-            val color = adapterText.colors[it].hex
-            settings.defaultButtonTextColor = color
-            root.findViewById<Button>(R.id.btn_edit_button_text_color_hex)?.text = color
-        }
-        setSelectedColorInSpinner(root, R.id.spinner_button_text_color, adapterText, settings.defaultButtonTextColor)
-
-        val adapterFocusText = SettingsActivity.ColorSpinnerAdapter(context, colors, defaultFocusTextHex)
-        setupSpinner(root, R.id.spinner_button_focus_text_color, adapterFocusText, 0) {
-            val color = adapterFocusText.colors[it].hex
-            settings.defaultButtonFocusTextColor = color
-            root.findViewById<Button>(R.id.btn_edit_button_focus_text_color_hex)?.text = color
-        }
-        setSelectedColorInSpinner(
-            root,
-            R.id.spinner_button_focus_text_color,
-            adapterFocusText,
-            settings.defaultButtonFocusTextColor,
+        val specs = listOf(
+            ColorControlSpec(
+                R.color.preset_gunmetal,
+                R.id.spinner_button_color,
+                R.id.btn_edit_button_color_hex,
+                settings.defaultButtonColor,
+            ) { settings.defaultButtonColor = it },
+            ColorControlSpec(
+                R.color.preset_sky_blue,
+                R.id.spinner_button_focus_color,
+                R.id.btn_edit_button_focus_color_hex,
+                settings.defaultButtonFocusColor,
+            ) { settings.defaultButtonFocusColor = it },
+            ColorControlSpec(
+                R.color.preset_platinum,
+                R.id.spinner_button_text_color,
+                R.id.btn_edit_button_text_color_hex,
+                settings.defaultButtonTextColor,
+            ) { settings.defaultButtonTextColor = it },
+            ColorControlSpec(
+                R.color.preset_deep_slate,
+                R.id.spinner_button_focus_text_color,
+                R.id.btn_edit_button_focus_text_color_hex,
+                settings.defaultButtonFocusTextColor,
+            ) { settings.defaultButtonFocusTextColor = it },
+            ColorControlSpec(
+                R.color.preset_gunmetal,
+                R.id.spinner_button_border_color,
+                R.id.btn_edit_button_border_color_hex,
+                settings.defaultButtonBorderColor,
+            ) { settings.defaultButtonBorderColor = it },
         )
+        specs.forEach { bindColorPair(root, colors, it) }
+    }
 
-        val defaultBorderHex = context.colorToHex(R.color.preset_gunmetal)
-        val adapterBorder = SettingsActivity.ColorSpinnerAdapter(context, colors, defaultBorderHex)
-        setupSpinner(root, R.id.spinner_button_border_color, adapterBorder, 0) {
-            val color = adapterBorder.colors[it].hex
-            settings.defaultButtonBorderColor = color
-            root.findViewById<Button>(R.id.btn_edit_button_border_color_hex)?.text = color
+    private fun bindColorPair(
+        root: View,
+        colors: List<SettingsActivity.ColorEntry>,
+        spec: ColorControlSpec,
+    ) {
+        val adapter = SettingsActivity.ColorSpinnerAdapter(context, colors, context.colorToHex(spec.defaultColorRes))
+        setupSpinner(root, spec.spinnerId, adapter, 0) {
+            val color = adapter.colors[it].hex
+            spec.onColorSelected(color)
+            root.findViewById<Button>(spec.hexButtonId)?.text = color
         }
-        setSelectedColorInSpinner(
-            root,
-            R.id.spinner_button_border_color,
-            adapterBorder,
-            settings.defaultButtonBorderColor,
-        )
+        setSelectedColorInSpinner(root, spec.spinnerId, adapter, spec.currentColor)
+        setupHexColorButton(root, spec.hexButtonId, spec.currentColor) {
+            spec.onColorSelected(it)
+            setSelectedColorInSpinner(root, spec.spinnerId, adapter, it)
+        }
+    }
 
-        setupHexColorButton(root, R.id.btn_edit_button_color_hex, settings.defaultButtonColor) {
-            settings.defaultButtonColor = it
-            setSelectedColorInSpinner(root, R.id.spinner_button_color, adapterColor, it)
-        }
-        setupHexColorButton(root, R.id.btn_edit_button_focus_color_hex, settings.defaultButtonFocusColor) {
-            settings.defaultButtonFocusColor = it
-            setSelectedColorInSpinner(root, R.id.spinner_button_focus_color, adapterFocus, it)
-        }
-        setupHexColorButton(root, R.id.btn_edit_button_text_color_hex, settings.defaultButtonTextColor) {
-            settings.defaultButtonTextColor = it
-            setSelectedColorInSpinner(root, R.id.spinner_button_text_color, adapterText, it)
-        }
-        setupHexColorButton(root, R.id.btn_edit_button_focus_text_color_hex, settings.defaultButtonFocusTextColor) {
-            settings.defaultButtonFocusTextColor = it
-            setSelectedColorInSpinner(root, R.id.spinner_button_focus_text_color, adapterFocusText, it)
-        }
-        setupHexColorButton(root, R.id.btn_edit_button_border_color_hex, settings.defaultButtonBorderColor) {
-            settings.defaultButtonBorderColor = it
-            setSelectedColorInSpinner(root, R.id.spinner_button_border_color, adapterBorder, it)
-        }
-
+    private fun bindCloseButtonControls(root: View) {
         val suffix = context.getString(R.string.settings_default_suffix)
         val closeButtonItems = context.resources.getStringArray(R.array.close_button_position_options)
             .mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }

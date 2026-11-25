@@ -9,6 +9,7 @@ import nl.rogro82.pipup.R
 import nl.rogro82.pipup.colorToHex
 import nl.rogro82.pipup.readExactBytes
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -41,6 +42,17 @@ class PayloadParser(private val context: Context) {
                 } catch (_: Exception) {}
             }
         }
+
+        private fun Map<String, List<String>>.firstVal(key: String): String? = this[key]?.firstOrNull()
+
+        private fun Map<String, List<String>>.optInt(key: String, default: Int): Int =
+            firstVal(key)?.toIntOrNull() ?: default
+
+        private fun Map<String, List<String>>.optFloat(key: String, default: Float): Float =
+            firstVal(key)?.toFloatOrNull() ?: default
+
+        private fun Map<String, List<String>>.optStrictBool(key: String): Boolean =
+            firstVal(key)?.toBooleanStrictOrNull() ?: false
     }
 
     private val isCleaningUp = AtomicBoolean(false)
@@ -93,104 +105,119 @@ class PayloadParser(private val context: Context) {
 
         val files = mutableMapOf<String, String>()
         session.parseBody(files)
-
         val parms = session.parameters
-        fun getVal(key: String): String? = parms[key]?.firstOrNull()
-
-        val title = getVal("title")
-        val message = getVal("message")
-        Log.d(TAG, "Parsed multipart text: title=$title, message=$message")
-        val duration = getVal("duration")?.toIntOrNull() ?: 10
-        val position = PopupProps.parsePositionIndex(getVal("position"))
-        val bgColor = getVal("backgroundColor") ?: "#CC000000"
-        val scale = getVal("scale")?.toBoolean() ?: true
-
-        val titleSize = getVal("titleSize")?.toFloatOrNull() ?: AppSettings.DEFAULT_TITLE_SIZE
-        val titleColor = getVal("titleColor") ?: context.colorToHex(R.color.preset_platinum)
-        val messageSize = getVal("messageSize")?.toFloatOrNull() ?: AppSettings.DEFAULT_MSG_SIZE
-        val messageColor = getVal("messageColor") ?: context.colorToHex(R.color.preset_silver)
-        val borderRadius = getVal("borderRadius")?.toFloatOrNull()?.toInt()
-            ?: getVal("cornerRadius")?.toFloatOrNull()?.toInt()
-            ?: AppSettings.DEFAULT_RADIUS
-        val borderWidth = getVal("borderWidth")?.toIntOrNull() ?: AppSettings.DEFAULT_BORDER_WIDTH
-        val borderColor = getVal("borderColor") ?: context.colorToHex(R.color.preset_gunmetal)
-        val contentPadding = getVal("contentPadding")?.toIntOrNull() ?: getVal("padding")?.toIntOrNull()
-        val titleAlignment = getVal("titleAlignment")?.toIntOrNull() ?: 0
-        val messageAlignment = getVal("messageAlignment")?.toIntOrNull() ?: 0
-        val mediaPosition = getVal("mediaPosition")?.toIntOrNull()
-        val animationType = getVal("animationType")?.toIntOrNull() ?: 0
-        val animationDuration = getVal("animationDuration")?.toIntOrNull() ?: 500
-        val animationExit = getVal("animationExit")?.toBoolean() ?: false
-        val overwrite = getVal("overwrite")?.toBoolean() ?: false
-        val stack = getVal("stack")?.trim()?.lowercase()?.takeIf { it == "vertical" || it == "horizontal" }
-        val mediaFullBleed = getVal("mediaFullBleed")?.toBooleanStrictOrNull()
-        val liveBadge = getVal("liveBadge")?.toBooleanStrictOrNull()
-        val liveBadgeColor = getVal("liveBadgeColor")
-        val liveBadgePosition = getVal("liveBadgePosition")
-        val fullscreen = getVal("fullscreen")?.toBooleanStrictOrNull() ?: false
-        val fullscreenUpscale = (getVal("fullscreenUpscale") ?: getVal("upscale"))?.toBooleanStrictOrNull()
-        val dismissOnBack = getVal("dismissOnBack")?.toBooleanStrictOrNull() ?: false
-        val closeButton = getVal("closeButton")?.let { PopupProps.parseCloseButton(it) }
-        val closeButtonTimeout = getVal("closeButtonTimeout")?.let { PopupProps.parseCloseButtonTimeout(it) }
-        val closeButtonSize = getVal("closeButtonSize")?.let { PopupProps.parseCloseButtonSize(it) }
-
-        var media: PopupProps.Media? = null
-        files["image"]?.let { tempPath ->
-            val rawImageWidth = getVal("imageWidth")?.toIntOrNull()?.takeIf { it > 0 }
-            val imageWidth = rawImageWidth ?: 480
-            val srcFile = File(tempPath)
-            val isReadable = srcFile.canRead()
-            Log.d(TAG, "Multipart image received: path=$tempPath, size=${srcFile.length()}, readable=$isReadable")
-
-            if (tempPath.isNotEmpty() && srcFile.exists() && srcFile.length() > 0) {
-                // Copy to app's cache dir to prevent deletion on session close
-                try {
-                    val persistentFile = File(
-                        context.cacheDir,
-                        "multipart_${System.currentTimeMillis()}_${(0..1000).random()}.png"
-                    )
-                    srcFile.copyTo(persistentFile, overwrite = true)
-                    Log.d(
-                        TAG,
-                        "Successfully persisted image to: ${persistentFile.absolutePath}, " +
-                            "final size=${persistentFile.length()}"
-                    )
-                    media = PopupProps.Media.LocalFile(
-                        persistentFile.absolutePath,
-                        imageWidth,
-                        scale = scale,
-                        explicitWidth = rawImageWidth != null
-                    )
-
-                    // Trigger async cache cleanup
-                    triggerCacheCleanup()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Failed to copy multipart file from $tempPath to persistent cache", e)
-                }
-            } else {
-                Log.w(TAG, "Ignoring multipart image part because file is empty or missing at: $tempPath")
-            }
+        val scale = parms.firstVal("scale")?.toBoolean() ?: true
+        val media = files["image"]?.let { tempPath ->
+            val rawImageWidth = parms.firstVal("imageWidth")?.toIntOrNull()?.takeIf { it > 0 }
+            persistMultipartImage(tempPath, rawImageWidth, scale)
         }
-
-        PopupProps(
-            title = title, message = message, duration = duration, position = position,
-            backgroundColor = bgColor, titleSize = titleSize, titleColor = titleColor,
-            messageSize = messageSize, messageColor = messageColor, borderRadius = borderRadius,
-            borderWidth = borderWidth, borderColor = borderColor, contentPadding = contentPadding,
-            titleAlignment = titleAlignment, messageAlignment = messageAlignment,
-            mediaPosition = mediaPosition, animationType = animationType,
-            animationDuration = animationDuration, animationExit = animationExit,
-            overwrite = overwrite, scale = scale, media = media, stack = stack,
-            mediaFullBleed = mediaFullBleed, liveBadge = liveBadge,
-            liveBadgeColor = liveBadgeColor, liveBadgePosition = liveBadgePosition,
-            fullscreen = fullscreen, fullscreenUpscale = fullscreenUpscale,
-            dismissOnBack = dismissOnBack,
-            closeButton = closeButton, closeButtonTimeout = closeButtonTimeout,
-            closeButtonSize = closeButtonSize
-        )
-    } catch (e: Exception) {
+        buildMultipartPopupProps(parms, scale, media)
+    } catch (e: IOException) {
         Log.e(TAG, "Multipart parsing error", e)
         null
+    } catch (e: NanoHTTPD.ResponseException) {
+        Log.e(TAG, "Multipart parsing error", e)
+        null
+    } catch (e: IllegalArgumentException) {
+        Log.e(TAG, "Multipart parsing error", e)
+        null
+    } catch (e: SecurityException) {
+        Log.e(TAG, "Multipart parsing error", e)
+        null
+    }
+
+    private fun buildMultipartPopupProps(
+        parms: Map<String, List<String>>,
+        scale: Boolean,
+        media: PopupProps.Media?,
+    ): PopupProps {
+        val title = parms.firstVal("title")
+        val message = parms.firstVal("message")
+        Log.d(TAG, "Parsed multipart text: title=$title, message=$message")
+        val borderRadius = (parms.firstVal("borderRadius") ?: parms.firstVal("cornerRadius"))
+            ?.toFloatOrNull()?.toInt() ?: AppSettings.DEFAULT_RADIUS
+        val contentPadding = (parms.firstVal("contentPadding") ?: parms.firstVal("padding"))?.toIntOrNull()
+        val stack = parms.firstVal("stack")?.trim()?.lowercase()
+            ?.takeIf { it == "vertical" || it == "horizontal" }
+        val fullscreenUpscale = (parms.firstVal("fullscreenUpscale") ?: parms.firstVal("upscale"))
+            ?.toBooleanStrictOrNull()
+
+        return PopupProps(
+            title = title,
+            message = message,
+            duration = parms.optInt("duration", PopupProps.DEFAULT_DURATION_SEC),
+            position = PopupProps.parsePositionIndex(parms.firstVal("position")),
+            backgroundColor = parms.firstVal("backgroundColor") ?: "#CC000000",
+            titleSize = parms.optFloat("titleSize", AppSettings.DEFAULT_TITLE_SIZE),
+            titleColor = parms.firstVal("titleColor") ?: context.colorToHex(R.color.preset_platinum),
+            messageSize = parms.optFloat("messageSize", AppSettings.DEFAULT_MSG_SIZE),
+            messageColor = parms.firstVal("messageColor") ?: context.colorToHex(R.color.preset_silver),
+            borderRadius = borderRadius,
+            borderWidth = parms.optInt("borderWidth", AppSettings.DEFAULT_BORDER_WIDTH),
+            borderColor = parms.firstVal("borderColor") ?: context.colorToHex(R.color.preset_gunmetal),
+            contentPadding = contentPadding,
+            titleAlignment = parms.optInt("titleAlignment", 0),
+            messageAlignment = parms.optInt("messageAlignment", 0),
+            mediaPosition = parms.firstVal("mediaPosition")?.toIntOrNull(),
+            animationType = parms.optInt("animationType", 0),
+            animationDuration = parms.optInt("animationDuration", PopupProps.DEFAULT_ANIMATION_DURATION_MS),
+            animationExit = parms.firstVal("animationExit")?.toBoolean() ?: false,
+            overwrite = parms.firstVal("overwrite")?.toBoolean() ?: false,
+            scale = scale,
+            media = media,
+            stack = stack,
+            mediaFullBleed = parms.firstVal("mediaFullBleed")?.toBooleanStrictOrNull(),
+            liveBadge = parms.firstVal("liveBadge")?.toBooleanStrictOrNull(),
+            liveBadgeColor = parms.firstVal("liveBadgeColor"),
+            liveBadgePosition = parms.firstVal("liveBadgePosition"),
+            fullscreen = parms.optStrictBool("fullscreen"),
+            fullscreenUpscale = fullscreenUpscale,
+            dismissOnBack = parms.optStrictBool("dismissOnBack"),
+            closeButton = PopupProps.parseCloseButton(parms.firstVal("closeButton")),
+            closeButtonTimeout = PopupProps.parseCloseButtonTimeout(parms.firstVal("closeButtonTimeout")),
+            closeButtonSize = PopupProps.parseCloseButtonSize(parms.firstVal("closeButtonSize")),
+        )
+    }
+
+    private fun persistMultipartImage(
+        tempPath: String,
+        rawImageWidth: Int?,
+        scale: Boolean,
+    ): PopupProps.Media? {
+        val imageWidth = rawImageWidth ?: PopupProps.DEFAULT_MEDIA_WIDTH
+        val srcFile = File(tempPath)
+        Log.d(TAG, "Multipart image received: path=$tempPath, size=${srcFile.length()}, readable=${srcFile.canRead()}")
+
+        if (tempPath.isEmpty() || !srcFile.exists() || srcFile.length() <= 0) {
+            Log.w(TAG, "Ignoring multipart image part because file is empty or missing at: $tempPath")
+            return null
+        }
+
+        return try {
+            val persistentFile = File(
+                context.cacheDir,
+                "multipart_${System.currentTimeMillis()}_${(0..1000).random()}.png"
+            )
+            srcFile.copyTo(persistentFile, overwrite = true)
+            Log.d(
+                TAG,
+                "Successfully persisted image to: ${persistentFile.absolutePath}, " +
+                    "final size=${persistentFile.length()}"
+            )
+            triggerCacheCleanup()
+            PopupProps.Media.LocalFile(
+                persistentFile.absolutePath,
+                imageWidth,
+                scale = scale,
+                explicitWidth = rawImageWidth != null
+            )
+        } catch (e: IOException) {
+            Log.e(TAG, "Failed to copy multipart file from $tempPath to persistent cache", e)
+            null
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Failed to copy multipart file from $tempPath to persistent cache", e)
+            null
+        }
     }
 
     /**
@@ -213,19 +240,14 @@ class PayloadParser(private val context: Context) {
      */
     private fun cleanupMultipartCache() {
         try {
-            val cacheDir = context.cacheDir
-            val files = cacheDir.listFiles { _, name -> name.startsWith("multipart_") }
-            if (files != null) {
-                val now = System.currentTimeMillis()
-                files.forEach { file ->
-                    if (now - file.lastModified() > CLEANUP_THRESHOLD_MS) {
-                        if (file.delete()) {
-                            Log.d(TAG, "Cleaned up leaked multipart cache file: ${file.name}")
-                        }
-                    }
+            val files = context.cacheDir.listFiles { _, name -> name.startsWith("multipart_") } ?: return
+            val now = System.currentTimeMillis()
+            files.forEach { file ->
+                if (now - file.lastModified() > CLEANUP_THRESHOLD_MS && file.delete()) {
+                    Log.d(TAG, "Cleaned up leaked multipart cache file: ${file.name}")
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: SecurityException) {
             Log.e(TAG, "Error during multipart cache cleanup", e)
         }
     }

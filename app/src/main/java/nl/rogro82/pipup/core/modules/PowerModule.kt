@@ -48,42 +48,46 @@ class PowerModule : PiPupModule {
         return null
     }
 
-    private fun handlePowerRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        val context = moduleContext?.androidContext ?: return NanoHTTPD.newFixedLengthResponse(
-            NanoHTTPD.Response.Status.INTERNAL_ERROR, "text/plain", "Missing context"
-        )
-
-        val requested = session.parameters["state"]?.firstOrNull()?.lowercase()
-        val target = when (requested) {
+    private fun parsePowerTarget(session: NanoHTTPD.IHTTPSession, context: android.content.Context): Boolean? =
+        when (session.parameters["state"]?.firstOrNull()?.lowercase()) {
             "on", "wake", "true", "1" -> true
             "off", "sleep", "false", "0" -> false
             "toggle" -> !PowerController.isScreenOn(context)
-            else -> return NanoHTTPD.newFixedLengthResponse(
+            else -> null
+        }
+
+    private fun handlePowerRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        val context = moduleContext?.androidContext ?: return NanoHTTPD.newFixedLengthResponse(
+            NanoHTTPD.Response.Status.INTERNAL_ERROR, "text/plain", "Missing context",
+        )
+        val target = parsePowerTarget(session, context)
+        return if (target == null) {
+            NanoHTTPD.newFixedLengthResponse(
                 NanoHTTPD.Response.Status.BAD_REQUEST,
                 "text/plain",
-                "State must be on, off or toggle"
+                "State must be on, off or toggle",
+            )
+        } else {
+            val success = if (target) PowerController.wake(context) else PowerController.sleep(context)
+            val method = if (target) "wake_activity" else PowerController.getSleepMethod(context)
+            if (!success && !target && method == null) {
+                moduleContext?.showToast(moduleContext?.getString(R.string.error_power_permission_missing) ?: "")
+            }
+
+            val body = Json.writeValueAsString(
+                mapOf(
+                    "state" to if (target) "on" else "off",
+                    "ok" to success,
+                    "method" to method,
+                    "screenOn" to PowerController.isScreenOn(context),
+                ),
+            )
+            NanoHTTPD.newFixedLengthResponse(
+                if (success) NanoHTTPD.Response.Status.OK else NanoHTTPD.Response.Status.NOT_IMPLEMENTED,
+                "application/json",
+                body,
             )
         }
-
-        val success = if (target) PowerController.wake(context) else PowerController.sleep(context)
-        val method = if (target) "wake_activity" else PowerController.getSleepMethod(context)
-
-        if (!success && !target && method == null) {
-            moduleContext?.showToast(moduleContext?.getString(R.string.error_power_permission_missing) ?: "")
-        }
-
-        val body = Json.writeValueAsString(mapOf(
-            "state" to if (target) "on" else "off",
-            "ok" to success,
-            "method" to method,
-            "screenOn" to PowerController.isScreenOn(context)
-        ))
-
-        return NanoHTTPD.newFixedLengthResponse(
-            if (success) NanoHTTPD.Response.Status.OK else NanoHTTPD.Response.Status.NOT_IMPLEMENTED,
-            "application/json",
-            body
-        )
     }
 
     override fun augmentState(state: MutableMap<String, Any?>) {

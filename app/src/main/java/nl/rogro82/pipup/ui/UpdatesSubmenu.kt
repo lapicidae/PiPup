@@ -193,32 +193,7 @@ class UpdatesSubmenu(
             .setTitle(R.string.settings_update_available)
             .setView(container)
             .setPositiveButton(R.string.settings_update_install) { _, _ ->
-                val scope = (context.applicationContext as? PiPupApp)?.applicationScope
-                    ?: kotlinx.coroutines.MainScope()
-                scope.launch(Dispatchers.Main) {
-                    val mgr = UpdateManager(context)
-                    context.showToast(context.getString(R.string.settings_update_verifying))
-
-                    mgr.checkForUpdates(settings.updateChannel == 1).onSuccess { release ->
-                        if (release != null) {
-                            if (release.tagName == targetRelease.tagName) {
-                                mgr.downloadAndInstall(release, silent = false)
-                                context.showToast(context.getString(R.string.settings_update_downloading), true)
-                            } else {
-                                // A different (likely newer) update was found during the re-check
-                                showUpdateDialog(release)
-                            }
-                        } else {
-                            context.showToast(context.getString(R.string.settings_update_no_longer_available), true)
-                            // Refresh UI state
-                            availableRelease = null
-                            settings.updateAvailableTag = ""
-                            btn?.let { updateButtonText(it) }
-                        }
-                    }.onFailure {
-                        context.showToast("Verification failed: ${it.message}", true)
-                    }
-                }
+                verifyAndDownloadUpdate(targetRelease)
             }
             .setNegativeButton(android.R.string.cancel, null)
             .create()
@@ -226,6 +201,34 @@ class UpdatesSubmenu(
         dialog.show()
         dialog.getButton(AlertDialog.BUTTON_NEGATIVE).post {
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE).requestFocus()
+        }
+    }
+
+    private fun verifyAndDownloadUpdate(targetRelease: GitHubRelease) {
+        val scope = (context.applicationContext as? PiPupApp)?.applicationScope
+            ?: kotlinx.coroutines.MainScope()
+        scope.launch(Dispatchers.Main) {
+            val mgr = UpdateManager(context)
+            context.showToast(context.getString(R.string.settings_update_verifying))
+
+            mgr.checkForUpdates(settings.updateChannel == 1).onSuccess { release ->
+                if (release != null) {
+                    if (release.tagName == targetRelease.tagName) {
+                        mgr.downloadAndInstall(release, silent = false)
+                        context.showToast(context.getString(R.string.settings_update_downloading), true)
+                    } else {
+                        // A different (likely newer) update was found during the re-check
+                        showUpdateDialog(release)
+                    }
+                } else {
+                    context.showToast(context.getString(R.string.settings_update_no_longer_available), true)
+                    availableRelease = null
+                    settings.updateAvailableTag = ""
+                    btn?.let { updateButtonText(it) }
+                }
+            }.onFailure {
+                context.showToast("Verification failed: ${it.message}", true)
+            }
         }
     }
 

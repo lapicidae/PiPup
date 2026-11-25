@@ -80,12 +80,15 @@ object Pusher {
 
     private fun deliver(p: Pending) {
         val code = post(p.target, p.event, p.body)
-        if (code != null && code in HTTP_OK_MIN..HTTP_OK_MAX) return
-        // Refused: a retry changes nothing.
-        if (code != null && code in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX) return
-        if (synchronized(pending) { pending.isNotEmpty() }) return // a newer push supersedes it
-        try { Thread.sleep(RETRY_DELAY_MS) } catch (_: InterruptedException) { return }
-        post(p.target, p.event, p.body)
+        val terminal = code != null &&
+            (code in HTTP_OK_MIN..HTTP_OK_MAX || code in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX)
+        if (terminal || synchronized(pending) { pending.isNotEmpty() }) return
+        try {
+            Thread.sleep(RETRY_DELAY_MS)
+            post(p.target, p.event, p.body)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+        }
     }
 
     private fun post(target: String, event: String, body: String): Int? {
@@ -107,13 +110,23 @@ object Pusher {
             lastEvent = event
             lastError = if (code in HTTP_OK_MIN..HTTP_OK_MAX) null else "HTTP $code"
             code
-        } catch (ex: Throwable) {
-            lastStatus = null
-            lastAt = System.currentTimeMillis()
-            lastEvent = event
-            lastError = ex.message ?: ex.javaClass.simpleName
-            Log.w(LOG_TAG, "push $event failed: $lastError")
+        } catch (ex: java.io.IOException) {
+            recordPostFailure(event, ex)
+            null
+        } catch (ex: IllegalArgumentException) {
+            recordPostFailure(event, ex)
+            null
+        } catch (ex: SecurityException) {
+            recordPostFailure(event, ex)
             null
         }
+    }
+
+    private fun recordPostFailure(event: String, ex: Exception) {
+        lastStatus = null
+        lastAt = System.currentTimeMillis()
+        lastEvent = event
+        lastError = ex.message ?: ex.javaClass.simpleName
+        Log.w(LOG_TAG, "push $event failed: $lastError")
     }
 }

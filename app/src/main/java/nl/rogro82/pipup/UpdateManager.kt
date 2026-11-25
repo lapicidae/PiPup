@@ -18,12 +18,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.io.FileInputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
+import java.security.NoSuchAlgorithmException
 import nl.rogro82.pipup.service.PipUpService
 
 /**
@@ -114,7 +117,7 @@ class UpdateManager(context: Context) {
                     for (i in 0 until rootArray.length()) {
                         releases.add(GitHubRelease.fromJsonObject(rootArray.getJSONObject(i)))
                     }
-                } catch (_: Exception) {
+                } catch (_: JSONException) {
                     val errorMsg = appContext.getString(R.string.update_error_invalid_api)
                     return@withContext Result.failure(Exception(errorMsg))
                 }
@@ -147,11 +150,19 @@ class UpdateManager(context: Context) {
                 lastError = "HTTP ${connection.responseCode}"
                 return@withContext Result.failure(Exception(lastError))
             }
-        } catch (e: Exception) {
-            Log.e("UpdateManager", "Error checking for updates", e)
-            lastError = e.localizedMessage ?: appContext.getString(R.string.update_error_network)
-            Result.failure(Exception(lastError))
+        } catch (e: IOException) {
+            recordCheckFailure(e)
+        } catch (e: SecurityException) {
+            recordCheckFailure(e)
+        } catch (e: IllegalArgumentException) {
+            recordCheckFailure(e)
         }
+    }
+
+    private fun recordCheckFailure(e: Exception): Result<GitHubRelease?> {
+        Log.e("UpdateManager", "Error checking for updates", e)
+        lastError = e.localizedMessage ?: appContext.getString(R.string.update_error_network)
+        return Result.failure(Exception(lastError))
     }
 
     /**
@@ -352,7 +363,13 @@ class UpdateManager(context: Context) {
                     appContext.showToast(appContext.getString(R.string.update_verification_failed), true)
                 }
             }
-        } catch (e: Exception) {
+        } catch (e: IOException) {
+            Log.e("UpdateManager", "Error during checksum verification", e)
+            withContext(Dispatchers.Main) { installApk(appContext) }
+        } catch (e: NoSuchAlgorithmException) {
+            Log.e("UpdateManager", "Error during checksum verification", e)
+            withContext(Dispatchers.Main) { installApk(appContext) }
+        } catch (e: SecurityException) {
             Log.e("UpdateManager", "Error during checksum verification", e)
             withContext(Dispatchers.Main) { installApk(appContext) }
         }
@@ -390,41 +407,61 @@ class UpdateManager(context: Context) {
         try {
             isInstalling = true
             val installer = ctx.packageManager.packageInstaller
-            val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
-
-            val silent = PiPupApp.settings.pendingUpdateSilent
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (silent) {
-                    params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
-                } else {
-                    params.setRequireUserAction(PackageInstaller.SessionParams.USER_ACTION_REQUIRED)
-                }
-            }
-
+            val params = buildInstallSessionParams()
             val sessionId = installer.createSession(params)
             installer.openSession(sessionId).use { session ->
-                session.openWrite("base.apk", 0, size).use { out ->
-                    FileInputStream(file).use { fis ->
-                        fis.copyTo(out)
-                    }
-                    session.fsync(out)
-                }
-                registerResultReceiver(ctx)
-                val intent = Intent(INSTALL_ACTION).setPackage(ctx.packageName)
-                val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
-                } else {
-                    PendingIntent.FLAG_UPDATE_CURRENT
-                }
-                val pendingIntent = PendingIntent.getBroadcast(ctx, sessionId, intent, flags)
-                session.commit(pendingIntent.intentSender)
+                writeApkToSession(session, file, size)
+                commitInstallSession(ctx, session, sessionId)
             }
             Log.i("UpdateManager", "Update session $sessionId committed.")
-        } catch (e: Exception) {
-            Log.e("UpdateManager", "Error during PackageInstaller session", e)
-            isInstalling = false
-            ctx.showToast(ctx.getString(R.string.update_installer_failed, e.message), true)
+        } catch (e: IOException) {
+            handleInstallFailure(ctx, e)
+        } catch (e: SecurityException) {
+            handleInstallFailure(ctx, e)
+        } catch (e: IllegalStateException) {
+            handleInstallFailure(ctx, e)
+        } catch (e: IllegalArgumentException) {
+            handleInstallFailure(ctx, e)
         }
+    }
+
+    private fun buildInstallSessionParams(): PackageInstaller.SessionParams {
+        val params = PackageInstaller.SessionParams(PackageInstaller.SessionParams.MODE_FULL_INSTALL)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val actionMode = if (PiPupApp.settings.pendingUpdateSilent) {
+                PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED
+            } else {
+                PackageInstaller.SessionParams.USER_ACTION_REQUIRED
+            }
+            params.setRequireUserAction(actionMode)
+        }
+        return params
+    }
+
+    private fun writeApkToSession(session: PackageInstaller.Session, file: File, size: Long) {
+        session.openWrite("base.apk", 0, size).use { out ->
+            FileInputStream(file).use { fis -> fis.copyTo(out) }
+            session.fsync(out)
+        }
+    }
+
+    @SuppressLint("RequestInstallPackagesPolicy")
+    private fun commitInstallSession(ctx: Context, session: PackageInstaller.Session, sessionId: Int) {
+        registerResultReceiver(ctx)
+        val intent = Intent(INSTALL_ACTION).setPackage(ctx.packageName)
+        val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_MUTABLE
+        } else {
+            PendingIntent.FLAG_UPDATE_CURRENT
+        }
+        val pendingIntent = PendingIntent.getBroadcast(ctx, sessionId, intent, flags)
+        session.commit(pendingIntent.intentSender)
+    }
+
+    private fun handleInstallFailure(ctx: Context, e: Exception) {
+        Log.e("UpdateManager", "Error during PackageInstaller session", e)
+        isInstalling = false
+        ctx.showToast(ctx.getString(R.string.update_installer_failed, e.message), true)
     }
 
     private var receiverRegistered = false

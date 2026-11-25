@@ -24,41 +24,7 @@ class TextSubmenu(
 ) : SubmenuBase(context, settings, onSettingsChanged, previewArea) {
 
     override fun onBind(root: View) {
-        val colors = settingsActivity?.materialColors ?: emptyList()
-
-        // Title Color
-        val titleAdapter = SettingsActivity.ColorSpinnerAdapter(
-            context,
-            colors,
-            context.colorToHex(R.color.preset_platinum),
-        )
-        setupSpinner(root, R.id.spinner_title_color, titleAdapter, 0) {
-            val color = titleAdapter.colors[it].hex
-            settings.titleColor = color
-            root.findViewById<Button>(R.id.btn_edit_title_hex)?.text = color
-        }
-        setSelectedColorInSpinner(root, R.id.spinner_title_color, titleAdapter, settings.titleColor)
-
-        setupHexColorButton(root, R.id.btn_edit_title_hex, settings.titleColor) {
-            settings.titleColor = it
-        }
-
-        // Message Color
-        val msgAdapter = SettingsActivity.ColorSpinnerAdapter(
-            context,
-            colors,
-            context.colorToHex(R.color.preset_silver),
-        )
-        setupSpinner(root, R.id.spinner_message_color, msgAdapter, 0) {
-            val color = msgAdapter.colors[it].hex
-            settings.messageColor = color
-            root.findViewById<Button>(R.id.btn_edit_message_hex)?.text = color
-        }
-        setSelectedColorInSpinner(root, R.id.spinner_message_color, msgAdapter, settings.messageColor)
-
-        setupHexColorButton(root, R.id.btn_edit_message_hex, settings.messageColor) {
-            settings.messageColor = it
-        }
+        bindTextColors(root)
 
         setupSeekBar(
             root,
@@ -79,6 +45,45 @@ class TextSubmenu(
             settings.messageSize = (it + PopupProps.TEXT_SIZE_UI_MIN).toFloat()
         }
 
+        bindTextAlignments(root)
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.TEXT)
+    }
+
+    private fun bindTextColors(root: View) {
+        val colors = settingsActivity?.materialColors ?: emptyList()
+
+        val titleAdapter = SettingsActivity.ColorSpinnerAdapter(
+            context,
+            colors,
+            context.colorToHex(R.color.preset_platinum),
+        )
+        setupSpinner(root, R.id.spinner_title_color, titleAdapter, 0) {
+            val color = titleAdapter.colors[it].hex
+            settings.titleColor = color
+            root.findViewById<Button>(R.id.btn_edit_title_hex)?.text = color
+        }
+        setSelectedColorInSpinner(root, R.id.spinner_title_color, titleAdapter, settings.titleColor)
+        setupHexColorButton(root, R.id.btn_edit_title_hex, settings.titleColor) {
+            settings.titleColor = it
+        }
+
+        val msgAdapter = SettingsActivity.ColorSpinnerAdapter(
+            context,
+            colors,
+            context.colorToHex(R.color.preset_silver),
+        )
+        setupSpinner(root, R.id.spinner_message_color, msgAdapter, 0) {
+            val color = msgAdapter.colors[it].hex
+            settings.messageColor = color
+            root.findViewById<Button>(R.id.btn_edit_message_hex)?.text = color
+        }
+        setSelectedColorInSpinner(root, R.id.spinner_message_color, msgAdapter, settings.messageColor)
+        setupHexColorButton(root, R.id.btn_edit_message_hex, settings.messageColor) {
+            settings.messageColor = it
+        }
+    }
+
+    private fun bindTextAlignments(root: View) {
         val suffix = context.getString(R.string.settings_default_suffix)
         val alignmentItems = context.resources.getStringArray(R.array.alignment_options)
             .mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
@@ -94,7 +99,5 @@ class TextSubmenu(
         setupSpinner(root, R.id.spinner_message_alignment, msgAlignAdapter, settings.messageAlignment) {
             settings.messageAlignment = it
         }
-
-        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.TEXT)
     }
 }

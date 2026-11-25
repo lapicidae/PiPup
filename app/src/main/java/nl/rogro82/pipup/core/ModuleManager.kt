@@ -155,28 +155,23 @@ class ModuleManager {
         val uri = session.uri.lowercase()
         val context = moduleContext ?: return null
 
-        // Check all modules that are NOT turned OFF
-        for (module in modules.values) {
-            val mode = context.settings.getModuleMode(module.id)
-            if (mode == ModuleMode.OFF) continue
-
-            // If not active yet, check if it should be activated by this request
-            if (!activeModules.contains(module.id)) {
-                if (module.supportedRoutes.any { uri.startsWith(it.lowercase()) }) {
-                    activateModule(module.id)
-                } else {
-                    continue
+        return modules.values.firstNotNullOfOrNull { module ->
+            if (!ensureActiveForRequest(module, uri, context)) {
+                null
+            } else {
+                module.handleRequest(session)?.also {
+                    lastActivityMap[module.id] = android.os.SystemClock.elapsedRealtime()
                 }
             }
-
-            val response = module.handleRequest(session)
-            if (response != null) {
-                lastActivityMap[module.id] = android.os.SystemClock.elapsedRealtime()
-                return response
-            }
         }
+    }
 
-        return null
+    private fun ensureActiveForRequest(module: PiPupModule, uri: String, context: ModuleContext): Boolean = when {
+        context.settings.getModuleMode(module.id) == ModuleMode.OFF -> false
+        activeModules.contains(module.id) -> true
+        else -> module.supportedRoutes.any { uri.startsWith(it.lowercase()) }.also { matches ->
+            if (matches) activateModule(module.id)
+        }
     }
 
     /**

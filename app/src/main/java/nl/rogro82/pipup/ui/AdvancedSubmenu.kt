@@ -3,6 +3,8 @@ package nl.rogro82.pipup.ui
 import android.content.Context
 import android.content.DialogInterface
 import android.content.Intent
+import java.io.IOException
+import org.json.JSONException
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.Button
@@ -240,45 +242,45 @@ class AdvancedSubmenu(
             ip.contains(':') && !ip.startsWith("[") -> "http://[$ip]:7979/settings"
             else -> "http://$ip:7979/settings"
         }
-        Thread {
-            try {
-                val url = java.net.URL(urlString)
-                val connection = url.openConnection() as java.net.HttpURLConnection
-                connection.connectTimeout = IMPORT_TIMEOUT_MS
-                connection.readTimeout = IMPORT_TIMEOUT_MS
-                if (connection.responseCode == HTTP_OK) {
-                    val json = connection.inputStream.bufferedReader().use { it.readText() }
-                    val data = AppSettings.SettingsData.fromJson(json)
-                    settingsActivity?.runOnUiThread {
-                        settings.apply(data)
-                        // Notify system about settings change
-                        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
-                            setPackage(PiPupApp.APP_PACKAGE)
-                            putExtra("origin", "remote")
-                        }
-                        context.sendBroadcast(intent)
-                        settingsActivity?.recreate()
-                        context.showToast(context.getString(R.string.settings_import_success))
-                    }
-                } else {
-                    settingsActivity?.runOnUiThread {
-                        val errorMsg = context.getString(
-                            R.string.settings_import_error,
-                            "HTTP ${connection.responseCode}",
-                        )
-                        context.showToast(errorMsg, true)
-                    }
-                }
-            } catch (e: Exception) {
-                settingsActivity?.runOnUiThread {
-                    val errorMsg = context.getString(
-                        R.string.settings_import_error,
-                        e.message ?: "Unknown error",
-                    )
-                    context.showToast(errorMsg, true)
-                }
+        Thread { fetchAndApplySettings(urlString) }.start()
+    }
+
+    private fun fetchAndApplySettings(urlString: String) {
+        try {
+            val connection = java.net.URL(urlString).openConnection() as java.net.HttpURLConnection
+            connection.connectTimeout = IMPORT_TIMEOUT_MS
+            connection.readTimeout = IMPORT_TIMEOUT_MS
+            if (connection.responseCode == HTTP_OK) {
+                val json = connection.inputStream.bufferedReader().use { it.readText() }
+                val data = AppSettings.SettingsData.fromJson(json)
+                settingsActivity?.runOnUiThread { applyImportedSettings(data) }
+            } else {
+                settingsActivity?.runOnUiThread { showImportError("HTTP ${connection.responseCode}") }
             }
-        }.start()
+        } catch (e: IOException) {
+            settingsActivity?.runOnUiThread { showImportError(e.message ?: "Unknown error") }
+        } catch (e: JSONException) {
+            settingsActivity?.runOnUiThread { showImportError(e.message ?: "Invalid settings JSON") }
+        } catch (e: IllegalArgumentException) {
+            settingsActivity?.runOnUiThread { showImportError(e.message ?: "Invalid address") }
+        } catch (e: SecurityException) {
+            settingsActivity?.runOnUiThread { showImportError(e.message ?: "Network permission denied") }
+        }
+    }
+
+    private fun applyImportedSettings(data: AppSettings.SettingsData) {
+        settings.apply(data)
+        val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
+            setPackage(PiPupApp.APP_PACKAGE)
+            putExtra("origin", "remote")
+        }
+        context.sendBroadcast(intent)
+        settingsActivity?.recreate()
+        context.showToast(context.getString(R.string.settings_import_success))
+    }
+
+    private fun showImportError(detail: String) {
+        context.showToast(context.getString(R.string.settings_import_error, detail), true)
     }
 
     /** Network import constants for [AdvancedSubmenu]. */

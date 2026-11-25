@@ -231,17 +231,15 @@ class MainActivity : AppCompatActivity() {
      */
     private fun checkAndShowPermissionNag() {
         val missing = getMissingRequiredPermissions()
-        if (missing.isEmpty()) return
-        if (nagDialog?.isShowing == true) return
+        if (missing.isEmpty() || nagDialog?.isShowing == true) return
 
         // Daily nag logic
         val today = Calendar.getInstance()
         val lastNag = Calendar.getInstance().apply { timeInMillis = appSettings.lastPermissionNagDate }
 
         val isSameDay = appSettings.lastPermissionNagDate != 0L &&
-                        today.get(Calendar.YEAR) == lastNag.get(Calendar.YEAR) &&
-                        today.get(Calendar.DAY_OF_YEAR) == lastNag.get(Calendar.DAY_OF_YEAR)
-
+            today.get(Calendar.YEAR) == lastNag.get(Calendar.YEAR) &&
+            today.get(Calendar.DAY_OF_YEAR) == lastNag.get(Calendar.DAY_OF_YEAR)
         if (isSameDay) return
 
         val appName = getString(R.string.app_name)

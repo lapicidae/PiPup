@@ -1,6 +1,7 @@
 package nl.rogro82.pipup.core
 
 import android.app.admin.DevicePolicyManager
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -71,20 +72,28 @@ object PowerController {
             )
             lock.acquire(WAKE_LOCK_TIMEOUT_MS)
             success = true
-        } catch (e: Exception) {
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Wake lock failed", e)
+        } catch (e: IllegalStateException) {
             Log.e(TAG, "Wake lock failed", e)
         }
 
         try {
             context.startActivity(
                 Intent(context, WakeActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or
+                    addFlags(
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
                             Intent.FLAG_ACTIVITY_NO_ANIMATION or
-                            Intent.FLAG_ACTIVITY_NO_HISTORY)
+                            Intent.FLAG_ACTIVITY_NO_HISTORY
+                    )
                 }
             )
             success = true
-        } catch (e: Exception) {
+        } catch (e: ActivityNotFoundException) {
+            Log.e(TAG, "WakeActivity launch failed", e)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "WakeActivity launch failed", e)
+        } catch (e: IllegalStateException) {
             Log.e(TAG, "WakeActivity launch failed", e)
         }
         return success
@@ -98,21 +107,24 @@ object PowerController {
      * @return True if a sleep command was successfully executed.
      */
     fun sleep(context: Context): Boolean {
-        if (isDeviceAdminActive(context)) {
-            try {
-                val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
-                dpm.lockNow()
-                return true
-            } catch (e: Exception) {
-                Log.e(TAG, "lockNow failed, falling back to accessibility", e)
-            }
+        val locked = tryDeviceAdminLock(context) || PiPupAccessibilityService.lockScreen()
+        if (!locked) {
+            Log.w(TAG, "No way to put screen to sleep. Grant Device Admin or Accessibility permissions.")
         }
+        return locked
+    }
 
-        if (PiPupAccessibilityService.lockScreen()) {
-            return true
+    private fun tryDeviceAdminLock(context: Context): Boolean {
+        return isDeviceAdminActive(context) && try {
+            val dpm = context.getSystemService(Context.DEVICE_POLICY_SERVICE) as DevicePolicyManager
+            dpm.lockNow()
+            true
+        } catch (e: SecurityException) {
+            Log.e(TAG, "lockNow failed, falling back to accessibility", e)
+            false
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "lockNow failed, falling back to accessibility", e)
+            false
         }
-
-        Log.w(TAG, "No way to put screen to sleep. Grant Device Admin or Accessibility permissions.")
-        return false
     }
 }

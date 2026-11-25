@@ -1,7 +1,6 @@
 package nl.rogro82.pipup.ui
 
 import android.content.Context
-import android.content.Intent
 import android.view.View
 import android.widget.ArrayAdapter
 import android.widget.FrameLayout
@@ -10,7 +9,6 @@ import androidx.appcompat.widget.SwitchCompat
 import androidx.core.os.LocaleListCompat
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
-import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.SettingCategory
 import java.util.Locale
@@ -42,6 +40,22 @@ class GeneralSubmenu(
             settings.contentPadding = it
         }
 
+        setupLanguageSpinner(root)
+        setupThemeSpinner(root, suffix)
+
+        root.findViewById<SwitchCompat>(R.id.switch_advanced)?.apply {
+            isChecked = settings.advancedMode
+            setOnCheckedChangeListener { _, isChecked ->
+                settings.advancedMode = isChecked
+                onSettingsChanged(false)
+            }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
+        }
+
+        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.GENERAL)
+    }
+
+    private fun setupLanguageSpinner(root: View) {
         val langCodes = context.resources.getStringArray(R.array.language_codes)
         val langItems = langCodes.map { code ->
             if (code == "default") {
@@ -63,21 +77,18 @@ class GeneralSubmenu(
             if (settings.language != newLang) {
                 settings.language = newLang
 
-                // Use official AppCompat API for language switching
                 val appLocale: LocaleListCompat = if (newLang == "default") {
                     LocaleListCompat.getEmptyLocaleList()
                 } else {
                     LocaleListCompat.forLanguageTags(newLang)
                 }
                 AppCompatDelegate.setApplicationLocales(appLocale)
-
-                val settingsIntent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED)
-                settingsIntent.setPackage(PiPupApp.APP_PACKAGE)
-                context.sendBroadcast(settingsIntent)
+                notifySettingsChanged()
             }
         }
+    }
 
-        // App Theme
+    private fun setupThemeSpinner(root: View, suffix: String) {
         val themeItems = listOf(
             context.getString(R.string.settings_theme_dark),
             context.getString(R.string.settings_theme_light),
@@ -90,26 +101,8 @@ class GeneralSubmenu(
                 settings.appTheme = it
                 val mode = if (it == 0) AppCompatDelegate.MODE_NIGHT_YES else AppCompatDelegate.MODE_NIGHT_NO
                 AppCompatDelegate.setDefaultNightMode(mode)
-
-                // Notify service to clear web cache
-                val settingsIntent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED)
-                settingsIntent.setPackage(PiPupApp.APP_PACKAGE)
-                context.sendBroadcast(settingsIntent)
-
-                // AppCompatDelegate.setDefaultNightMode already triggers activity recreation
-                // if the mode has changed, so we don't need a manual recreate() call here.
+                notifySettingsChanged()
             }
         }
-
-        root.findViewById<SwitchCompat>(R.id.switch_advanced)?.apply {
-            isChecked = settings.advancedMode
-            setOnCheckedChangeListener { _, isChecked ->
-                settings.advancedMode = isChecked
-                onSettingsChanged(false)
-            }
-            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
-        }
-
-        renderModuleSettings(root as android.view.ViewGroup, SettingCategory.GENERAL)
     }
 }

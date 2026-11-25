@@ -71,11 +71,13 @@ class PiPupAccessibilityService : AccessibilityService() {
          */
         fun triggerSystemScan(context: Context) {
             try {
-                val am = context.getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
+                val am = context.getSystemService(ACCESSIBILITY_SERVICE) as? AccessibilityManager ?: return
                 // Querying the enabled services list often triggers an internal refresh in the system.
                 am.getEnabledAccessibilityServiceList(AccessibilityEvent.TYPES_ALL_MASK)
                 Log.d(LOG_TAG, "Triggered passive system scan for accessibility services")
-            } catch (e: Exception) {
+            } catch (e: SecurityException) {
+                Log.w(LOG_TAG, "Failed to trigger system scan: ${e.message}")
+            } catch (e: IllegalStateException) {
                 Log.w(LOG_TAG, "Failed to trigger system scan: ${e.message}")
             }
         }

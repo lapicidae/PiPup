@@ -3,6 +3,7 @@ package nl.rogro82.pipup
 import android.app.Activity
 import android.app.AppOpsManager
 import android.app.admin.DevicePolicyManager
+import android.content.ActivityNotFoundException
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -92,6 +93,7 @@ object Permissions {
     /**
      * Checks if the overlay permission is granted.
      */
+    @Suppress("TooGenericExceptionCaught") // OEM firmware may throw vendor runtime/linkage errors on Settings APIs
     fun overlay(context: Context): Boolean = try {
         Settings.canDrawOverlays(context)
     } catch (ex: Throwable) {
@@ -102,6 +104,7 @@ object Permissions {
     /**
      * Checks if the package install permission is granted.
      */
+    @Suppress("TooGenericExceptionCaught") // OEM firmware may throw vendor runtime/linkage errors on PackageManager
     fun installPackages(context: Context): Boolean = try {
         context.packageManager.canRequestPackageInstalls().also {
             mInstallCheckError = null
@@ -120,28 +123,28 @@ object Permissions {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
 
         // 1. TCL Optimization (AppOp-based)
-        try {
+        val tclAllowed = try {
             // We use checkOpNoThrow to see if the op is even known to the system
             @Suppress("DEPRECATION")
             ops.checkOpNoThrow(OP_TCL_AUTO_START, Process.myUid(), context.packageName)
-            val mode = checkAppOp(ops, OP_TCL_AUTO_START, context)
-            return mode == AppOpsManager.MODE_ALLOWED
-        } catch (_: Throwable) {}
+            checkAppOp(ops, OP_TCL_AUTO_START, context) == AppOpsManager.MODE_ALLOWED
+        } catch (_: Throwable) {
+            null
+        }
 
         // 2. Xiaomi / MIUI (Intent-based)
         // On Xiaomi devices, background activity is strictly controlled.
         // We show the row (return false) so users can reach the MIUI management screen.
-        if (Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true) ||
-            Build.BRAND.contains("Xiaomi", ignoreCase = true)) {
-            return false
-        }
+        val isXiaomi = Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true) ||
+            Build.BRAND.contains("Xiaomi", ignoreCase = true)
 
         // Return null for hardware without known specific auto-start restrictions
         // to gracefully hide the row in modular UIs.
-        return null
+        return tclAllowed ?: if (isXiaomi) false else null
     }
 
     /** Returns the current [AppOpsManager] mode label for [op], or an unavailability reason. */
+    @Suppress("TooGenericExceptionCaught") // OEM AppOps implementations may throw arbitrary runtime errors
     fun opMode(context: Context, op: String): String = try {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         when (val mode = checkAppOp(ops, op, context)) {
@@ -248,6 +251,7 @@ object Permissions {
     }
 
     /** Resolves the target activity class name for [intent], or null if unresolvable. */
+    @Suppress("TooGenericExceptionCaught") // OEM PackageManager resolvers can throw unexpected runtime exceptions
     fun resolvedActivity(context: Context, intent: Intent): String? = try {
         @Suppress("DEPRECATION")
         context.packageManager.resolveActivity(intent, 0)?.activityInfo?.name
@@ -272,17 +276,14 @@ object Permissions {
 
     /** Returns an intent to fix the permission, or null if the device explicitly blocks it or has no screen. */
     fun fixIntent(context: Context, key: String): Intent? {
-        if (key != KEY_OVERLAY && opBlocked(context, key)) return null
-
-        val intent = rawIntent(context, key) ?: return null
-        val activity = resolvedActivity(context, intent)
-
-        if (isPlaceholder(activity)) {
+        val intent = if (key != KEY_OVERLAY && opBlocked(context, key)) null else rawIntent(context, key)
+        val activity = intent?.let { resolvedActivity(context, it) }
+        return if (intent != null && isPlaceholder(activity)) {
             Log.w(LOG_TAG, "Detected placeholder activity for $key: $activity")
-            return null
+            null
+        } else {
+            intent
         }
-
-        return intent
     }
 
     /** Returns true when PiPup is allowed to start an activity (foreground or overlay granted). */
@@ -299,29 +300,44 @@ object Permissions {
         return when (key) {
             KEY_ENERGY -> launchEnergyFix(context)
             KEY_ACCESSIBILITY -> openTvAccessibilitySettings(context)
-            KEY_ADMIN -> {
-                val intent = rawIntent(context, KEY_ADMIN) ?: return false
-                if (context is SettingsActivity) {
-                    context.requestAdminRights(intent)
-                    true
-                } else {
-                    openTvAdminSettings(context)
-                }
-            }
-            else -> {
-                val intent = rawIntent(context, key) ?: return false
-                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                try {
-                    context.startActivity(intent)
-                    record(key, ok = true, activity = null, error = null)
-                    true
-                } catch (ex: Throwable) {
-                    Log.e(LOG_TAG, "Failed to start fix activity for $key: ${ex.message}")
-                    record(key, ok = false, activity = null, error = ex.message)
-                    false
-                }
-            }
+            KEY_ADMIN -> launchAdminFix(context)
+            else -> launchDefaultFix(context, key)
         }
+    }
+
+    private fun launchAdminFix(context: Context): Boolean {
+        val intent = rawIntent(context, KEY_ADMIN) ?: return false
+        return if (context is SettingsActivity) {
+            context.requestAdminRights(intent)
+            true
+        } else {
+            openTvAdminSettings(context)
+        }
+    }
+
+    private fun launchDefaultFix(context: Context, key: String): Boolean {
+        val intent = rawIntent(context, key) ?: return false
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val error = startActivityOrError(context, intent)
+        return if (error == null) {
+            record(key, ok = true, activity = null, error = null)
+            true
+        } else {
+            Log.e(LOG_TAG, "Failed to start fix activity for $key: $error")
+            record(key, ok = false, activity = null, error = error)
+            false
+        }
+    }
+
+    private fun startActivityOrError(context: Context, intent: Intent): String? = try {
+        context.startActivity(intent)
+        null
+    } catch (e: ActivityNotFoundException) {
+        "${e.javaClass.simpleName}: ${e.message}"
+    } catch (e: SecurityException) {
+        "${e.javaClass.simpleName}: ${e.message}"
+    } catch (e: IllegalStateException) {
+        "${e.javaClass.simpleName}: ${e.message}"
     }
 
     private fun openTvAdminSettings(context: Context): Boolean {
@@ -335,15 +351,14 @@ object Permissions {
         for (intent in intents) {
             if (intent == null) continue
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            try {
-                Log.d(LOG_TAG, "Attempting to launch admin settings: ${intent.action}")
-                context.startActivity(intent)
+            Log.d(LOG_TAG, "Attempting to launch admin settings: ${intent.action}")
+            val error = startActivityOrError(context, intent)
+            if (error == null) {
                 val name = resolvedActivity(context, intent) ?: intent.action
                 record(KEY_ADMIN, ok = true, activity = name, error = null)
                 return true
-            } catch (e: Exception) {
-                Log.w(LOG_TAG, "Failed to launch admin intent ${intent.action}: ${e.message}")
             }
+            Log.w(LOG_TAG, "Failed to launch admin intent ${intent.action}: $error")
         }
         record(KEY_ADMIN, ok = false, activity = null, error = "All admin intents failed")
         return false
@@ -353,28 +368,29 @@ object Permissions {
         val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-
-        if (context is SettingsActivity) {
-            context.requestAdminRights(intent)
-            return true
-        }
-
-        return try {
-            context.startActivity(intent)
-            record(KEY_ACCESSIBILITY, ok = true, activity = "AccessibilitySettings", error = null)
-            true
-        } catch (_: Exception) {
-            Log.w(LOG_TAG, "Accessibility settings not found, falling back to general settings")
-            try {
+        return when {
+            context is SettingsActivity -> {
+                context.requestAdminRights(intent)
+                true
+            }
+            startActivityOrError(context, intent) == null -> {
+                record(KEY_ACCESSIBILITY, ok = true, activity = "AccessibilitySettings", error = null)
+                true
+            }
+            else -> {
+                Log.w(LOG_TAG, "Accessibility settings not found, falling back to general settings")
                 val fallback = Intent(Settings.ACTION_SETTINGS).apply {
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                context.startActivity(fallback)
-                record(KEY_ACCESSIBILITY, ok = true, activity = "GeneralSettings", error = null)
-                true
-            } catch (e2: Exception) {
-                record(KEY_ACCESSIBILITY, ok = false, activity = null, error = e2.message)
-                false
+                val fallbackError = startActivityOrError(context, fallback)
+                val ok = fallbackError == null
+                record(
+                    KEY_ACCESSIBILITY,
+                    ok = ok,
+                    activity = if (ok) "GeneralSettings" else null,
+                    error = fallbackError,
+                )
+                ok
             }
         }
     }
@@ -388,25 +404,21 @@ object Permissions {
             }
         }
 
-        try {
-            context.startActivity(intent)
-
-            Handler(Looper.getMainLooper()).postDelayed({
-                val isStillResumed = (context as? AppCompatActivity)?.lifecycle?.currentState
-                    ?.isAtLeast(Lifecycle.State.RESUMED) ?: false
-                if (isStillResumed) {
-                    Log.w(LOG_TAG, "Energy menu likely blocked, falling back to App Info")
-                    try {
-                        val fallbackIntent = Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS)
-                        context.startActivity(fallbackIntent)
-                    } catch (_: Exception) {}
-                }
-            }, ENERGY_FALLBACK_DELAY_MS)
-            return true
-        } catch (e: Exception) {
-            Log.e(LOG_TAG, "Failed to launch energy settings", e)
+        val error = startActivityOrError(context, intent)
+        if (error != null) {
+            Log.e(LOG_TAG, "Failed to launch energy settings: $error")
             return false
         }
+
+        Handler(Looper.getMainLooper()).postDelayed({
+            val isStillResumed = (context as? AppCompatActivity)?.lifecycle?.currentState
+                ?.isAtLeast(Lifecycle.State.RESUMED) ?: false
+            if (isStillResumed) {
+                Log.w(LOG_TAG, "Energy menu likely blocked, falling back to App Info")
+                startActivityOrError(context, Intent(Settings.ACTION_MANAGE_APPLICATIONS_SETTINGS))
+            }
+        }, ENERGY_FALLBACK_DELAY_MS)
+        return true
     }
 
     /**
@@ -610,14 +622,10 @@ object Permissions {
             record("app", ok = false, activity = "MainActivity", error = BLOCKED_ERROR)
             return false
         }
-        return try {
-            context.startActivity(Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            record("app", ok = true, activity = "MainActivity", error = null)
-            true
-        } catch (ex: Throwable) {
-            record("app", ok = false, activity = "MainActivity", error = "${ex.javaClass.simpleName}: ${ex.message}")
-            false
-        }
+        val intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val error = startActivityOrError(context, intent)
+        record("app", ok = error == null, activity = "MainActivity", error = error)
+        return error == null
     }
 
     /** Returns the first missing fixable permission key, or null when all fixable ones are granted. */

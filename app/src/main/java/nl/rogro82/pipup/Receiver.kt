@@ -34,7 +34,9 @@ class Receiver : BroadcastReceiver() {
             try {
                 Log.i(TAG, "Starting PipUpService as foreground service")
                 startForegroundService(serviceIntent)
-            } catch (e: Exception) {
+            } catch (e: IllegalStateException) {
+                Log.e(TAG, "Failed to start PipUpService from receiver", e)
+            } catch (e: SecurityException) {
                 Log.e(TAG, "Failed to start PipUpService from receiver", e)
             }
         }

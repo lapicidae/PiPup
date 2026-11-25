@@ -87,6 +87,12 @@ class MediaRenderer(
         private const val VIDEO_RETRY_DELAY_MS = 1000L
         private const val WEB_RETRY_DELAY_MS = 1000L
         private const val GLIDE_RETRY_DELAY_MS = 500L
+        private const val INVISIBLE_SURFACE_ALPHA = 0.01f
+        private const val DEFAULT_MIN_BUF_MS = 500
+        private const val DEFAULT_MAX_BUF_MS = 1000
+        private const val DEFAULT_START_BUF_MS = 250
+        private const val DEFAULT_REBUFFER_MS = 500
+        private const val MAX_IMAGE_HEIGHT_RATIO = 0.40
 
         private const val VIDEO_WATCH_JS = """
             (function() {
@@ -196,20 +202,7 @@ class MediaRenderer(
             val boxW = requestedW?.takeIf { it > 0 }?.let { minOf(safeAvailW, it) } ?: safeAvailW
             val boxH = requestedH?.takeIf { it > 0 }?.let { minOf(safeAvailH, it) } ?: safeAvailH
             if (sourceW <= 0 || sourceH <= 0) {
-                return when {
-                    requestedW != null && requestedH != null -> boxW to boxH
-                    requestedW != null -> {
-                        val h = ((boxW * 9) / 16).coerceIn(1, boxH)
-                        val w = if (h < (boxW * 9) / 16) ((h * 16) / 9).coerceIn(1, boxW) else boxW
-                        w to h
-                    }
-                    requestedH != null -> {
-                        val w = ((boxH * 16) / 9).coerceIn(1, boxW)
-                        val h = if (w < (boxH * 16) / 9) ((w * 9) / 16).coerceIn(1, boxH) else boxH
-                        w to h
-                    }
-                    else -> boxW to boxH
-                }
+                return fitFallbackAspect(boxW, boxH, requestedW != null, requestedH != null)
             }
             val ratio = if (pixelWidthHeightRatio > 0f) pixelWidthHeightRatio else 1f
             val nativeW = (sourceW * ratio).roundToInt().coerceAtLeast(1)
@@ -219,6 +212,36 @@ class MediaRenderer(
             val fittedW = (nativeW * effectiveScale).roundToInt().coerceIn(1, boxW)
             val fittedH = (nativeH * effectiveScale).roundToInt().coerceIn(1, boxH)
             return fittedW to fittedH
+        }
+
+        private fun fitFallbackAspect(
+            boxW: Int,
+            boxH: Int,
+            hasRequestedW: Boolean,
+            hasRequestedH: Boolean,
+        ): Pair<Int, Int> = when {
+            hasRequestedW && hasRequestedH -> boxW to boxH
+            hasRequestedW -> {
+                val aspectH = (boxW * PopupProps.ASPECT_16_9_HEIGHT) / PopupProps.ASPECT_16_9_WIDTH
+                val h = aspectH.coerceIn(1, boxH)
+                val w = if (h < aspectH) {
+                    ((h * PopupProps.ASPECT_16_9_WIDTH) / PopupProps.ASPECT_16_9_HEIGHT).coerceIn(1, boxW)
+                } else {
+                    boxW
+                }
+                w to h
+            }
+            hasRequestedH -> {
+                val aspectW = (boxH * PopupProps.ASPECT_16_9_WIDTH) / PopupProps.ASPECT_16_9_HEIGHT
+                val w = aspectW.coerceIn(1, boxW)
+                val h = if (w < aspectW) {
+                    ((w * PopupProps.ASPECT_16_9_HEIGHT) / PopupProps.ASPECT_16_9_WIDTH).coerceIn(1, boxH)
+                } else {
+                    boxH
+                }
+                w to h
+            }
+            else -> boxW to boxH
         }
     }
 
@@ -382,31 +405,12 @@ class MediaRenderer(
         if (targetHeight > 0) currentTargetHeight = targetHeight
 
         if (media == null) {
-            frame.isVisible = false
-            cleanup()
-            frame.removeAllViews()
-            Log.i("MediaRenderer", "No media in props, notifying ready immediately")
-            if (Looper.myLooper() == Looper.getMainLooper()) {
-                callback?.notifyReady() ?: Log.e("MediaRenderer", "Callback is NULL in setup(null)")
-            } else {
-                mainHandler.postAtTime({
-                    callback?.notifyReady() ?: Log.e("MediaRenderer", "Callback is NULL in setup(null)")
-                }, rendererToken, SystemClock.uptimeMillis())
-            }
+            handleNullMedia(frame)
             return
         }
 
         frame.isVisible = true
-        val isSameType = if (frame.isNotEmpty()) {
-            val child = frame.getChildAt(0)
-            (media is PopupProps.Media.Image && child is ImageView) ||
-            (media is PopupProps.Media.Bitmap && child is ImageView) ||
-            (media is PopupProps.Media.Whep && child is WebView) ||
-            (media is PopupProps.Media.Web && child is WebView) ||
-            (media is PopupProps.Media.Video && child is TextureView)
-        } else false
-
-        if (!isSameType) {
+        if (!isReusableMediaChild(media, frame)) {
             cleanup()
             frame.removeAllViews()
         }
@@ -426,6 +430,32 @@ class MediaRenderer(
             is PopupProps.Media.Whep -> renderWhep(frame, media, retryCount)
             is PopupProps.Media.LocalFile -> renderLocalFile(uiContext, frame, media.path, media.width, media.scale)
             is PopupProps.Media.Bitmap -> renderBitmap(uiContext, frame, media.bitmap, media.width, media.scale)
+        }
+    }
+
+    private fun handleNullMedia(frame: FrameLayout) {
+        frame.isVisible = false
+        cleanup()
+        frame.removeAllViews()
+        Log.i("MediaRenderer", "No media in props, notifying ready immediately")
+        val notify: () -> Unit = {
+            callback?.notifyReady() ?: Log.e("MediaRenderer", "Callback is NULL in setup(null)")
+        }
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            notify()
+        } else {
+            mainHandler.postAtTime(notify, rendererToken, SystemClock.uptimeMillis())
+        }
+    }
+
+    private fun isReusableMediaChild(media: PopupProps.Media, frame: FrameLayout): Boolean {
+        if (!frame.isNotEmpty()) return false
+        val child = frame.getChildAt(0)
+        return when (media) {
+            is PopupProps.Media.Image, is PopupProps.Media.Bitmap -> child is ImageView
+            is PopupProps.Media.Whep, is PopupProps.Media.Web -> child is WebView
+            is PopupProps.Media.Video -> child is TextureView
+            is PopupProps.Media.LocalFile -> false
         }
     }
 
@@ -545,7 +575,9 @@ class MediaRenderer(
                 wv.loadUrl("about:blank")
                 // Use post to destroy after current event loop to avoid native crashes
                 wv.post { try { wv.destroy() } catch (_: Exception) {} }
-            } catch (e: Exception) {
+            } catch (e: IllegalStateException) {
+                Log.d("MediaRenderer", "WebView cleanup error: ${e.message}")
+            } catch (e: android.util.AndroidRuntimeException) {
                 Log.d("MediaRenderer", "WebView cleanup error: ${e.message}")
             }
         }
@@ -578,7 +610,9 @@ class MediaRenderer(
                     }
                 }
                 frame.removeAllViews()
-            } catch (e: Exception) {
+            } catch (e: IllegalStateException) {
+                Log.d("MediaRenderer", "UI cleanup error: ${e.message}")
+            } catch (e: IllegalArgumentException) {
                 Log.d("MediaRenderer", "UI cleanup error: ${e.message}")
             }
             (media as? PopupProps.Media.LocalFile)?.let {
@@ -725,20 +759,7 @@ class MediaRenderer(
         retryCount: Int = 0,
         videoContext: Context
     ) {
-        val width = video.width
-        val scale = video.scale
-        val udp = video.udp
-        val uri = video.uri
-        val poster = video.poster
-        val bufferMs = video.bufferMs ?: appSettings.defaultBufferMs.takeIf { it > 0 }
-
-        val (tw, th) = if (isFullscreenActive) {
-            resolveFullscreenFrameSize()
-        } else {
-            val w = if (scale) appContext.getScaledPixels(width) else width
-            val h = video.height?.let { if (scale) appContext.getScaledPixels(it) else it } ?: ((w * 9) / 16)
-            w to h
-        }
+        val (tw, th) = resolveStreamFrameDimensions(video.width, video.height, video.scale)
         callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
         frame.layoutParams.height = th
@@ -747,37 +768,71 @@ class MediaRenderer(
         player = null
         videoView?.let { (it.parent as? ViewGroup)?.removeView(it) }
 
-        val loadControl = lowLatencyBufferDurations(bufferMs)?.let { buf ->
-            Log.d(
-                "PiPup-Media",
-                "Configuring ExoPlayer LoadControl with custom bufferMs=$bufferMs " +
-                    "(minBuf=${buf.minMs}, maxBuf=${buf.maxMs}, " +
-                    "playbackBuf=${buf.startMs}, rebufferBuf=${buf.rebufferMs})"
-            )
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(buf.minMs, buf.maxMs, buf.startMs, buf.rebufferMs)
-                .setPrioritizeTimeOverSizeThresholds(true)
-                .build()
-        } ?: run {
-            Log.d("PiPup-Media", "Configuring ExoPlayer LoadControl with defaults (500, 1000, 250, 500)")
-            DefaultLoadControl.Builder()
-                .setBufferDurationsMs(500, 1000, 250, 500)
-                .setPrioritizeTimeOverSizeThresholds(true)
-                .build()
-        }
-
+        val bufferMs = video.bufferMs ?: appSettings.defaultBufferMs.takeIf { it > 0 }
         val p = ExoPlayer.Builder(appContext)
-            .setLoadControl(loadControl)
+            .setLoadControl(buildVideoLoadControl(bufferMs))
             .build().also { player = it }
 
         val tv = TextureView(videoContext).also {
             videoView = it
             // Use 0.01f (> 0f) so Android's RenderNode does not skip TextureView.draw(),
             // ensuring SurfaceTexture is created while remaining invisible during buffering.
-            it.alpha = 0.01f
+            it.alpha = INVISIBLE_SURFACE_ALPHA
             it.isVisible = false
         }
-        if (video.muted) {
+        configurePlayerAudio(p, video.muted)
+        p.setVideoTextureView(tv)
+        p.repeatMode = Player.REPEAT_MODE_ONE
+        preparePlayerMedia(p, video.uri, video.udp)
+
+        p.addListener(VideoPlayerListener(this, WeakReference(frame), tw, th, video, retryCount, videoContext))
+        attachPosterOrPlaceholder(videoContext, frame, video.poster, video.posterMode)
+        frame.addView(
+            tv,
+            FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER,
+            ),
+        )
+        if (mediaStarted) {
+            tv.isVisible = true
+            p.play()
+        }
+    }
+
+    private fun resolveStreamFrameDimensions(width: Int, height: Int?, scale: Boolean): Pair<Int, Int> {
+        if (isFullscreenActive) return resolveFullscreenFrameSize()
+        val w = if (scale) appContext.getScaledPixels(width) else width
+        val h = height?.let { if (scale) appContext.getScaledPixels(it) else it }
+            ?: ((w * PopupProps.ASPECT_16_9_HEIGHT) / PopupProps.ASPECT_16_9_WIDTH)
+        return w to h
+    }
+
+    private fun buildVideoLoadControl(bufferMs: Int?): DefaultLoadControl {
+        val buf = lowLatencyBufferDurations(bufferMs)
+        return if (buf != null) {
+            Log.d(
+                "PiPup-Media",
+                "Configuring ExoPlayer LoadControl with custom bufferMs=$bufferMs " +
+                    "(minBuf=${buf.minMs}, maxBuf=${buf.maxMs}, " +
+                    "playbackBuf=${buf.startMs}, rebufferBuf=${buf.rebufferMs})",
+            )
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(buf.minMs, buf.maxMs, buf.startMs, buf.rebufferMs)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+        } else {
+            Log.d("PiPup-Media", "Configuring ExoPlayer LoadControl with defaults (500, 1000, 250, 500)")
+            DefaultLoadControl.Builder()
+                .setBufferDurationsMs(DEFAULT_MIN_BUF_MS, DEFAULT_MAX_BUF_MS, DEFAULT_START_BUF_MS, DEFAULT_REBUFFER_MS)
+                .setPrioritizeTimeOverSizeThresholds(true)
+                .build()
+        }
+    }
+
+    private fun configurePlayerAudio(p: ExoPlayer, muted: Boolean) {
+        if (muted) {
             // Disable audio entirely: avoids audio-codec failures (e.g. RTSP Opus) and keeps TV audio untouched.
             p.trackSelectionParameters = p.trackSelectionParameters.buildUpon()
                 .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, true)
@@ -786,9 +841,9 @@ class MediaRenderer(
         } else {
             p.volume = 1f
         }
-        p.setVideoTextureView(tv)
-        p.repeatMode = Player.REPEAT_MODE_ONE
+    }
 
+    private fun preparePlayerMedia(p: ExoPlayer, uri: String, udp: Boolean) {
         val mediaItem = MediaItem.fromUri(uri)
         if (uri.startsWith("rtsp://", ignoreCase = true) || uri.startsWith("rtsps://", ignoreCase = true)) {
             val mediaSource = androidx.media3.exoplayer.rtsp.RtspMediaSource.Factory()
@@ -799,21 +854,6 @@ class MediaRenderer(
             p.setMediaItem(mediaItem)
         }
         p.prepare()
-
-        p.addListener(VideoPlayerListener(this, WeakReference(frame), tw, th, video, retryCount, videoContext))
-        attachPosterOrPlaceholder(videoContext, frame, poster, video.posterMode)
-        frame.addView(
-            tv,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT,
-                Gravity.CENTER
-            )
-        )
-        if (mediaStarted) {
-            tv.isVisible = true
-            p.play()
-        }
     }
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -878,84 +918,94 @@ class MediaRenderer(
 
     @SuppressLint("SetJavaScriptEnabled")
     private fun renderWhep(frame: FrameLayout, whep: PopupProps.Media.Whep, retryCount: Int = 0) {
-        val uri = whep.uri
-        val width = whep.width
-        val height = whep.height
-        val scale = whep.scale
-        val videoFit = whep.videoFit
-        val poster = whep.poster
-
         val finalUri = if (isEmulator()) {
-            uri.replace("127.0.0.1", "10.0.2.2").replace("localhost", "10.0.2.2")
+            whep.uri.replace("127.0.0.1", "10.0.2.2").replace("localhost", "10.0.2.2")
         } else {
-            uri
+            whep.uri
         }
 
+        val injectedHtml = loadWhepHtml(finalUri, whep.videoFit)
+        if (injectedHtml == null) {
+            callback?.notifyReady()
+            return
+        }
+
+        val (tw, th) = resolveStreamFrameDimensions(whep.width, whep.height, whep.scale)
+        callback?.onDimensionsUpdated(tw, th)
+        frame.layoutParams.width = tw
+        frame.layoutParams.height = th
+
+        cleanupWebView()
+        attachPosterOrPlaceholder(frame.context, frame, whep.poster, whep.posterMode)
+
         try {
-            val html = appContext.assets.open("whep.html").bufferedReader().use { it.readText() }
-            val injectedHtml = html.replace("'{{STREAM_URL}}'", "'$finalUri'")
-                .replace("object-fit: cover;", "object-fit: $videoFit !important;")
-
-            val (tw, th) = if (isFullscreenActive) {
-                resolveFullscreenFrameSize()
-            } else {
-                val w = if (scale) appContext.getScaledPixels(width) else width
-                val h = height?.let { if (scale) appContext.getScaledPixels(it) else it } ?: ((w * 9) / 16)
-                w to h
-            }
-            callback?.onDimensionsUpdated(tw, th)
-            frame.layoutParams.width = tw
-            frame.layoutParams.height = th
-
-            cleanupWebView()
-
-            val hasOverlay = !poster.isNullOrBlank() || appSettings.mediaLoadingPlaceholder
-            attachPosterOrPlaceholder(frame.context, frame, poster, whep.posterMode)
-
-            val startTimeMs = SystemClock.elapsedRealtime()
-            Log.d("MediaRenderer", "Creating fresh WebView for WHEP: $finalUri")
-            val wv = WebView(frame.context).apply {
-                visibility = View.VISIBLE
-                alpha = if (hasOverlay) 0.01f else 1f
-                setBackgroundColor(Color.TRANSPARENT)
-                webView = this
-                addJavascriptInterface(
-                    WhepJsBridge(
-                        WeakReference(this@MediaRenderer),
-                        WeakReference(frame),
-                        tw,
-                        height != null,
-                        retryCount,
-                        startTimeMs
-                    ),
-                    "PiPup"
-                )
-                webViewClient = WhepWebViewClient(this@MediaRenderer, retryCount)
-                webChromeClient = AppWebChromeClient()
-                settings.apply {
-                    javaScriptEnabled = true
-                    domStorageEnabled = true
-                    loadWithOverviewMode = false
-                    useWideViewPort = false
-                    mediaPlaybackRequiresUserGesture = false
-                    allowFileAccess = false
-                    allowContentAccess = false
-                    mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
-                }
-            }
+            val wv = createWhepWebView(frame, whep, tw, retryCount)
             frame.addView(
                 wv,
                 FrameLayout.LayoutParams(
                     FrameLayout.LayoutParams.MATCH_PARENT,
                     FrameLayout.LayoutParams.MATCH_PARENT,
-                    Gravity.CENTER
-                )
+                    Gravity.CENTER,
+                ),
             )
             wv.onResume()
             wv.loadDataWithBaseURL(finalUri, injectedHtml, "text/html", "UTF-8", null)
-        } catch (e: Exception) {
+        } catch (e: android.util.AndroidRuntimeException) {
             Log.e("MediaRenderer", "Error setting up WHEP: ${e.message}")
             callback?.notifyReady()
+        } catch (e: IllegalStateException) {
+            Log.e("MediaRenderer", "Error setting up WHEP: ${e.message}")
+            callback?.notifyReady()
+        }
+    }
+
+    private fun loadWhepHtml(finalUri: String, videoFit: String): String? = try {
+        val html = appContext.assets.open("whep.html").bufferedReader().use { it.readText() }
+        html.replace("'{{STREAM_URL}}'", "'$finalUri'")
+            .replace("object-fit: cover;", "object-fit: $videoFit !important;")
+    } catch (e: java.io.IOException) {
+        Log.e("MediaRenderer", "Error loading WHEP template: ${e.message}")
+        null
+    }
+
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun createWhepWebView(
+        frame: FrameLayout,
+        whep: PopupProps.Media.Whep,
+        tw: Int,
+        retryCount: Int,
+    ): WebView {
+        val hasOverlay = !whep.poster.isNullOrBlank() || appSettings.mediaLoadingPlaceholder
+        val startTimeMs = SystemClock.elapsedRealtime()
+        Log.d("MediaRenderer", "Creating fresh WebView for WHEP: ${whep.uri}")
+        return WebView(frame.context).apply {
+            visibility = View.VISIBLE
+            alpha = if (hasOverlay) INVISIBLE_SURFACE_ALPHA else 1f
+            setBackgroundColor(Color.TRANSPARENT)
+            webView = this
+            addJavascriptInterface(
+                WhepJsBridge(
+                    WeakReference(this@MediaRenderer),
+                    WeakReference(frame),
+                    tw,
+                    whep.height != null,
+                    retryCount,
+                    startTimeMs,
+                ),
+                "PiPup",
+            )
+            webViewClient = WhepWebViewClient(this@MediaRenderer, retryCount)
+            webChromeClient = AppWebChromeClient()
+            settings.apply {
+                javaScriptEnabled = true
+                domStorageEnabled = true
+                loadWithOverviewMode = false
+                useWideViewPort = false
+                mediaPlaybackRequiresUserGesture = false
+                allowFileAccess = false
+                allowContentAccess = false
+                mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+            }
         }
     }
 
@@ -1092,20 +1142,21 @@ class MediaRenderer(
         private val startTimeMs = SystemClock.elapsedRealtime()
 
         override fun onVideoSizeChanged(videoSize: VideoSize) {
-            val renderer = rendererRef.get() ?: return
-            val f = frame.get() ?: return
-            if (videoSize.width > 0 && videoSize.height > 0) {
-                renderer.updateSourceDimensions(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio)
-                if (renderer.currentCoversScreen) {
-                    renderer.applyFullscreenMediaFrameSize(f)
-                    renderer.callback?.adjustHeights()
-                    return
-                }
+            if (videoSize.width <= 0 || videoSize.height <= 0) return
+            val renderer = rendererRef.get()
+            val f = frame.get()
+            if (renderer == null || f == null) return
+
+            renderer.updateSourceDimensions(videoSize.width, videoSize.height, videoSize.pixelWidthHeightRatio)
+            if (renderer.currentCoversScreen) {
+                renderer.applyFullscreenMediaFrameSize(f)
+                renderer.callback?.adjustHeights()
+            } else {
                 val finalHeight = heightForDisplayAspect(
                     tw,
                     videoSize.width,
                     videoSize.height,
-                    videoSize.pixelWidthHeightRatio
+                    videoSize.pixelWidthHeightRatio,
                 )
                 if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
                     f.layoutParams.height = finalHeight
@@ -1116,30 +1167,28 @@ class MediaRenderer(
             }
         }
 
+        private fun syncVideoSizeBeforeReveal(renderer: MediaRenderer, f: FrameLayout) {
+            val vs = renderer.player?.videoSize?.takeIf { it.width > 0 && it.height > 0 }
+            if (renderer.currentCoversScreen) {
+                vs?.let { renderer.updateSourceDimensions(it.width, it.height, it.pixelWidthHeightRatio) }
+                renderer.applyFullscreenMediaFrameSize(f)
+                return
+            }
+            val finalHeight = vs?.let {
+                heightForDisplayAspect(tw, it.width, it.height, it.pixelWidthHeightRatio)
+            } ?: f.layoutParams.height.takeIf { it > 0 } ?: th
+            if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
+                f.layoutParams.height = finalHeight
+                f.requestLayout()
+                renderer.callback?.onDimensionsUpdated(tw, finalHeight)
+            }
+        }
+
         private fun revealVideo(renderer: MediaRenderer, f: FrameLayout) {
             if (ready || renderer.callback?.isCleanedUp() == true) return
             ready = true
             val revealStartElapsed = SystemClock.elapsedRealtime() - startTimeMs
-            if (renderer.currentCoversScreen) {
-                renderer.player?.videoSize?.let { vs ->
-                    if (vs.width > 0 && vs.height > 0) {
-                        renderer.updateSourceDimensions(vs.width, vs.height, vs.pixelWidthHeightRatio)
-                    }
-                }
-                renderer.applyFullscreenMediaFrameSize(f)
-            } else {
-                var finalHeight = f.layoutParams.height.takeIf { it > 0 } ?: th
-                renderer.player?.videoSize?.let { vs ->
-                    if (vs.width > 0 && vs.height > 0) {
-                        finalHeight = heightForDisplayAspect(tw, vs.width, vs.height, vs.pixelWidthHeightRatio)
-                    }
-                }
-                if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
-                    f.layoutParams.height = finalHeight
-                    f.requestLayout()
-                    renderer.callback?.onDimensionsUpdated(tw, finalHeight)
-                }
-            }
+            syncVideoSizeBeforeReveal(renderer, f)
             renderer.videoView?.let { keepView ->
                 renderer.crossfadeRevealStream(f, keepView, revealStartElapsed)
             } ?: run {
@@ -1180,20 +1229,21 @@ class MediaRenderer(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            val renderer = rendererRef.get() ?: return
-            val f = frame.get() ?: return
-            val ui = uiContextRef.get() ?: return
-            if (!ready) {
-                if (retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
-                    renderer.mainHandler.postAtTime({
-                        val r = rendererRef.get() ?: return@postAtTime
-                        if (r.callback?.isCleanedUp() == false) {
-                            f.removeAllViews()
-                            r.renderVideo(f, video, retryCount + 1, ui)
-                        }
-                    }, renderer.rendererToken, SystemClock.uptimeMillis() + VIDEO_RETRY_DELAY_MS * (retryCount + 1))
-                    return
-                }
+            if (ready) return
+            val renderer = rendererRef.get()
+            val f = frame.get()
+            val ui = uiContextRef.get()
+            if (renderer == null || f == null || ui == null) return
+
+            if (retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
+                renderer.mainHandler.postAtTime({
+                    val r = rendererRef.get() ?: return@postAtTime
+                    if (r.callback?.isCleanedUp() == false) {
+                        f.removeAllViews()
+                        r.renderVideo(f, video, retryCount + 1, ui)
+                    }
+                }, renderer.rendererToken, SystemClock.uptimeMillis() + VIDEO_RETRY_DELAY_MS * (retryCount + 1))
+            } else {
                 renderer.callback?.showPlaceholder(error.errorCodeName)
                 renderer.callback?.notifyReady()
                 renderer.callback?.adjustHeights()
@@ -1220,13 +1270,15 @@ class MediaRenderer(
 
         fun revealWeb() {
             if (revealed) return
-            val renderer = rendererRef.get() ?: return
-            val f = frame.get() ?: return
-            val wv = renderer.webView ?: return
-            if (renderer.callback?.isCleanedUp() == true) return
-            revealed = true
-            val elapsed = SystemClock.elapsedRealtime() - startTimeMs
-            renderer.crossfadeRevealStream(f, wv, elapsed)
+            val renderer = rendererRef.get()
+            val f = frame.get()
+            val wv = renderer?.webView
+            if (renderer == null || f == null || wv == null) return
+            if (renderer.callback?.isCleanedUp() != true) {
+                revealed = true
+                val elapsed = SystemClock.elapsedRealtime() - startTimeMs
+                renderer.crossfadeRevealStream(f, wv, elapsed)
+            }
         }
 
         override fun onPageCommitVisible(view: WebView?, url: String?) {
@@ -1257,9 +1309,11 @@ class MediaRenderer(
         }
 
         private fun handleWebError(description: String) {
-            val renderer = rendererRef.get() ?: return
-            val f = frame.get() ?: return
-            val ui = uiContextRef.get() ?: return
+            val renderer = rendererRef.get()
+            val f = frame.get()
+            val ui = uiContextRef.get()
+            if (renderer == null || f == null || ui == null) return
+
             renderer.lastMediaError = description
             if (retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
                 renderer.mainHandler.postAtTime({
@@ -1341,21 +1395,26 @@ class MediaRenderer(
             Log.w("MediaRenderer", "Glide load failed: ${e?.message}, model: $model")
             e?.logRootCauses("MediaRenderer")
 
-            val renderer = rendererRef.get() ?: return false
-            val f = frame.get() ?: return false
-            val ui = uiContextRef.get() ?: return false
-            if (retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
+            val renderer = rendererRef.get()
+            val f = frame.get()
+            val ui = uiContextRef.get()
+            if (renderer == null || f == null || ui == null) return false
+
+            val shouldRetry = retryCount < renderer.appSettings.mediaRetries &&
+                renderer.callback?.isCleanedUp() == false
+            return if (shouldRetry) {
                 renderer.mainHandler.postAtTime({
                     val r = rendererRef.get() ?: return@postAtTime
                     if (r.callback?.isCleanedUp() == false) {
                         r.renderGlide(ui, f, source, width, scale, diskCache, skipMemory, retryCount + 1)
                     }
                 }, renderer.rendererToken, SystemClock.uptimeMillis() + GLIDE_RETRY_DELAY_MS * (retryCount + 1))
-                return true
+                true
+            } else {
+                renderer.callback?.showPlaceholder(renderer.appContext.getString(R.string.media_error_load_failed))
+                renderer.callback?.notifyReady()
+                false
             }
-            renderer.callback?.showPlaceholder(renderer.appContext.getString(R.string.media_error_load_failed))
-            renderer.callback?.notifyReady()
-            return false
         }
 
         override fun onResourceReady(
@@ -1365,27 +1424,31 @@ class MediaRenderer(
             dataSource: DataSource,
             isFirstResource: Boolean
         ): Boolean {
-            val renderer = rendererRef.get() ?: return false
-            val f = frame.get() ?: return false
-            val imageView = iv.get() ?: return false
-            if (renderer.callback?.isReadyCalled() == true || renderer.callback?.isCleanedUp() == true) return false
-            if (resource.intrinsicWidth > 0 && resource.intrinsicHeight > 0) {
-                renderer.updateSourceDimensions(resource.intrinsicWidth, resource.intrinsicHeight)
-                if (renderer.currentCoversScreen) {
-                    renderer.applyFullscreenMediaFrameSize(f)
-                } else {
-                    val maxH = (renderer.appContext.resources.displayMetrics.heightPixels * 0.40).toInt()
-                    val targetH = ((tw * resource.intrinsicHeight) / resource.intrinsicWidth).coerceAtMost(maxH)
-                    val fittedW = (targetH * resource.intrinsicWidth) / resource.intrinsicHeight
-                    f.layoutParams.width = fittedW
-                    f.layoutParams.height = targetH
-                    f.requestLayout()
-                    renderer.callback?.onDimensionsUpdated(fittedW, targetH)
+            val renderer = rendererRef.get()
+            val f = frame.get()
+            val imageView = iv.get()
+            if (renderer == null || f == null || imageView == null) return false
+
+            if (renderer.callback?.isReadyCalled() != true && renderer.callback?.isCleanedUp() != true) {
+                if (resource.intrinsicWidth > 0 && resource.intrinsicHeight > 0) {
+                    renderer.updateSourceDimensions(resource.intrinsicWidth, resource.intrinsicHeight)
+                    if (renderer.currentCoversScreen) {
+                        renderer.applyFullscreenMediaFrameSize(f)
+                    } else {
+                        val maxH = (renderer.appContext.resources.displayMetrics.heightPixels * MAX_IMAGE_HEIGHT_RATIO)
+                            .toInt()
+                        val targetH = ((tw * resource.intrinsicHeight) / resource.intrinsicWidth).coerceAtMost(maxH)
+                        val fittedW = (targetH * resource.intrinsicWidth) / resource.intrinsicHeight
+                        f.layoutParams.width = fittedW
+                        f.layoutParams.height = targetH
+                        f.requestLayout()
+                        renderer.callback?.onDimensionsUpdated(fittedW, targetH)
+                    }
                 }
+                renderer.removeStaleViews(f, imageView)
+                renderer.callback?.notifyReady()
+                renderer.callback?.adjustHeights()
             }
-            renderer.removeStaleViews(f, imageView)
-            renderer.callback?.notifyReady()
-            renderer.callback?.adjustHeights()
             return false
         }
     }
@@ -1418,9 +1481,9 @@ class MediaRenderer(
     ) {
         @JavascriptInterface
         fun onSourceDimensions(sourceWidth: Int, sourceHeight: Int) {
-            if (hasExplicitHeight) return
-            val renderer = rendererRef.get() ?: return
-            val frame = frameRef.get() ?: return
+            val renderer = rendererRef.get()
+            val frame = frameRef.get()
+            if (hasExplicitHeight || renderer == null || frame == null) return
             renderer.mainHandler.postAtTime({
                 if (renderer.callback?.isCleanedUp() == false) {
                     renderer.onWhepSourceDimensions(frame, tw, sourceWidth, sourceHeight)

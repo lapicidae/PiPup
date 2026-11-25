@@ -2,81 +2,12 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:NotificationManager.kt$NotificationManager$itemA.key != itemB.key &amp;&amp; !sharesContainer(itemA.props, itemB.props) &amp;&amp; rectB != null &amp;&amp; rectsOverlapWithGap(rectA, rectB)</ID>
-    <ID>ComplexCondition:PermissionsSubmenu.kt$PermissionsSubmenu$why != null &amp;&amp; (isNotSupported || !isGranted || key in alwaysExplainKeys)</ID>
-    <ID>ComplexCondition:PopupProps.kt$PopupProps.Companion$bId.isNotEmpty() &amp;&amp; bLabel.isNotEmpty() &amp;&amp; bId != "null" &amp;&amp; bLabel != "null"</ID>
-    <ID>CyclomaticComplexMethod:AppSettings.kt$AppSettings$fun applyDefaults(props: PopupProps): PopupProps</ID>
-    <ID>CyclomaticComplexMethod:AppSettings.kt$AppSettings.SettingsData.Companion$fun fromJson(jsonStr: String, defaults: SettingsData? = null): SettingsData</ID>
-    <ID>CyclomaticComplexMethod:MediaRenderer.kt$MediaRenderer$fun setup( uiContext: Context, frame: FrameLayout, props: PopupProps, retryCount: Int = 0, targetWidth: Int = 0, targetHeight: Int = 0 )</ID>
-    <ID>CyclomaticComplexMethod:MediaRenderer.kt$MediaRenderer$private fun renderVideo( frame: FrameLayout, video: PopupProps.Media.Video, retryCount: Int = 0, videoContext: Context )</ID>
-    <ID>CyclomaticComplexMethod:MediaRenderer.kt$MediaRenderer.Companion$internal fun fitInFullscreenBox( availW: Int, availH: Int, sourceW: Int, sourceH: Int, pixelWidthHeightRatio: Float = 1f, upscale: Boolean = false, requestedW: Int? = null, requestedH: Int? = null ): Pair&lt;Int, Int&gt;</ID>
-    <ID>CyclomaticComplexMethod:MediaRenderer.kt$MediaRenderer.VideoPlayerListener$private fun revealVideo(renderer: MediaRenderer, f: FrameLayout)</ID>
-    <ID>CyclomaticComplexMethod:NotificationManager.kt$NotificationManager$private fun adjustDualAxisContainerMargins(position: PopupProps.Position)</ID>
-    <ID>CyclomaticComplexMethod:NotificationManager.kt$NotificationManager$private fun applyPositionToLayoutParams( params: FrameLayout.LayoutParams, position: PopupProps.Position, fullscreen: Boolean = false )</ID>
-    <ID>CyclomaticComplexMethod:NotificationManager.kt$NotificationManager$private fun computeSimulatedLayout(items: List&lt;LayoutItem&gt;): Map&lt;String, Rect&gt;</ID>
-    <ID>CyclomaticComplexMethod:NotificationManager.kt$NotificationManager$private fun evaluateAdmission( props: PopupProps, excludedKeys: Set&lt;String&gt; = emptySet(), activeSlotsOverride: Collection&lt;ShownSlot&gt;? = null, candidateMeasuredDimensions: Pair&lt;Int, Int&gt;? = null, replaceSlotKey: String? = null ): AdmissionDecision</ID>
-    <ID>CyclomaticComplexMethod:NotificationManager.kt$NotificationManager$private fun findAtomicEvictionPlan( props: PopupProps, decision: AdmissionDecision, activeSlotsOverride: Collection&lt;ShownSlot&gt;? = null, candidateMeasuredDimensions: Pair&lt;Int, Int&gt;? = null, replaceSlotKey: String? = null ): List&lt;String&gt;?</ID>
-    <ID>CyclomaticComplexMethod:NotificationManager.kt$NotificationManager$private fun handleEnqueue(props: PopupProps, isInternal: Boolean = false)</ID>
-    <ID>CyclomaticComplexMethod:NotificationManager.kt$NotificationManager$private fun performButtonRemoval(idOrKey: String)</ID>
-    <ID>CyclomaticComplexMethod:NotificationManager.kt$NotificationManager$private fun processSingleQueuePass(isStrictSequential: Boolean): Boolean</ID>
-    <ID>CyclomaticComplexMethod:PayloadParser.kt$PayloadParser$private fun parseMultipart(session: NanoHTTPD.IHTTPSession): PopupProps?</ID>
-    <ID>CyclomaticComplexMethod:PermissionsSubmenu.kt$PermissionsSubmenu$private fun addPermissionRow(container: LinearLayout, key: String, isOptional: Boolean = false)</ID>
-    <ID>CyclomaticComplexMethod:PipUpService.kt$PipUpService$private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>CyclomaticComplexMethod:PopupAnimator.kt$PopupAnimator$fun animateIn(props: PopupProps)</ID>
-    <ID>CyclomaticComplexMethod:PopupAnimator.kt$PopupAnimator$fun animateOut(props: PopupProps, completion: () -&gt; Unit)</ID>
-    <ID>CyclomaticComplexMethod:PopupProps.kt$PopupProps$fun toJson(): String</ID>
-    <ID>CyclomaticComplexMethod:PopupProps.kt$PopupProps.Companion$fun fromJson(jsonStr: String): PopupProps</ID>
-    <ID>CyclomaticComplexMethod:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$fun calculate( context: android.content.Context, props: PopupProps, settings: AppSettings, ): PopupLayoutMetrics</ID>
-    <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun applyHeightConstraints(notifyCallback: Boolean)</ID>
-    <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun isMediaContentSame(m1: PopupProps.Media?, m2: PopupProps.Media?): Boolean</ID>
-    <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun reorderViews()</ID>
-    <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun setupHorizontal(container: LinearLayout, first: View, second: View, mediaFirst: Boolean)</ID>
-    <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun setupVertical(container: LinearLayout, first: View, second: View, mediaFirst: Boolean)</ID>
-    <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun updateButtons()</ID>
-    <ID>CyclomaticComplexMethod:PopupView.kt$PopupView$private fun updateVisuals()</ID>
-    <ID>CyclomaticComplexMethod:SettingsActivity.kt$SettingsActivity$fun getController(layoutRes: Int): SubmenuController</ID>
-    <ID>CyclomaticComplexMethod:SettingsActivity.kt$SettingsActivity$fun setupSubmenuFocus(targetNavId: Int = -1)</ID>
-    <ID>CyclomaticComplexMethod:SettingsActivity.kt$SettingsActivity$private fun getStubIdForNavItem(item: NavItem): Int</ID>
-    <ID>CyclomaticComplexMethod:SettingsActivity.kt$SettingsActivity$private fun updatePreview(animate: Boolean = false)</ID>
-    <ID>CyclomaticComplexMethod:SubmenuBase.kt$SubmenuBase$protected fun setupSeekBar( root: View, resId: Int, valueResId: Int, initialValue: Int, max: Int? = null, onChanged: (Int) -&gt; Unit )</ID>
-    <ID>CyclomaticComplexMethod:SubmenuBase.kt$SubmenuBase$protected fun updateSliderValueDisplay(bar: SeekBar, textView: TextView?)</ID>
-    <ID>CyclomaticComplexMethod:SystemModule.kt$SystemModule$private fun fixResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>CyclomaticComplexMethod:UiUtils.kt$fun AlertDialog.setupTvKeyboardAvoidance(input: View)</ID>
-    <ID>CyclomaticComplexMethod:VendorSubmenu.kt$VendorSubmenu$private fun updateStatus()</ID>
     <ID>ExplicitGarbageCollectionCall:CoreUtils.kt$gc()</ID>
     <ID>ExplicitGarbageCollectionCall:CoreUtils.kt$runFinalization()</ID>
     <ID>LargeClass:MediaRenderer.kt$MediaRenderer</ID>
     <ID>LargeClass:NotificationManager.kt$NotificationManager</ID>
     <ID>LargeClass:PipUpService.kt$PipUpService : Service</ID>
     <ID>LargeClass:PopupView.kt$PopupView : FrameLayout</ID>
-    <ID>LargeClass:SettingsActivity.kt$SettingsActivity : AppCompatActivity</ID>
-    <ID>LongMethod:AppSettings.kt$AppSettings.SettingsData.Companion$fun fromJson(jsonStr: String, defaults: SettingsData? = null): SettingsData</ID>
-    <ID>LongMethod:ButtonSubmenu.kt$ButtonSubmenu$override fun onBind(root: View)</ID>
-    <ID>LongMethod:GeneralSubmenu.kt$GeneralSubmenu$override fun onBind(root: View)</ID>
-    <ID>LongMethod:MediaRenderer.kt$MediaRenderer$@SuppressLint("SetJavaScriptEnabled") private fun renderWhep(frame: FrameLayout, whep: PopupProps.Media.Whep, retryCount: Int = 0)</ID>
-    <ID>LongMethod:MediaRenderer.kt$MediaRenderer$private fun renderVideo( frame: FrameLayout, video: PopupProps.Media.Video, retryCount: Int = 0, videoContext: Context )</ID>
-    <ID>LongMethod:NotificationManager.kt$NotificationManager$private fun computeSimulatedLayout(items: List&lt;LayoutItem&gt;): Map&lt;String, Rect&gt;</ID>
-    <ID>LongMethod:NotificationManager.kt$NotificationManager$private fun evaluateAdmission( props: PopupProps, excludedKeys: Set&lt;String&gt; = emptySet(), activeSlotsOverride: Collection&lt;ShownSlot&gt;? = null, candidateMeasuredDimensions: Pair&lt;Int, Int&gt;? = null, replaceSlotKey: String? = null ): AdmissionDecision</ID>
-    <ID>LongMethod:NotificationManager.kt$NotificationManager$private fun handleEnqueue(props: PopupProps, isInternal: Boolean = false)</ID>
-    <ID>LongMethod:OpenSourceLicensesTest.kt$OpenSourceLicensesTest$@Test fun parseGroupedCombinesAndroidXAndMavenFamiliesWhilePreservingArtifacts()</ID>
-    <ID>LongMethod:PayloadParser.kt$PayloadParser$private fun parseMultipart(session: NanoHTTPD.IHTTPSession): PopupProps?</ID>
-    <ID>LongMethod:PayloadParserTest.kt$PayloadParserTest$@Test fun testFullscreenParsingAndLayoutMetrics()</ID>
-    <ID>LongMethod:PermissionsSubmenu.kt$PermissionsSubmenu$private fun addPermissionRow(container: LinearLayout, key: String, isOptional: Boolean = false)</ID>
-    <ID>LongMethod:PipUpService.kt$PipUpService$private fun buildState(): MutableMap&lt;String, Any?&gt;</ID>
-    <ID>LongMethod:PipUpService.kt$PipUpService$private fun handleLandingPage(): NanoHTTPD.Response</ID>
-    <ID>LongMethod:PipUpService.kt$PipUpService$private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>LongMethod:PopupAnimator.kt$PopupAnimator$fun animateIn(props: PopupProps)</ID>
-    <ID>LongMethod:PopupAnimator.kt$PopupAnimator$fun animateOut(props: PopupProps, completion: () -&gt; Unit)</ID>
-    <ID>LongMethod:PopupProps.kt$PopupProps$fun toJson(): String</ID>
-    <ID>LongMethod:PopupProps.kt$PopupProps.Companion$fun fromJson(jsonStr: String): PopupProps</ID>
-    <ID>LongMethod:PopupProps.kt$PopupProps.PopupLayoutMetrics.Companion$fun calculate( context: android.content.Context, props: PopupProps, settings: AppSettings, ): PopupLayoutMetrics</ID>
-    <ID>LongMethod:PopupView.kt$PopupView$private fun applyHeightConstraints(notifyCallback: Boolean)</ID>
-    <ID>LongMethod:PopupView.kt$PopupView$private fun updateButtons()</ID>
-    <ID>LongMethod:PopupView.kt$PopupView$private fun updateVisuals()</ID>
-    <ID>LongMethod:SettingsActivity.kt$SettingsActivity$private fun updatePreview(animate: Boolean = false)</ID>
-    <ID>LongMethod:TextSubmenu.kt$TextSubmenu$override fun onBind(root: View)</ID>
-    <ID>LongMethod:UiUtils.kt$fun AlertDialog.setupTvKeyboardAvoidance(input: View)</ID>
-    <ID>LongMethod:UpdatesSubmenu.kt$UpdatesSubmenu$private fun showUpdateDialog(targetRelease: GitHubRelease)</ID>
     <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, props: PopupProps, retryCount: Int = 0, targetWidth: Int = 0, targetHeight: Int = 0 )</ID>
     <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, source: Any, width: Int, scale: Boolean, diskCache: DiskCacheStrategy, skipMemory: Boolean, retryCount: Int )</ID>
     <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0, )</ID>
@@ -89,61 +20,6 @@
     <ID>LongParameterList:NotificationManager.kt$NotificationManager$( pos: PopupProps.Position, itemWidth: Int, top: Int, bottom: Int, screenWidth: Int, baseMargin: Int )</ID>
     <ID>LongParameterList:NotificationManager.kt$NotificationManager.ShownSlot$( val key: String, var container: LinearLayout? = null, var view: PopupView, var props: PopupProps, var expire: Runnable? = null, var shownAt: Long = SystemClock.elapsedRealtime(), var removedEventFired: Boolean = false, val prepToken: Any = Any() )</ID>
     <ID>LongParameterList:SubmenuBase.kt$SubmenuBase$( root: View, resId: Int, valueResId: Int, initialValue: Int, max: Int? = null, onChanged: (Int) -&gt; Unit )</ID>
-    <ID>LoopWithTooManyJumpStatements:ModuleManager.kt$ModuleManager$for</ID>
-    <ID>LoopWithTooManyJumpStatements:OpenSourceLicenses.kt$OpenSourceLicenses$for</ID>
-    <ID>LoopWithTooManyJumpStatements:PopupProps.kt$PopupProps.Companion$for</ID>
-    <ID>NestedBlockDepth:MediaRenderer.kt$MediaRenderer$@SuppressLint("SetJavaScriptEnabled") private fun renderWhep(frame: FrameLayout, whep: PopupProps.Media.Whep, retryCount: Int = 0)</ID>
-    <ID>NestedBlockDepth:NotificationManager.kt$NotificationManager$private fun adjustDualAxisContainerMargins(position: PopupProps.Position)</ID>
-    <ID>NestedBlockDepth:NotificationManager.kt$NotificationManager$private fun computeSimulatedLayout(items: List&lt;LayoutItem&gt;): Map&lt;String, Rect&gt;</ID>
-    <ID>NestedBlockDepth:NotificationManager.kt$NotificationManager$private fun evaluateAdmission( props: PopupProps, excludedKeys: Set&lt;String&gt; = emptySet(), activeSlotsOverride: Collection&lt;ShownSlot&gt;? = null, candidateMeasuredDimensions: Pair&lt;Int, Int&gt;? = null, replaceSlotKey: String? = null ): AdmissionDecision</ID>
-    <ID>NestedBlockDepth:PayloadParser.kt$PayloadParser$private fun cleanupMultipartCache()</ID>
-    <ID>NestedBlockDepth:PayloadParser.kt$PayloadParser$private fun parseMultipart(session: NanoHTTPD.IHTTPSession): PopupProps?</ID>
-    <ID>NestedBlockDepth:PipUpService.kt$PipUpService$private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>NestedBlockDepth:UpdateManager.kt$UpdateManager$@SuppressLint("RequestInstallPackagesPolicy") private fun installApk(installContext: Context)</ID>
-    <ID>ReturnCount:MainActivity.kt$MainActivity$private fun checkAndShowPermissionNag()</ID>
-    <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.GlideRequestListener$override fun onLoadFailed( e: GlideException?, model: Any?, target: Target&lt;Drawable&gt;, isFirstResource: Boolean ): Boolean</ID>
-    <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.GlideRequestListener$override fun onResourceReady( resource: Drawable, model: Any, target: Target&lt;Drawable&gt;?, dataSource: DataSource, isFirstResource: Boolean ): Boolean</ID>
-    <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.VideoPlayerListener$override fun onPlayerError(error: PlaybackException)</ID>
-    <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.VideoPlayerListener$override fun onVideoSizeChanged(videoSize: VideoSize)</ID>
-    <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.WebRendererClient$fun revealWeb()</ID>
-    <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.WebRendererClient$private fun handleWebError(description: String)</ID>
-    <ID>ReturnCount:MediaRenderer.kt$MediaRenderer.WhepJsBridge$@JavascriptInterface fun onSourceDimensions(sourceWidth: Int, sourceHeight: Int)</ID>
-    <ID>ReturnCount:ModuleManager.kt$ModuleManager$fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response?</ID>
-    <ID>ReturnCount:NotificationManager.kt$NotificationManager$private fun handleEnqueue(props: PopupProps, isInternal: Boolean = false)</ID>
-    <ID>ReturnCount:NotificationManager.kt$NotificationManager$private fun performCancelById(id: String): CancelResult</ID>
-    <ID>ReturnCount:OpenSourceLicenses.kt$OpenSourceLicenses$fun parse(json: String): List&lt;LibraryInfo&gt;</ID>
-    <ID>ReturnCount:OpenSourceLicenses.kt$OpenSourceLicenses$private fun parseAuthor(libObj: JSONObject): String?</ID>
-    <ID>ReturnCount:OpenSourceLicenses.kt$OpenSourceLicenses$private fun resolveGroupName( primary: LibraryInfo?, items: List&lt;LibraryInfo&gt;, lastSegment: String, ): String</ID>
-    <ID>ReturnCount:Permissions.kt$Permissions$fun autoStart(context: Context): Boolean?</ID>
-    <ID>ReturnCount:Permissions.kt$Permissions$fun fixIntent(context: Context, key: String): Intent?</ID>
-    <ID>ReturnCount:Permissions.kt$Permissions$fun launchFix(context: Context, key: String): Boolean</ID>
-    <ID>ReturnCount:PipUpService.kt$PipUpService$private fun handleSettingsRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>ReturnCount:PopupView.kt$PopupView$private fun isMediaContentSame(m1: PopupProps.Media?, m2: PopupProps.Media?): Boolean</ID>
-    <ID>ReturnCount:PowerController.kt$PowerController$fun sleep(context: Context): Boolean</ID>
-    <ID>ReturnCount:PowerModule.kt$PowerModule$private fun handlePowerRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>ReturnCount:Pusher.kt$Pusher$private fun deliver(p: Pending)</ID>
-    <ID>ReturnCount:SettingsActivity.kt$SettingsActivity$fun setupSubmenuFocus(targetNavId: Int = -1)</ID>
-    <ID>ReturnCount:SystemModule.kt$SystemModule$private fun cancelResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>ReturnCount:SystemModule.kt$SystemModule$private fun fixResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>ReturnCount:SystemModule.kt$SystemModule$private fun notifyResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response</ID>
-    <ID>ReturnCount:SystemModule.kt$SystemModule$private fun updateResponse(): NanoHTTPD.Response</ID>
-    <ID>TooGenericExceptionCaught:AdvancedSubmenu.kt$AdvancedSubmenu$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:DebugModule.kt$DebugModule$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:DiscoveryModule.kt$DiscoveryModule$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:MediaRenderer.kt$MediaRenderer$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:NotificationManager.kt$NotificationManager$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:PayloadParser.kt$PayloadParser$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:Permissions.kt$Permissions$e2: Exception</ID>
-    <ID>TooGenericExceptionCaught:Permissions.kt$Permissions$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:Permissions.kt$Permissions$ex: Throwable</ID>
-    <ID>TooGenericExceptionCaught:PiPupAccessibilityService.kt$PiPupAccessibilityService.Companion$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:PipUpService.kt$PipUpService$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:PipUpService.kt$PipUpService$ex: Exception</ID>
-    <ID>TooGenericExceptionCaught:PipUpService.kt$PipUpService$ex: Throwable</ID>
-    <ID>TooGenericExceptionCaught:PowerController.kt$PowerController$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:Pusher.kt$Pusher$ex: Throwable</ID>
-    <ID>TooGenericExceptionCaught:Receiver.kt$Receiver$e: Exception</ID>
-    <ID>TooGenericExceptionCaught:UpdateManager.kt$UpdateManager$e: Exception</ID>
     <ID>TooManyFunctions:AppSettings.kt$AppSettings</ID>
     <ID>TooManyFunctions:DiscoveryModule.kt$DiscoveryModule : PiPupModulePeerDiscoveryProvider</ID>
     <ID>TooManyFunctions:MediaRenderer.kt$MediaRenderer</ID>

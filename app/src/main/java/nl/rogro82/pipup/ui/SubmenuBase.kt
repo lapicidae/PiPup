@@ -111,24 +111,32 @@ abstract class SubmenuBase(
         seekBar.progress = initialValue
         updateSliderValueDisplay(seekBar, textView)
 
+        attachSeekBarChangeListener(seekBar, textView, onChanged)
+        attachSeekBarFocusAndKeyListeners(seekBar)
+        updateSeekBarAppearance(seekBar, false)
+
+        val isAlwaysVisible = seekBar.id in ALWAYS_VISIBLE_SEEKBAR_IDS
+        textView?.visibility = if (settings.advancedMode || isAlwaysVisible) View.VISIBLE else View.GONE
+    }
+
+    private fun attachSeekBarChangeListener(seekBar: SeekBar, textView: TextView?, onChanged: (Int) -> Unit) {
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
                 val isAdjusting = s?.let { activeSeekBars.contains(it.id) } ?: false
-                if (fromUser || isAdjusting) {
-                    updateSliderValueDisplay(seekBar, textView)
-                    onChanged(progress)
+                if (!fromUser && !isAdjusting) return
+                updateSliderValueDisplay(seekBar, textView)
+                onChanged(progress)
 
-                    if (s?.id == R.id.seekbar_animation_duration) {
-                        onSettingsChanged(false)
-                        handler.removeCallbacksAndMessages(animationDebounceToken)
-                        handler.postAtTime(
-                            { onSettingsChanged(true) },
-                            animationDebounceToken,
-                            android.os.SystemClock.uptimeMillis() + ANIMATION_DEBOUNCE_MS,
-                        )
-                    } else {
-                        onSettingsChanged(false)
-                    }
+                if (s?.id == R.id.seekbar_animation_duration) {
+                    onSettingsChanged(false)
+                    handler.removeCallbacksAndMessages(animationDebounceToken)
+                    handler.postAtTime(
+                        { onSettingsChanged(true) },
+                        animationDebounceToken,
+                        android.os.SystemClock.uptimeMillis() + ANIMATION_DEBOUNCE_MS,
+                    )
+                } else {
+                    onSettingsChanged(false)
                 }
             }
             override fun onStartTrackingTouch(s: SeekBar?) {
@@ -143,7 +151,9 @@ abstract class SubmenuBase(
                 }
             }
         })
+    }
 
+    private fun attachSeekBarFocusAndKeyListeners(seekBar: SeekBar) {
         val oldFocusListener = seekBar.onFocusChangeListener
         seekBar.setOnFocusChangeListener { v, hasFocus ->
             oldFocusListener?.onFocusChange(v, hasFocus)
@@ -157,76 +167,58 @@ abstract class SubmenuBase(
         seekBar.setOnKeyListener { view, keyCode, event ->
             val bar = view as SeekBar
             val isActive = activeSeekBars.contains(bar.id)
-            if (event.action == KeyEvent.ACTION_DOWN) {
-                when (keyCode) {
-                    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
-                        val becomingActive = !isActive
-                        if (becomingActive) activeSeekBars.add(bar.id) else activeSeekBars.remove(bar.id)
-                        updateSeekBarAppearance(bar, becomingActive)
-                        true
-                    }
-                    KeyEvent.KEYCODE_DPAD_LEFT -> if (isActive) { bar.progress -= 1; true } else {
-                        settingsActivity?.focusRail()
-                        true
-                    }
-                    KeyEvent.KEYCODE_DPAD_RIGHT -> if (isActive) { bar.progress += 1; true } else true
-                    else -> false
+            if (event.action != KeyEvent.ACTION_DOWN) return@setOnKeyListener isActive
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> {
+                    val becomingActive = !isActive
+                    if (becomingActive) activeSeekBars.add(bar.id) else activeSeekBars.remove(bar.id)
+                    updateSeekBarAppearance(bar, becomingActive)
+                    true
                 }
-            } else isActive
+                KeyEvent.KEYCODE_DPAD_LEFT -> if (isActive) {
+                    bar.progress -= 1
+                    true
+                } else {
+                    settingsActivity?.focusRail()
+                    true
+                }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    if (isActive) bar.progress += 1
+                    true
+                }
+                else -> false
+            }
         }
-        updateSeekBarAppearance(seekBar, false)
-
-        val isAlwaysVisible = seekBar.id == R.id.seekbar_media_timeout ||
-                seekBar.id == R.id.seekbar_media_retries ||
-                seekBar.id == R.id.seekbar_max_popups ||
-                seekBar.id == R.id.seekbar_buffer_ms ||
-                seekBar.id == R.id.seekbar_close_button_size ||
-                seekBar.id == R.id.seekbar_close_button_timeout
-        textView?.visibility = if (settings.advancedMode || isAlwaysVisible) View.VISIBLE else View.GONE
     }
 
     protected fun updateSliderValueDisplay(bar: SeekBar, textView: TextView?) {
-        val format = when (bar.id) {
-            R.id.seekbar_animation_duration -> "%d ms"
-            R.id.seekbar_media_timeout -> context.resources.getQuantityString(
-                R.plurals.settings_media_timeout_seconds,
-                bar.progress,
-                bar.progress,
-            )
-            R.id.seekbar_close_button_size -> "%d dp"
-            R.id.seekbar_close_button_timeout -> if (bar.progress == 0) {
-                context.getString(R.string.settings_close_button_off)
-            } else {
-                context.resources.getQuantityString(
-                    R.plurals.settings_media_timeout_seconds,
-                    bar.progress,
-                    bar.progress
-                )
-            }
-            R.id.seekbar_media_retries -> context.resources.getQuantityString(
-                R.plurals.settings_media_retries_count,
-                bar.progress,
-                bar.progress,
-            )
-            R.id.seekbar_max_popups -> "%d"
-            R.id.seekbar_buffer_ms -> if (bar.progress == 0) context.getString(R.string.language_default) else "%d ms"
-            R.id.seekbar_title_size, R.id.seekbar_message_size, R.id.seekbar_button_size -> "%d sp"
-            else -> context.getString(R.string.settings_slider_value_format, bar.progress, bar.max)
-        }
         textView?.text = when (bar.id) {
-            R.id.seekbar_animation_duration -> String.format(format, bar.progress)
-            R.id.seekbar_close_button_size -> String.format(format, bar.progress + PopupProps.CLOSE_BUTTON_SIZE_MIN)
-            R.id.seekbar_max_popups -> String.format(format, bar.progress + 1)
+            R.id.seekbar_animation_duration -> "${bar.progress} ms"
+            R.id.seekbar_media_timeout -> context.resources.getQuantityString(
+                R.plurals.settings_media_timeout_seconds, bar.progress, bar.progress,
+            )
+            R.id.seekbar_close_button_size -> "${bar.progress + PopupProps.CLOSE_BUTTON_SIZE_MIN} dp"
+            R.id.seekbar_close_button_timeout -> formatCloseButtonTimeout(bar.progress)
+            R.id.seekbar_media_retries -> context.resources.getQuantityString(
+                R.plurals.settings_media_retries_count, bar.progress, bar.progress,
+            )
+            R.id.seekbar_max_popups -> "${bar.progress + 1}"
             R.id.seekbar_buffer_ms -> if (bar.progress == 0) {
-                format
+                context.getString(R.string.language_default)
             } else {
-                String.format(format, bar.progress * BUFFER_STEP_MS)
+                "${bar.progress * BUFFER_STEP_MS} ms"
             }
             R.id.seekbar_title_size,
             R.id.seekbar_message_size,
-            R.id.seekbar_button_size -> String.format(format, bar.progress + PopupProps.TEXT_SIZE_UI_MIN)
-            else -> format
+            R.id.seekbar_button_size -> "${bar.progress + PopupProps.TEXT_SIZE_UI_MIN} sp"
+            else -> context.getString(R.string.settings_slider_value_format, bar.progress, bar.max)
         }
+    }
+
+    private fun formatCloseButtonTimeout(seconds: Int): String = if (seconds == 0) {
+        context.getString(R.string.settings_close_button_off)
+    } else {
+        context.resources.getQuantityString(R.plurals.settings_media_timeout_seconds, seconds, seconds)
     }
 
     protected fun updateSeekBarAppearance(bar: SeekBar, active: Boolean) {
@@ -444,5 +436,13 @@ abstract class SubmenuBase(
     companion object {
         const val BUFFER_STEP_MS = 100
         private const val ANIMATION_DEBOUNCE_MS = 800L
+        private val ALWAYS_VISIBLE_SEEKBAR_IDS = setOf(
+            R.id.seekbar_media_timeout,
+            R.id.seekbar_media_retries,
+            R.id.seekbar_max_popups,
+            R.id.seekbar_buffer_ms,
+            R.id.seekbar_close_button_size,
+            R.id.seekbar_close_button_timeout,
+        )
     }
 }

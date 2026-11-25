@@ -126,10 +126,31 @@ class PermissionsSubmenu(
         // Developers can still see them (grayed out) in Debug builds for integration testing.
         if (isNotSupported && !BuildConfig.DEBUG) return
 
+        val row = buildPermissionRowContainer(key, isGranted)
         val label = Permissions.getLabel(context, key)
+        row.addView(buildPermissionTitleView(label, isNotSupported, isGranted, isOptional))
 
-        val row = LinearLayout(context).apply {
-            id = key.hashCode() and 0x7FFFFFFF
+        val why = Permissions.getWhyText(context, key)
+        if (why != null && shouldExplainPermission(key, isNotSupported, isGranted)) {
+            row.addView(buildWhyTextView(if (isNotSupported) UNSUPPORTED_TEXT else why))
+        }
+
+        if (!isGranted && !isNotSupported) {
+            val adb = Permissions.adbCommand(key, context)
+            if (adb.isNotEmpty()) {
+                row.addView(buildAdbHintView(adb))
+            }
+        }
+
+        container.addView(row)
+    }
+
+    private fun shouldExplainPermission(key: String, isNotSupported: Boolean, isGranted: Boolean): Boolean =
+        isNotSupported || !isGranted || key in ALWAYS_EXPLAIN_KEYS
+
+    private fun buildPermissionRowContainer(key: String, isGranted: Boolean): LinearLayout =
+        LinearLayout(context).apply {
+            id = key.hashCode() and POSITIVE_INT_MASK
             orientation = LinearLayout.VERTICAL
             setPadding(
                 context.dpToPx(PAD_LG_DP),
@@ -138,90 +159,63 @@ class PermissionsSubmenu(
                 context.dpToPx(PAD_LG_DP),
             )
             background = ContextCompat.getDrawable(context, R.drawable.focus_background)
-            val params = LinearLayout.LayoutParams(
+            layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-            )
-            params.bottomMargin = context.dpToPx(PAD_LG_DP)
-            layoutParams = params
-
+            ).apply { bottomMargin = context.dpToPx(PAD_LG_DP) }
             isFocusable = true
             isFocusableInTouchMode = true
-
-            setOnClickListener {
-                if (!isGranted) {
-                    Permissions.showFixDialog(context, key)
-                }
-            }
-
-            onFocusChangeListener = View.OnFocusChangeListener { v, f ->
-                if (f) updatePreviewPosition(v)
-            }
-
+            setOnClickListener { if (!isGranted) Permissions.showFixDialog(context, key) }
+            onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
             setOnKeyListener { _, keyCode, event ->
                 event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT
             }
         }
 
-        val title = TextView(context).apply {
-            text = when {
-                isNotSupported -> context.getString(R.string.permission_granted, label) + " (N/A)"
-                isGranted -> context.getString(R.string.permission_granted, label)
-                else -> context.getString(R.string.permission_missing, label)
-            }
-            textSize = 18f
-
-            val statusColor = when {
-                isNotSupported -> R.color.colorOnSurfaceVariant
-                isGranted -> R.color.status_green
-                isOptional -> R.color.status_orange
-                else -> R.color.status_red
-            }
-            setTextColor(ContextCompat.getColor(context, statusColor))
-            if (!isGranted && !isNotSupported) setTypeface(null, Typeface.BOLD)
+    private fun buildPermissionTitleView(
+        label: String,
+        isNotSupported: Boolean,
+        isGranted: Boolean,
+        isOptional: Boolean,
+    ): TextView = TextView(context).apply {
+        text = when {
+            isNotSupported -> context.getString(R.string.permission_granted, label) + " (N/A)"
+            isGranted -> context.getString(R.string.permission_granted, label)
+            else -> context.getString(R.string.permission_missing, label)
         }
-        row.addView(title)
-
-        val why = Permissions.getWhyText(context, key)
-
-        val alwaysExplainKeys = setOf(
-            Permissions.KEY_OVERLAY,
-            Permissions.KEY_ENERGY,
-            Permissions.KEY_INSTALL,
-            Permissions.KEY_ADMIN,
-            Permissions.KEY_ACCESSIBILITY,
-            Permissions.KEY_POWER,
-        )
-        if (why != null && (isNotSupported || !isGranted || key in alwaysExplainKeys)) {
-            row.addView(TextView(context).apply {
-                text = if (isNotSupported) "This permission is not applicable to your hardware." else why
-                textSize = WHY_TEXT_SIZE_SP
-                alpha = WHY_TEXT_ALPHA
-                setTextColor(ContextCompat.getColor(this@PermissionsSubmenu.context, R.color.colorOnSurfaceVariant))
-                setPadding(0, context.dpToPx(PAD_XS_DP), 0, 0)
-            })
+        textSize = TITLE_TEXT_SIZE_SP
+        val statusColor = when {
+            isNotSupported -> R.color.colorOnSurfaceVariant
+            isGranted -> R.color.status_green
+            isOptional -> R.color.status_orange
+            else -> R.color.status_red
         }
+        setTextColor(ContextCompat.getColor(context, statusColor))
+        if (!isGranted && !isNotSupported) setTypeface(null, Typeface.BOLD)
+    }
 
-        if (!isGranted && !isNotSupported) {
-            val adb = Permissions.adbCommand(key, context)
-            if (adb.isNotEmpty()) {
-                row.addView(TextView(context).apply {
-                    text = context.getString(R.string.permission_adb_format, adb)
-                    textSize = ADB_TEXT_SIZE_SP
-                    typeface = Typeface.MONOSPACE
-                    setTextColor(ContextCompat.getColor(context, R.color.colorPrimary))
-                    setPadding(0, context.dpToPx(PAD_MD_DP), 0, 0)
-                })
-            }
-        }
+    private fun buildWhyTextView(textValue: String): TextView = TextView(context).apply {
+        text = textValue
+        textSize = WHY_TEXT_SIZE_SP
+        alpha = WHY_TEXT_ALPHA
+        setTextColor(ContextCompat.getColor(this@PermissionsSubmenu.context, R.color.colorOnSurfaceVariant))
+        setPadding(0, context.dpToPx(PAD_XS_DP), 0, 0)
+    }
 
-        container.addView(row)
+    private fun buildAdbHintView(adb: String): TextView = TextView(context).apply {
+        text = context.getString(R.string.permission_adb_format, adb)
+        textSize = ADB_TEXT_SIZE_SP
+        typeface = Typeface.MONOSPACE
+        setTextColor(ContextCompat.getColor(context, R.color.colorPrimary))
+        setPadding(0, context.dpToPx(PAD_MD_DP), 0, 0)
     }
 
     /** Timing and layout constants for [PermissionsSubmenu]. */
     companion object {
         private const val REFRESH_INTERVAL_MS = 2000L
+        private const val POSITIVE_INT_MASK = 0x7FFFFFFF
         private const val HEADER_TEXT_SIZE_SP = 14f
+        private const val TITLE_TEXT_SIZE_SP = 18f
         private const val WHY_TEXT_SIZE_SP = 14f
         private const val WHY_TEXT_ALPHA = 0.8f
         private const val ADB_TEXT_SIZE_SP = 11f
@@ -229,5 +223,14 @@ class PermissionsSubmenu(
         private const val PAD_SM_DP = 8
         private const val PAD_MD_DP = 12
         private const val PAD_LG_DP = 16
+        private const val UNSUPPORTED_TEXT = "This permission is not applicable to your hardware."
+        private val ALWAYS_EXPLAIN_KEYS = setOf(
+            Permissions.KEY_OVERLAY,
+            Permissions.KEY_ENERGY,
+            Permissions.KEY_INSTALL,
+            Permissions.KEY_ADMIN,
+            Permissions.KEY_ACCESSIBILITY,
+            Permissions.KEY_POWER,
+        )
     }
 }

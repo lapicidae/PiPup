@@ -74,7 +74,68 @@ class OpenSourceLicensesTest {
 
     @Test
     fun parseGroupedCombinesAndroidXAndMavenFamiliesWhilePreservingArtifacts() {
+        val grouped = OpenSourceLicenses.parseGrouped(SAMPLE_GROUPED_LIBRARIES_JSON)
+        assertEquals(5, grouped.size)
+
+        val byName = grouped.associateBy { it.name }
+
+        val androidx = byName.getValue("AndroidX (Jetpack)")
+        assertNull(androidx.version)
+        assertEquals("The Android Open Source Project", androidx.author)
+        assertEquals(
+            listOf("androidx.appcompat:appcompat:1.8.0", "androidx.core:core-ktx:1.19.1"),
+            androidx.artifacts,
+        )
+
+        val glide = byName.getValue("Glide")
+        assertEquals("5.0.10", glide.version)
+        assertEquals("https://github.com/bumptech/glide", glide.website)
+        assertEquals(2, glide.artifacts.size)
+
+        val kotlinx = byName.getValue("Kotlinx")
+        assertNull(kotlinx.version)
+        assertEquals(2, kotlinx.artifacts.size)
+
+        val media3 = byName.getValue("Media3")
+        assertEquals("1.11.1", media3.version)
+        assertEquals(2, media3.artifacts.size)
+
+        val nano = byName.getValue("NanoHttpd-Core")
+        assertEquals("2.3.1", nano.version)
+        assertEquals(listOf("org.nanohttpd:nanohttpd:2.3.1"), nano.artifacts)
+    }
+
+    @Test
+    fun parseGroupedDoesNotMergeArtifactsWithDifferentLicenses() {
         val json = """
+            {
+              "libraries": [
+                { "uniqueId": "com.example:lib-a", "name": "Lib A", "licenses": ["Apache-2.0"] },
+                { "uniqueId": "com.example:lib-b", "name": "Lib B", "licenses": ["MIT"] }
+              ],
+              "licenses": {
+                "Apache-2.0": { "name": "Apache License 2.0" },
+                "MIT": { "name": "MIT License" }
+              }
+            }
+        """.trimIndent()
+
+        val grouped = OpenSourceLicenses.parseGrouped(json)
+        assertEquals(2, grouped.size)
+        assertEquals(listOf("Lib A", "Lib B"), grouped.map { it.name })
+    }
+
+    @Test
+    fun parseReturnsEmptyListForBlankOrMalformedJson() {
+        assertTrue(OpenSourceLicenses.parse("").isEmpty())
+        assertTrue(OpenSourceLicenses.parse("   ").isEmpty())
+        assertTrue(OpenSourceLicenses.parse("{not-valid-json").isEmpty())
+        assertTrue(OpenSourceLicenses.parse("{}").isEmpty())
+        assertTrue(OpenSourceLicenses.parseGrouped("").isEmpty())
+    }
+
+    private companion object {
+        val SAMPLE_GROUPED_LIBRARIES_JSON = """
             {
               "libraries": [
                 {
@@ -142,64 +203,5 @@ class OpenSourceLicensesTest {
               }
             }
         """.trimIndent()
-
-        val grouped = OpenSourceLicenses.parseGrouped(json)
-        assertEquals(5, grouped.size)
-
-        val byName = grouped.associateBy { it.name }
-
-        val androidx = byName.getValue("AndroidX (Jetpack)")
-        assertNull(androidx.version)
-        assertEquals("The Android Open Source Project", androidx.author)
-        assertEquals(
-            listOf("androidx.appcompat:appcompat:1.8.0", "androidx.core:core-ktx:1.19.1"),
-            androidx.artifacts,
-        )
-
-        val glide = byName.getValue("Glide")
-        assertEquals("5.0.10", glide.version)
-        assertEquals("https://github.com/bumptech/glide", glide.website)
-        assertEquals(2, glide.artifacts.size)
-
-        val kotlinx = byName.getValue("Kotlinx")
-        assertNull(kotlinx.version)
-        assertEquals(2, kotlinx.artifacts.size)
-
-        val media3 = byName.getValue("Media3")
-        assertEquals("1.11.1", media3.version)
-        assertEquals(2, media3.artifacts.size)
-
-        val nano = byName.getValue("NanoHttpd-Core")
-        assertEquals("2.3.1", nano.version)
-        assertEquals(listOf("org.nanohttpd:nanohttpd:2.3.1"), nano.artifacts)
-    }
-
-    @Test
-    fun parseGroupedDoesNotMergeArtifactsWithDifferentLicenses() {
-        val json = """
-            {
-              "libraries": [
-                { "uniqueId": "com.example:lib-a", "name": "Lib A", "licenses": ["Apache-2.0"] },
-                { "uniqueId": "com.example:lib-b", "name": "Lib B", "licenses": ["MIT"] }
-              ],
-              "licenses": {
-                "Apache-2.0": { "name": "Apache License 2.0" },
-                "MIT": { "name": "MIT License" }
-              }
-            }
-        """.trimIndent()
-
-        val grouped = OpenSourceLicenses.parseGrouped(json)
-        assertEquals(2, grouped.size)
-        assertEquals(listOf("Lib A", "Lib B"), grouped.map { it.name })
-    }
-
-    @Test
-    fun parseReturnsEmptyListForBlankOrMalformedJson() {
-        assertTrue(OpenSourceLicenses.parse("").isEmpty())
-        assertTrue(OpenSourceLicenses.parse("   ").isEmpty())
-        assertTrue(OpenSourceLicenses.parse("{not-valid-json").isEmpty())
-        assertTrue(OpenSourceLicenses.parse("{}").isEmpty())
-        assertTrue(OpenSourceLicenses.parseGrouped("").isEmpty())
     }
 }

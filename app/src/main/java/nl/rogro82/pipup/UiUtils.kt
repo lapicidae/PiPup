@@ -134,41 +134,50 @@ fun AlertDialog.setupTvKeyboardAvoidance(input: View) {
     }
     show()
 
-    val handler = Handler(Looper.getMainLooper())
     context.findActivity()?.window?.decorView?.let { decor ->
-        var wasKeyboardVisible = true
-        val posUpdater = Runnable {
-            window?.let { win ->
-                val p = win.attributes
-                p.gravity = if (wasKeyboardVisible) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
-                p.y = if (wasKeyboardVisible) TV_DIALOG_TOP_OFFSET_Y else 0
-                win.attributes = p
-            }
-        }
-        val listener = ViewTreeObserver.OnGlobalLayoutListener {
-            val r = Rect()
-            decor.getWindowVisibleDisplayFrame(r)
-            val screenHeight = decor.rootView.height
-            val keypadHeight = screenHeight - r.bottom
-            val isKeyboardVisible = (keypadHeight > screenHeight * 0.15) ||
-                (
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
-                        decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
-                    )
+        attachKeyboardVisibilityObserver(decor)
+    }
+    configureTvDialogKeyNavigation(input)
+}
 
-            if (isKeyboardVisible != wasKeyboardVisible) {
-                wasKeyboardVisible = isKeyboardVisible
-                handler.removeCallbacks(posUpdater)
-                handler.postDelayed(posUpdater, if (isKeyboardVisible) 0 else 250)
-            }
-        }
-        decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
-        setOnDismissListener {
-            decor.viewTreeObserver.removeOnGlobalLayoutListener(listener)
-            handler.removeCallbacks(posUpdater)
+private fun AlertDialog.attachKeyboardVisibilityObserver(decor: View) {
+    val handler = Handler(Looper.getMainLooper())
+    var wasKeyboardVisible = true
+    val posUpdater = Runnable {
+        window?.let { win ->
+            val p = win.attributes
+            p.gravity = if (wasKeyboardVisible) Gravity.TOP or Gravity.CENTER_HORIZONTAL else Gravity.CENTER
+            p.y = if (wasKeyboardVisible) TV_DIALOG_TOP_OFFSET_Y else 0
+            win.attributes = p
         }
     }
+    val listener = ViewTreeObserver.OnGlobalLayoutListener {
+        val isKeyboardVisible = isImeCurrentlyVisible(decor)
+        if (isKeyboardVisible != wasKeyboardVisible) {
+            wasKeyboardVisible = isKeyboardVisible
+            handler.removeCallbacks(posUpdater)
+            handler.postDelayed(posUpdater, if (isKeyboardVisible) 0 else 250)
+        }
+    }
+    decor.viewTreeObserver.addOnGlobalLayoutListener(listener)
+    setOnDismissListener {
+        decor.viewTreeObserver.removeOnGlobalLayoutListener(listener)
+        handler.removeCallbacks(posUpdater)
+    }
+}
 
+private fun isImeCurrentlyVisible(decor: View): Boolean {
+    val r = Rect()
+    decor.getWindowVisibleDisplayFrame(r)
+    val screenHeight = decor.rootView.height
+    val keypadHeight = screenHeight - r.bottom
+    val frameIndicatesIme = keypadHeight > screenHeight * 0.15
+    val insetsIndicateIme = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
+        decor.rootWindowInsets?.isVisible(android.view.WindowInsets.Type.ime()) == true
+    return frameIndicatesIme || insetsIndicateIme
+}
+
+private fun AlertDialog.configureTvDialogKeyNavigation(input: View) {
     input.setOnKeyListener { _, keyCode, event ->
         val handled = event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_UP
         if (handled) {
@@ -180,8 +189,15 @@ fun AlertDialog.setupTvKeyboardAvoidance(input: View) {
     val buttonKeyListener = View.OnKeyListener { _, keyCode, event ->
         if (event.action != KeyEvent.ACTION_DOWN) return@OnKeyListener false
         when (keyCode) {
-            KeyEvent.KEYCODE_DPAD_UP -> { input.requestFocus(); true }
-            KeyEvent.KEYCODE_DPAD_DOWN -> { input.requestFocus(); input.dispatchKeyEvent(event); true }
+            KeyEvent.KEYCODE_DPAD_UP -> {
+                input.requestFocus()
+                true
+            }
+            KeyEvent.KEYCODE_DPAD_DOWN -> {
+                input.requestFocus()
+                input.dispatchKeyEvent(event)
+                true
+            }
             else -> false
         }
     }

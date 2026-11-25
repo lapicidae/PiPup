@@ -117,7 +117,11 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
             }
 
             nsd.registerService(serviceInfo, NsdManager.PROTOCOL_DNS_SD, registrationListener)
-        } catch (e: Exception) {
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "Failed to register NSD service", e)
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "Failed to register NSD service", e)
+        } catch (e: SecurityException) {
             Log.e(TAG, "Failed to register NSD service", e)
         }
     }
@@ -126,7 +130,9 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
         registrationListener?.let {
             try {
                 nsdManager?.unregisterService(it)
-            } catch (e: Exception) {
+            } catch (e: IllegalArgumentException) {
+                Log.e(TAG, "Failed to unregister NSD service", e)
+            } catch (e: IllegalStateException) {
                 Log.e(TAG, "Failed to unregister NSD service", e)
             }
         }
@@ -403,7 +409,9 @@ class DiscoveryModule : PiPupModule, PeerDiscoveryProvider {
         discoveryListener?.let {
             try {
                 nsdManager?.stopServiceDiscovery(it)
-            } catch (e: Exception) {
+            } catch (e: IllegalArgumentException) {
+                Log.e(TAG, "Failed to stop discovery", e)
+            } catch (e: IllegalStateException) {
                 Log.e(TAG, "Failed to stop discovery", e)
             }
         }

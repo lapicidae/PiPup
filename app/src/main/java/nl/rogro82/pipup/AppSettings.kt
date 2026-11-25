@@ -401,98 +401,120 @@ class AppSettings(context: Context) {
 
         /** JSON deserialization helpers for [SettingsData]. */
         companion object {
+            private val DEFAULT_SNAPSHOT = SettingsData(
+                positionIndex = 0,
+                backgroundColor = "",
+                backgroundAlpha = DEFAULT_BG_ALPHA,
+                titleColor = "",
+                titleSize = DEFAULT_TITLE_SIZE,
+                messageColor = "",
+                messageSize = DEFAULT_MSG_SIZE,
+                borderRadius = DEFAULT_RADIUS,
+                borderWidth = DEFAULT_BORDER_WIDTH,
+                borderColor = "",
+                contentPadding = DEFAULT_PADDING,
+                titleAlignment = 0,
+                messageAlignment = 0,
+                mediaPosition = 0,
+                animationType = 0,
+                animationDuration = DEFAULT_ANIMATION_DURATION_MS,
+                animationExit = false,
+                mediaTimeout = DEFAULT_MEDIA_TIMEOUT_SEC,
+                mediaRetries = DEFAULT_MEDIA_RETRIES,
+                maxPopups = 1,
+                appTheme = 0,
+                advancedMode = false,
+                moduleModes = emptyMap(),
+                updateChannel = 0,
+                updateInterval = DEFAULT_UPDATE_INTERVAL,
+                updateNotificationStyle = 1,
+                lastUpdateCheck = 0L,
+                updateAvailableTag = "",
+                updateRepeat = false,
+                lastNotifiedTag = "",
+                pendingUpdateId = -1L,
+                pendingUpdateDigest = "",
+                pendingUpdateTagName = "",
+                language = "default",
+            )
+
+            private fun <T> JSONObject.optParsed(key: String, fallback: T, parser: (Any) -> T?): T {
+                return if (has(key) && !isNull(key)) parser(get(key)) ?: fallback else fallback
+            }
+
             /**
              * Parses a JSON object into [SettingsData], preserving any omitted fields from
              * [defaults] when provided (partial merge).
              */
             fun fromJson(jsonStr: String, defaults: SettingsData? = null): SettingsData {
                 val j = JSONObject(jsonStr)
-                val mergedModes = (defaults?.moduleModes ?: emptyMap()).toMutableMap()
+                val base = defaults ?: DEFAULT_SNAPSHOT
+                val mergedModes = base.moduleModes.toMutableMap()
                 j.optJSONObject("moduleModes")?.let { modes ->
                     modes.keys().forEach { key -> mergedModes[key] = modes.getInt(key) }
                 }
                 return SettingsData(
-                    positionIndex = j.optInt("positionIndex", defaults?.positionIndex ?: 0),
-                    backgroundColor = j.optString("backgroundColor", defaults?.backgroundColor ?: ""),
-                    backgroundAlpha = j.optInt("backgroundAlpha", defaults?.backgroundAlpha ?: DEFAULT_BG_ALPHA),
-                    titleColor = j.optString("titleColor", defaults?.titleColor ?: ""),
-                    titleSize = j.optDouble(
-                        "titleSize",
-                        defaults?.titleSize?.toDouble() ?: DEFAULT_TITLE_SIZE.toDouble()
-                    ).toFloat(),
-                    messageColor = j.optString("messageColor", defaults?.messageColor ?: ""),
-                    messageSize = j.optDouble(
-                        "messageSize",
-                        defaults?.messageSize?.toDouble() ?: DEFAULT_MSG_SIZE.toDouble()
-                    ).toFloat(),
-                    borderRadius = j.optInt("borderRadius", defaults?.borderRadius ?: DEFAULT_RADIUS),
-                    borderWidth = j.optInt("borderWidth", defaults?.borderWidth ?: DEFAULT_BORDER_WIDTH),
-                    borderColor = j.optString("borderColor", defaults?.borderColor ?: ""),
-                    contentPadding = j.optInt("contentPadding", defaults?.contentPadding ?: DEFAULT_PADDING),
-                    titleAlignment = j.optInt("titleAlignment", defaults?.titleAlignment ?: 0),
-                    messageAlignment = j.optInt("messageAlignment", defaults?.messageAlignment ?: 0),
-                    mediaPosition = j.optInt("mediaPosition", defaults?.mediaPosition ?: 0),
-                    animationType = j.optInt("animationType", defaults?.animationType ?: 0),
-                    animationDuration = j.optInt(
-                        "animationDuration",
-                        defaults?.animationDuration ?: DEFAULT_ANIMATION_DURATION_MS
-                    ),
-                    animationExit = j.optBoolean("animationExit", defaults?.animationExit ?: false),
-                    mediaTimeout = j.optInt("mediaTimeout", defaults?.mediaTimeout ?: DEFAULT_MEDIA_TIMEOUT_SEC),
-                    mediaRetries = j.optInt("mediaRetries", defaults?.mediaRetries ?: DEFAULT_MEDIA_RETRIES),
-                    maxPopups = j.optInt("maxPopups", defaults?.maxPopups ?: 1),
-                    popupLoadingBehavior = j.optInt("popupLoadingBehavior", defaults?.popupLoadingBehavior ?: 0),
-                    defaultBufferMs = j.optInt("defaultBufferMs", defaults?.defaultBufferMs ?: 0),
-                    mediaLoadingPlaceholder = j.optBoolean(
-                        "mediaLoadingPlaceholder",
-                        defaults?.mediaLoadingPlaceholder ?: false
-                    ),
-                    mediaFullBleed = j.optBoolean("mediaFullBleed", defaults?.mediaFullBleed ?: false),
-                    fullscreenUpscale = j.optBoolean("fullscreenUpscale", defaults?.fullscreenUpscale ?: false),
-                    liveBadge = j.optBoolean("liveBadge", defaults?.liveBadge ?: false),
-                    liveBadgePosition = j.optString("liveBadgePosition", defaults?.liveBadgePosition ?: "bottom_right"),
-                    closeButton = if (j.has("closeButton") && !j.isNull("closeButton")) {
-                        PopupProps.parseCloseButton(j.get("closeButton")) ?: "none"
-                    } else {
-                        defaults?.closeButton ?: "none"
-                    },
-                    closeButtonTimeout = if (j.has("closeButtonTimeout") && !j.isNull("closeButtonTimeout")) {
-                        PopupProps.parseCloseButtonTimeout(j.get("closeButtonTimeout"))
-                            ?: PopupProps.CLOSE_BUTTON_TIMEOUT_DEFAULT
-                    } else {
-                        defaults?.closeButtonTimeout ?: PopupProps.CLOSE_BUTTON_TIMEOUT_DEFAULT
-                    },
-                    closeButtonSize = if (j.has("closeButtonSize") && !j.isNull("closeButtonSize")) {
-                        PopupProps.parseCloseButtonSize(j.get("closeButtonSize"))
-                            ?: PopupProps.CLOSE_BUTTON_SIZE_DEFAULT
-                    } else {
-                        defaults?.closeButtonSize ?: PopupProps.CLOSE_BUTTON_SIZE_DEFAULT
-                    },
-                    appTheme = j.optInt("appTheme", defaults?.appTheme ?: 0),
-                    advancedMode = j.optBoolean("advancedMode", defaults?.advancedMode ?: false),
+                    positionIndex = j.optInt("positionIndex", base.positionIndex),
+                    backgroundColor = j.optString("backgroundColor", base.backgroundColor),
+                    backgroundAlpha = j.optInt("backgroundAlpha", base.backgroundAlpha),
+                    titleColor = j.optString("titleColor", base.titleColor),
+                    titleSize = j.optDouble("titleSize", base.titleSize.toDouble()).toFloat(),
+                    messageColor = j.optString("messageColor", base.messageColor),
+                    messageSize = j.optDouble("messageSize", base.messageSize.toDouble()).toFloat(),
+                    borderRadius = j.optInt("borderRadius", base.borderRadius),
+                    borderWidth = j.optInt("borderWidth", base.borderWidth),
+                    borderColor = j.optString("borderColor", base.borderColor),
+                    contentPadding = j.optInt("contentPadding", base.contentPadding),
+                    titleAlignment = j.optInt("titleAlignment", base.titleAlignment),
+                    messageAlignment = j.optInt("messageAlignment", base.messageAlignment),
+                    mediaPosition = j.optInt("mediaPosition", base.mediaPosition),
+                    animationType = j.optInt("animationType", base.animationType),
+                    animationDuration = j.optInt("animationDuration", base.animationDuration),
+                    animationExit = j.optBoolean("animationExit", base.animationExit),
+                    mediaTimeout = j.optInt("mediaTimeout", base.mediaTimeout),
+                    mediaRetries = j.optInt("mediaRetries", base.mediaRetries),
+                    maxPopups = j.optInt("maxPopups", base.maxPopups),
+                    popupLoadingBehavior = j.optInt("popupLoadingBehavior", base.popupLoadingBehavior),
+                    defaultBufferMs = j.optInt("defaultBufferMs", base.defaultBufferMs),
+                    mediaLoadingPlaceholder = j.optBoolean("mediaLoadingPlaceholder", base.mediaLoadingPlaceholder),
+                    mediaFullBleed = j.optBoolean("mediaFullBleed", base.mediaFullBleed),
+                    fullscreenUpscale = j.optBoolean("fullscreenUpscale", base.fullscreenUpscale),
+                    liveBadge = j.optBoolean("liveBadge", base.liveBadge),
+                    liveBadgePosition = j.optString("liveBadgePosition", base.liveBadgePosition),
+                    appTheme = j.optInt("appTheme", base.appTheme),
+                    advancedMode = j.optBoolean("advancedMode", base.advancedMode),
                     moduleModes = mergedModes,
-                    updateChannel = j.optInt("updateChannel", defaults?.updateChannel ?: 0),
-                    updateInterval = j.optInt("updateInterval", defaults?.updateInterval ?: DEFAULT_UPDATE_INTERVAL),
-                    updateNotificationStyle = j.optInt(
-                        "updateNotificationStyle",
-                        defaults?.updateNotificationStyle ?: 1
-                    ),
-                    lastUpdateCheck = j.optLong("lastUpdateCheck", defaults?.lastUpdateCheck ?: 0L),
-                    updateAvailableTag = j.optString("updateAvailableTag", defaults?.updateAvailableTag ?: ""),
-                    updateRepeat = j.optBoolean("updateRepeat", defaults?.updateRepeat ?: false),
-                    lastNotifiedTag = j.optString("lastNotifiedTag", defaults?.lastNotifiedTag ?: ""),
-                    pendingUpdateId = j.optLong("pendingUpdateId", defaults?.pendingUpdateId ?: -1L),
-                    pendingUpdateDigest = j.optString("pendingUpdateDigest", defaults?.pendingUpdateDigest ?: ""),
-                    pendingUpdateTagName = j.optString("pendingUpdateTagName", defaults?.pendingUpdateTagName ?: ""),
-                    language = j.optString("language", defaults?.language ?: "default"),
-                    moduleModeMedia = if (j.has("moduleModeMedia")) {
-                        j.getInt("moduleModeMedia")
-                    } else {
-                        defaults?.moduleModeMedia
-                    },
-                    webhookHeartbeat = j.optInt("webhookHeartbeat", defaults?.webhookHeartbeat ?: 0)
-                )
+                    updateChannel = j.optInt("updateChannel", base.updateChannel),
+                    updateInterval = j.optInt("updateInterval", base.updateInterval),
+                    updateNotificationStyle = j.optInt("updateNotificationStyle", base.updateNotificationStyle),
+                    lastUpdateCheck = j.optLong("lastUpdateCheck", base.lastUpdateCheck),
+                    updateAvailableTag = j.optString("updateAvailableTag", base.updateAvailableTag),
+                    updateRepeat = j.optBoolean("updateRepeat", base.updateRepeat),
+                    lastNotifiedTag = j.optString("lastNotifiedTag", base.lastNotifiedTag),
+                    pendingUpdateId = j.optLong("pendingUpdateId", base.pendingUpdateId),
+                    pendingUpdateDigest = j.optString("pendingUpdateDigest", base.pendingUpdateDigest),
+                    pendingUpdateTagName = j.optString("pendingUpdateTagName", base.pendingUpdateTagName),
+                    language = j.optString("language", base.language),
+                ).withExtraJsonFields(j, base)
             }
+
+            private fun SettingsData.withExtraJsonFields(j: JSONObject, base: SettingsData): SettingsData = copy(
+                closeButton = j.optParsed("closeButton", base.closeButton) {
+                    PopupProps.parseCloseButton(it) ?: "none"
+                },
+                closeButtonTimeout = j.optParsed("closeButtonTimeout", base.closeButtonTimeout) {
+                    PopupProps.parseCloseButtonTimeout(it) ?: PopupProps.CLOSE_BUTTON_TIMEOUT_DEFAULT
+                },
+                closeButtonSize = j.optParsed("closeButtonSize", base.closeButtonSize) {
+                    PopupProps.parseCloseButtonSize(it) ?: PopupProps.CLOSE_BUTTON_SIZE_DEFAULT
+                },
+                moduleModeMedia = if (j.has("moduleModeMedia")) {
+                    j.getInt("moduleModeMedia")
+                } else {
+                    base.moduleModeMedia
+                },
+                webhookHeartbeat = j.optInt("webhookHeartbeat", base.webhookHeartbeat),
+            )
         }
     }
 
@@ -673,44 +695,25 @@ class AppSettings(context: Context) {
      * Applies user-configured default settings to a PopupProps instance.
      */
     fun applyDefaults(props: PopupProps): PopupProps {
-        val updatedMedia = when (val m = props.media) {
-            is PopupProps.Media.Video -> {
-                if (m.bufferMs == null && defaultBufferMs > 0) {
-                    m.copy(bufferMs = defaultBufferMs.coerceIn(PopupProps.BUFFER_MS_MIN, PopupProps.BUFFER_MS_MAX))
-                } else {
-                    m
-                }
-            }
-            else -> m
-        }
         return props.copy(
-            backgroundColor = if (props.backgroundColor == "#CC000000") {
-                getFullBackgroundColor()
-            } else {
-                props.backgroundColor
-            },
-            borderColor = if (props.borderColor == "#00000000") borderColor else props.borderColor,
-            borderRadius = if (props.borderRadius == 0) borderRadius else props.borderRadius,
-            borderWidth = if (props.borderWidth == 0) borderWidth else props.borderWidth,
+            backgroundColor = props.backgroundColor.orIfDefault("#CC000000", getFullBackgroundColor()),
+            borderColor = props.borderColor.orIfDefault("#00000000", borderColor),
+            borderRadius = props.borderRadius.orIfDefault(0, borderRadius),
+            borderWidth = props.borderWidth.orIfDefault(0, borderWidth),
             contentPadding = props.contentPadding ?: contentPadding,
-            titleColor = if (props.titleColor == "#FFFFFF") titleColor else props.titleColor,
-            titleSize = if (props.titleSize == PopupProps.DEFAULT_TITLE_SIZE_SP) titleSize else props.titleSize,
-            messageColor = if (props.messageColor == "#FFFFFF") messageColor else props.messageColor,
-            messageSize = if (props.messageSize == PopupProps.DEFAULT_MESSAGE_SIZE_SP) {
-                messageSize
-            } else {
-                props.messageSize
-            },
-            titleAlignment = if (props.titleAlignment == 0) titleAlignment else props.titleAlignment,
-            messageAlignment = if (props.messageAlignment == 0) messageAlignment else props.messageAlignment,
-            media = updatedMedia,
+            titleColor = props.titleColor.orIfDefault("#FFFFFF", titleColor),
+            titleSize = props.titleSize.orIfDefault(PopupProps.DEFAULT_TITLE_SIZE_SP, titleSize),
+            messageColor = props.messageColor.orIfDefault("#FFFFFF", messageColor),
+            messageSize = props.messageSize.orIfDefault(PopupProps.DEFAULT_MESSAGE_SIZE_SP, messageSize),
+            titleAlignment = props.titleAlignment.orIfDefault(0, titleAlignment),
+            messageAlignment = props.messageAlignment.orIfDefault(0, messageAlignment),
+            media = applyMediaDefaults(props.media),
             mediaPosition = props.mediaPosition ?: mediaPosition,
-            animationType = if (props.animationType == 0) animationType else props.animationType,
-            animationDuration = if (props.animationDuration == PopupProps.DEFAULT_ANIMATION_DURATION_MS) {
+            animationType = props.animationType.orIfDefault(0, animationType),
+            animationDuration = props.animationDuration.orIfDefault(
+                PopupProps.DEFAULT_ANIMATION_DURATION_MS,
                 animationDuration
-            } else {
-                props.animationDuration
-            },
+            ),
             animationExit = props.animationExit || animationExit,
             mediaFullBleed = props.mediaFullBleed ?: mediaFullBleed,
             fullscreenUpscale = props.fullscreenUpscale ?: fullscreenUpscale,
@@ -721,6 +724,15 @@ class AppSettings(context: Context) {
             closeButtonSize = props.closeButtonSize ?: closeButtonSize
         )
     }
+
+    private fun <T> T.orIfDefault(sentinel: T, fallback: T): T = if (this == sentinel) fallback else this
+
+    private fun applyMediaDefaults(media: PopupProps.Media?): PopupProps.Media? =
+        if (media is PopupProps.Media.Video && media.bufferMs == null && defaultBufferMs > 0) {
+            media.copy(bufferMs = defaultBufferMs.coerceIn(PopupProps.BUFFER_MS_MIN, PopupProps.BUFFER_MS_MAX))
+        } else {
+            media
+        }
 
     private class StringPref(
         val key: String,

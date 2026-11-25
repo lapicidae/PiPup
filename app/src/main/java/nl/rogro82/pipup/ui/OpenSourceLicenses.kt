@@ -48,8 +48,8 @@ object OpenSourceLicenses {
         return try {
             val root = JSONObject(json)
             val licenseMap = parseLicenseMap(root.optJSONObject("licenses"))
-            val libraries = root.optJSONArray("libraries") ?: return emptyList()
-            parseLibraries(libraries, licenseMap).sortedByName()
+            val libraries = root.optJSONArray("libraries")
+            if (libraries == null) emptyList() else parseLibraries(libraries, licenseMap).sortedByName()
         } catch (_: Exception) {
             emptyList()
         }
@@ -150,16 +150,16 @@ object OpenSourceLicenses {
         items: List<LibraryInfo>,
         lastSegment: String,
     ): String {
-        primary?.name?.let { return it }
-        val commonPrefix = longestCommonWordPrefix(items.map { it.name })
-        if (commonPrefix.isNotEmpty()) {
-            return if (commonPrefix.all { it.isLowerCase() || !it.isLetter() }) {
+        val commonPrefix = if (primary == null) longestCommonWordPrefix(items.map { it.name }) else ""
+        return when {
+            primary != null -> primary.name
+            commonPrefix.isNotEmpty() -> if (commonPrefix.all { it.isLowerCase() || !it.isLetter() }) {
                 commonPrefix.replaceFirstChar { it.uppercaseChar() }
             } else {
                 commonPrefix
             }
+            else -> lastSegment.replaceFirstChar { it.uppercaseChar() }
         }
-        return lastSegment.replaceFirstChar { it.uppercaseChar() }
     }
 
     private fun longestCommonWordPrefix(names: List<String>): String {
@@ -200,35 +200,40 @@ object OpenSourceLicenses {
     private fun parseLibraries(array: JSONArray, licenseMap: Map<String, LicenseInfo>): List<LibraryInfo> {
         val result = ArrayList<LibraryInfo>(array.length())
         for (i in 0 until array.length()) {
-            val obj = array.optJSONObject(i) ?: continue
-            val uniqueId = obj.optNonBlankString("uniqueId") ?: continue
-            val name = obj.optNonBlankString("name") ?: uniqueId
-            val version = obj.optNonBlankString("artifactVersion")
-            val author = parseAuthor(obj)
-            val website = obj.optNonBlankString("website")
-                ?: obj.optJSONObject("scm")?.optNonBlankString("url")
-            val licenses = parseLibraryLicenses(obj.optJSONArray("licenses"), licenseMap)
-            result.add(
-                LibraryInfo(
-                    uniqueId = uniqueId,
-                    name = name,
-                    version = version,
-                    description = obj.optNonBlankString("description"),
-                    author = author,
-                    website = website,
-                    licenses = licenses,
-                ),
-            )
+            array.optJSONObject(i)?.let { parseLibraryObject(it, licenseMap) }?.let { result.add(it) }
         }
         return result
     }
 
+    private fun parseLibraryObject(obj: JSONObject, licenseMap: Map<String, LicenseInfo>): LibraryInfo? {
+        val uniqueId = obj.optNonBlankString("uniqueId") ?: return null
+        val name = obj.optNonBlankString("name") ?: uniqueId
+        val version = obj.optNonBlankString("artifactVersion")
+        val author = parseAuthor(obj)
+        val website = obj.optNonBlankString("website")
+            ?: obj.optJSONObject("scm")?.optNonBlankString("url")
+        val licenses = parseLibraryLicenses(obj.optJSONArray("licenses"), licenseMap)
+        return LibraryInfo(
+            uniqueId = uniqueId,
+            name = name,
+            version = version,
+            description = obj.optNonBlankString("description"),
+            author = author,
+            website = website,
+            licenses = licenses,
+        )
+    }
+
     private fun parseAuthor(libObj: JSONObject): String? {
-        libObj.optJSONObject("organization")?.optNonBlankString("name")?.let { return it }
-        val devs = libObj.optJSONArray("developers") ?: return null
-        val names = mutableListOf<String>()
-        for (i in 0 until devs.length()) {
-            devs.optJSONObject(i)?.optNonBlankString("name")?.let { names.add(it) }
+        val orgName = libObj.optJSONObject("organization")?.optNonBlankString("name")
+        if (orgName != null) return orgName
+        val devs = libObj.optJSONArray("developers")
+        val names = buildList {
+            if (devs != null) {
+                for (i in 0 until devs.length()) {
+                    devs.optJSONObject(i)?.optNonBlankString("name")?.let(::add)
+                }
+            }
         }
         return names.takeIf { it.isNotEmpty() }?.joinToString(", ")
     }

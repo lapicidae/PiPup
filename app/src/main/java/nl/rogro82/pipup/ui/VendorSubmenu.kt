@@ -92,28 +92,20 @@ class VendorSubmenu(
         val accEnabled = PiPupAccessibilityService.isEnabledInSettings(context)
         val accRunning = PiPupAccessibilityService.isAvailable()
 
-        val statusText = when {
-            !isTcl -> context.getString(R.string.vendor_status_not_tcl)
-            !isEnabled -> context.getString(R.string.vendor_status_disabled)
-            accRunning -> context.getString(R.string.vendor_status_active)
-            accEnabled -> context.getString(R.string.vendor_status_waiting)
-            else -> context.getString(R.string.vendor_status_inactive)
-        }
-
-        val color = when {
-            !isTcl -> R.color.colorOnSurfaceVariant
-            !isEnabled -> R.color.status_red
-            accRunning -> R.color.status_green
-            accEnabled -> R.color.status_orange
-            else -> R.color.status_red
+        val (statusTextRes, colorRes) = when {
+            !isTcl -> R.string.vendor_status_not_tcl to R.color.colorOnSurfaceVariant
+            !isEnabled -> R.string.vendor_status_disabled to R.color.status_red
+            accRunning -> R.string.vendor_status_active to R.color.status_green
+            accEnabled -> R.string.vendor_status_waiting to R.color.status_orange
+            else -> R.string.vendor_status_inactive to R.color.status_red
         }
 
         label.text = context.getString(
             R.string.settings_module_setting_format,
             context.getString(R.string.settings_vendor_tcl_keepalive),
-            statusText,
+            context.getString(statusTextRes),
         )
-        label.setTextColor(ContextCompat.getColor(context, color))
+        label.setTextColor(ContextCompat.getColor(context, colorRes))
     }
 
     private fun addSectionHeader(container: LinearLayout, title: String) {

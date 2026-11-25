@@ -97,7 +97,8 @@ class DebugModule : PiPupModule {
 
                 // 3. Trigger manual GC
                 triggerSystemGc()
-            } catch (e: Exception) {
+            } catch (@Suppress("TooGenericExceptionCaught") e: Exception) {
+                // Debug cleanup must always count down the latch even on OEM WebView/Glide errors.
                 Log.e(TAG, "Error during forced unload: ${e.message}")
             } finally {
                 latch.countDown()

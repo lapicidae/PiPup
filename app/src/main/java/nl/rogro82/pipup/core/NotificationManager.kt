@@ -54,6 +54,19 @@ class NotificationManager(
         private const val EXIT_WATCHDOG_PADDING_MS = 250L
         private const val OVERLAY_ERROR_TOAST_COOLDOWN_MS = 5000L
         private const val MS_PER_SECOND = 1000L
+        private const val BASE_MARGIN_DP = 20
+        private const val MAX_COLUMN_MARGIN_DP = 80
+        private val POSITION_GRAVITIES = mapOf(
+            PopupProps.Position.TopRight to (Gravity.TOP or Gravity.END),
+            PopupProps.Position.TopLeft to (Gravity.TOP or Gravity.START),
+            PopupProps.Position.BottomRight to (Gravity.BOTTOM or Gravity.END),
+            PopupProps.Position.BottomLeft to (Gravity.BOTTOM or Gravity.START),
+            PopupProps.Position.Center to Gravity.CENTER,
+            PopupProps.Position.TopCenter to (Gravity.TOP or Gravity.CENTER_HORIZONTAL),
+            PopupProps.Position.BottomCenter to (Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL),
+            PopupProps.Position.CenterLeft to (Gravity.CENTER_VERTICAL or Gravity.START),
+            PopupProps.Position.CenterRight to (Gravity.CENTER_VERTICAL or Gravity.END),
+        )
     }
 
     private class ShownSlot(
@@ -205,7 +218,6 @@ class NotificationManager(
                 Log.w(TAG, "Rejecting external attempt to use reserved update popup ID: ${props.id}")
                 return
             }
-
             if (isInternal || props.isInternalUpdateAction) {
                 props.id?.let { internalUpdateKeys.add(it) }
             }
@@ -217,67 +229,53 @@ class NotificationManager(
             lastMediaError = null
 
             val id = props.id
-
-            if (!id.isNullOrEmpty()) {
-                mExiting.remove(id)?.let { exiting ->
-                    handler.removeCallbacksAndMessages(exiting)
-                    exiting.container?.removeView(exiting.view)
-                    exiting.view.cleanup()
-                }
-            }
-
-            // 1. If active on-screen unique ID popup exists
-            if (!id.isNullOrEmpty()) {
-                mShown[id]?.let { current ->
-                    if (canUpdateInPlace(current.props, props)) {
-                        handleInPlaceUpdate(id, props)
-                        return
-                    } else {
-                        removePopupInstantly(id, "replaced")
-                    }
-                }
-            }
-
-            // 2. If unique ID popup is preparing or waiting ready, clean it up before replacing
-            if (!id.isNullOrEmpty()) {
-                cleanupPendingSlot(id)
-            }
-
-            // 3. If unique ID popup is waiting in the queue, update its payload in the queue
-            if (!id.isNullOrEmpty()) {
-                var updatedInQueue = false
-                val updatedQueue = ArrayDeque<PopupProps>()
-                while (queue.isNotEmpty()) {
-                    val queued = queue.poll() ?: break
-                    if (queued.id == id) {
-                        updatedQueue.addLast(props)
-                        updatedInQueue = true
-                    } else {
-                        updatedQueue.addLast(queued)
-                    }
-                }
-                queue.addAll(updatedQueue)
-                if (updatedInQueue) {
+            val handledExisting = !id.isNullOrEmpty() && handleExistingPopupById(id, props)
+            if (!handledExisting) {
+                if (PopupProps.PopupLayoutMetrics.isFundamentallyUnplaceable(context)) {
+                    Log.w(TAG, "Discarding unplaceable popup: ${props.title ?: props.id}")
+                    (props.media as? PopupProps.Media.LocalFile)?.let { PayloadParser.deleteFileAsync(it.path) }
+                } else {
+                    if (props.overwrite) queue.addFirst(props) else queue.addLast(props)
                     processNextLocked()
-                    return
                 }
             }
-
-            if (PopupProps.PopupLayoutMetrics.isFundamentallyUnplaceable(context)) {
-                Log.w(TAG, "Discarding unplaceable popup: ${props.title ?: props.id}")
-                (props.media as? PopupProps.Media.LocalFile)?.let { lf ->
-                    PayloadParser.deleteFileAsync(lf.path)
-                }
-                return
-            }
-
-            if (props.overwrite) {
-                queue.addFirst(props)
-            } else {
-                queue.addLast(props)
-            }
-            processNextLocked()
         }
+    }
+
+    private fun handleExistingPopupById(id: String, props: PopupProps): Boolean {
+        mExiting.remove(id)?.let { exiting ->
+            handler.removeCallbacksAndMessages(exiting)
+            exiting.container?.removeView(exiting.view)
+            exiting.view.cleanup()
+        }
+
+        mShown[id]?.let { current ->
+            if (canUpdateInPlace(current.props, props)) {
+                handleInPlaceUpdate(id, props)
+                return true
+            }
+            removePopupInstantly(id, "replaced")
+        }
+
+        cleanupPendingSlot(id)
+        return replaceQueuedPayloadById(id, props)
+    }
+
+    private fun replaceQueuedPayloadById(id: String, props: PopupProps): Boolean {
+        var updatedInQueue = false
+        val updatedQueue = ArrayDeque<PopupProps>()
+        while (queue.isNotEmpty()) {
+            val queued = queue.poll() ?: break
+            if (queued.id == id) {
+                updatedQueue.addLast(props)
+                updatedInQueue = true
+            } else {
+                updatedQueue.addLast(queued)
+            }
+        }
+        queue.addAll(updatedQueue)
+        if (updatedInQueue) processNextLocked()
+        return updatedInQueue
     }
 
     private fun handleInPlaceUpdate(id: String, props: PopupProps) {
@@ -399,12 +397,25 @@ class NotificationManager(
         }
     }
 
-    private fun computeSimulatedLayout(items: List<LayoutItem>): Map<String, Rect> {
-        val screenWidth = context.resources.displayMetrics.widthPixels
-        val screenHeight = context.resources.displayMetrics.heightPixels
-        val baseMargin = context.dpToPx(20)
-        val gapPx = context.dpToPx(STACK_GAP_DP)
+    private data class SimulationBounds(
+        val screenWidth: Int,
+        val screenHeight: Int,
+        val baseMargin: Int,
+        val gapPx: Int,
+    )
 
+    private fun currentSimulationBounds(): SimulationBounds {
+        val dm = context.resources.displayMetrics
+        return SimulationBounds(
+            screenWidth = dm.widthPixels,
+            screenHeight = dm.heightPixels,
+            baseMargin = context.dpToPx(BASE_MARGIN_DP),
+            gapPx = context.dpToPx(STACK_GAP_DP),
+        )
+    }
+
+    private fun computeSimulatedLayout(items: List<LayoutItem>): Map<String, Rect> {
+        val bounds = currentSimulationBounds()
         val (fullscreenItems, normalItems) = items.partition { it.props.coversScreen }
         val grouped = normalItems.groupBy {
             ContainerKey(it.props.getPositionEnum(), it.props.getStackDirectionEnum())
@@ -412,81 +423,99 @@ class NotificationManager(
         val result = LinkedHashMap<String, Rect>(items.size)
 
         for (item in fullscreenItems) {
-            val left = (screenWidth - item.width) / 2
-            val top = (screenHeight - item.height) / 2
+            val left = (bounds.screenWidth - item.width) / 2
+            val top = (bounds.screenHeight - item.height) / 2
             result[item.key] = Rect(left, top, left + item.width, top + item.height)
         }
 
         for (pos in PopupProps.Position.entries) {
             val vItems = grouped[ContainerKey(pos, PopupProps.StackDirection.VERTICAL)].orEmpty()
             val hItems = grouped[ContainerKey(pos, PopupProps.StackDirection.HORIZONTAL)].orEmpty()
-
             val vWidth = vItems.maxOfOrNull { it.width } ?: 0
-            val vMeasuredHeight = vItems.sumOf { it.height + gapPx }
+            val vMeasuredHeight = vItems.sumOf { it.height + bounds.gapPx }
 
             if (vItems.isNotEmpty()) {
-                val anchor = pos.getVerticalAnchor()
-                if (anchor == PopupProps.VerticalAnchor.BOTTOM) {
-                    var cursorY = screenHeight - baseMargin
-                    for (item in vItems) {
-                        val bottom = cursorY
-                        val top = bottom - item.height
-                        result[item.key] = computeVerticalItemRect(
-                            pos, item.width, top, bottom, screenWidth, baseMargin
-                        )
-                        cursorY = top - gapPx
-                    }
-                } else {
-                    var cursorY = if (anchor == PopupProps.VerticalAnchor.TOP) {
-                        baseMargin
-                    } else {
-                        (screenHeight - vMeasuredHeight) / 2
-                    }
-                    for (item in vItems) {
-                        val top = cursorY
-                        val bottom = top + item.height
-                        result[item.key] = computeVerticalItemRect(
-                            pos, item.width, top, bottom, screenWidth, baseMargin
-                        )
-                        cursorY = bottom + gapPx
-                    }
-                }
+                layoutVerticalItems(pos, vItems, bounds, result)
             }
-
             if (hItems.isNotEmpty()) {
-                val hHeight = hItems.maxOfOrNull { it.height } ?: 0
-                val hMeasuredWidth = hItems.sumOf { it.width + gapPx }
-                val side = pos.getScreenSide()
-
-                if (side == PopupProps.ScreenSide.RIGHT) {
-                    var cursorX = screenWidth - baseMargin - (if (vWidth > 0) vWidth + gapPx else 0)
-                    for (item in hItems) {
-                        val right = cursorX
-                        val left = right - item.width
-                        result[item.key] = computeHorizontalItemRect(
-                            pos, item.height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
-                        )
-                        cursorX = left - gapPx
-                    }
-                } else {
-                    var cursorX = if (side == PopupProps.ScreenSide.LEFT) {
-                        baseMargin + (if (vWidth > 0) vWidth + gapPx else 0)
-                    } else {
-                        (screenWidth - hMeasuredWidth) / 2
-                    }
-                    for (item in hItems) {
-                        val left = cursorX
-                        val right = left + item.width
-                        result[item.key] = computeHorizontalItemRect(
-                            pos, item.height, left, right, hHeight, vMeasuredHeight, screenHeight, baseMargin, gapPx
-                        )
-                        cursorX = right + gapPx
-                    }
-                }
+                layoutHorizontalItems(pos, hItems, vWidth to vMeasuredHeight, bounds, result)
             }
         }
 
         return result
+    }
+
+    private fun layoutVerticalItems(
+        pos: PopupProps.Position,
+        vItems: List<LayoutItem>,
+        bounds: SimulationBounds,
+        result: MutableMap<String, Rect>,
+    ) {
+        val anchor = pos.getVerticalAnchor()
+        if (anchor == PopupProps.VerticalAnchor.BOTTOM) {
+            var cursorY = bounds.screenHeight - bounds.baseMargin
+            for (item in vItems) {
+                val top = cursorY - item.height
+                result[item.key] = computeVerticalItemRect(
+                    pos, item.width, top, cursorY, bounds.screenWidth, bounds.baseMargin,
+                )
+                cursorY = top - bounds.gapPx
+            }
+            return
+        }
+        val vMeasuredHeight = vItems.sumOf { it.height + bounds.gapPx }
+        var cursorY = if (anchor == PopupProps.VerticalAnchor.TOP) {
+            bounds.baseMargin
+        } else {
+            (bounds.screenHeight - vMeasuredHeight) / 2
+        }
+        for (item in vItems) {
+            val bottom = cursorY + item.height
+            result[item.key] = computeVerticalItemRect(
+                pos, item.width, cursorY, bottom, bounds.screenWidth, bounds.baseMargin,
+            )
+            cursorY = bottom + bounds.gapPx
+        }
+    }
+
+    private fun layoutHorizontalItems(
+        pos: PopupProps.Position,
+        hItems: List<LayoutItem>,
+        vDims: Pair<Int, Int>,
+        bounds: SimulationBounds,
+        result: MutableMap<String, Rect>,
+    ) {
+        val (vWidth, vMeasuredHeight) = vDims
+        val hHeight = hItems.maxOfOrNull { it.height } ?: 0
+        val side = pos.getScreenSide()
+        val vShift = if (vWidth > 0) vWidth + bounds.gapPx else 0
+
+        if (side == PopupProps.ScreenSide.RIGHT) {
+            var cursorX = bounds.screenWidth - bounds.baseMargin - vShift
+            for (item in hItems) {
+                val left = cursorX - item.width
+                result[item.key] = computeHorizontalItemRect(
+                    pos, item.height, left, cursorX, hHeight, vMeasuredHeight,
+                    bounds.screenHeight, bounds.baseMargin, bounds.gapPx,
+                )
+                cursorX = left - bounds.gapPx
+            }
+            return
+        }
+        val hMeasuredWidth = hItems.sumOf { it.width + bounds.gapPx }
+        var cursorX = if (side == PopupProps.ScreenSide.LEFT) {
+            bounds.baseMargin + vShift
+        } else {
+            (bounds.screenWidth - hMeasuredWidth) / 2
+        }
+        for (item in hItems) {
+            val right = cursorX + item.width
+            result[item.key] = computeHorizontalItemRect(
+                pos, item.height, cursorX, right, hHeight, vMeasuredHeight,
+                bounds.screenHeight, bounds.baseMargin, bounds.gapPx,
+            )
+            cursorX = right + bounds.gapPx
+        }
     }
 
     private fun computeVerticalItemRect(
@@ -556,6 +585,25 @@ class NotificationManager(
             b.top < a.bottom + minGapPx
     }
 
+    private data class AdmissionContext(
+        val props: PopupProps,
+        val candidateItem: LayoutItem,
+        val existingItems: List<LayoutItem>,
+        val simulatedRects: Map<String, Rect>,
+        val bounds: SimulationBounds,
+    )
+
+    private fun sharesContainer(a: PopupProps, b: PopupProps): Boolean =
+        !a.coversScreen && !b.coversScreen &&
+            a.getPositionEnum() == b.getPositionEnum() &&
+            a.getStackDirectionEnum() == b.getStackDirectionEnum()
+
+    private fun isOutOfBounds(rect: Rect, coversScreen: Boolean, bounds: SimulationBounds): Boolean {
+        val margin = if (coversScreen) 0 else bounds.baseMargin
+        return rect.left < margin || rect.right > bounds.screenWidth - margin ||
+            rect.top < margin || rect.bottom > bounds.screenHeight - margin
+    }
+
     private fun evaluateAdmission(
         props: PopupProps,
         excludedKeys: Set<String> = emptySet(),
@@ -574,15 +622,53 @@ class NotificationManager(
 
         val basePool = (activeSlotsOverride ?: (mShown.values + mExiting.values))
             .filter { it.key !in excludedKeys }
-        val activeSlotsWithoutCandidate = basePool.filter { it.key != replaceSlotKey }
-        val activeCount = activeSlotsWithoutCandidate.size
-        val max = PiPupApp.settings.maxPopups
-        val isCapacityFull = activeCount >= max
+        val isCapacityFull = basePool.count { it.key != replaceSlotKey } >= PiPupApp.settings.maxPopups
+
+        val candidateItem = LayoutItem(CANDIDATE_KEY, props, candidateW, candidateH)
+        val layoutItems = buildAdmissionLayoutItems(basePool, candidateItem, replaceSlotKey)
+        val simulatedRects = computeSimulatedLayout(layoutItems)
+        val candidateRect = simulatedRects[CANDIDATE_KEY] ?: candidateMetrics.boundingBox
+
+        val ctx = AdmissionContext(
+            props = props,
+            candidateItem = candidateItem,
+            existingItems = layoutItems.filter { it.key != CANDIDATE_KEY },
+            simulatedRects = simulatedRects,
+            bounds = currentSimulationBounds(),
+        )
+
+        val conflictingKeys = LinkedHashSet<String>()
+        collectDirectAndFullscreenConflicts(ctx, candidateRect, conflictingKeys)
 
         val candidatePos = props.getPositionEnum()
-        val candidateDir = props.getStackDirectionEnum()
-        val candidateItem = LayoutItem(CANDIDATE_KEY, props, candidateW, candidateH)
+        val shiftedExisting = ctx.existingItems.filter {
+            !it.props.coversScreen && it.props.getPositionEnum() == candidatePos
+        }
+        collectInducedOverlaps(ctx, shiftedExisting, conflictingKeys)
+        val isBoundsOverflow = checkBoundsAndStackOverflow(ctx, candidateRect, shiftedExisting, conflictingKeys)
 
+        val isGeometryBlocked = conflictingKeys.isNotEmpty() || isBoundsOverflow
+        val status = when {
+            isCapacityFull && isGeometryBlocked -> AdmissionStatus.CAPACITY_AND_GEOMETRY_BLOCKED
+            isCapacityFull -> AdmissionStatus.CAPACITY_FULL
+            isGeometryBlocked -> AdmissionStatus.GEOMETRY_BLOCKED
+            else -> AdmissionStatus.ALLOWED
+        }
+
+        Log.d(
+            TAG,
+            "[ADMISSION] '${props.title ?: props.id}' at pos=${candidatePos.name}(${candidatePos.index}) " +
+                "stack=${props.getStackDirectionEnum().name} -> status=$status, candidateBox=$candidateRect, " +
+                "conflicting=$conflictingKeys",
+        )
+        return AdmissionDecision(status, conflictingKeys)
+    }
+
+    private fun buildAdmissionLayoutItems(
+        basePool: List<ShownSlot>,
+        candidateItem: LayoutItem,
+        replaceSlotKey: String?,
+    ): List<LayoutItem> {
         val layoutItems = ArrayList<LayoutItem>(basePool.size + 1)
         var replacedInPlace = false
         for (slot in basePool) {
@@ -594,143 +680,132 @@ class NotificationManager(
                 layoutItems.add(LayoutItem(slot.key, slot.props, w, h))
             }
         }
-        if (!replacedInPlace) {
-            layoutItems.add(candidateItem)
-        }
-        val existingItems = layoutItems.filter { it.key != CANDIDATE_KEY }
+        if (!replacedInPlace) layoutItems.add(candidateItem)
+        return layoutItems
+    }
 
-        val simulatedRects = computeSimulatedLayout(layoutItems)
-        val candidateRect = simulatedRects[CANDIDATE_KEY] ?: candidateMetrics.boundingBox
-
-        val screenWidth = context.resources.displayMetrics.widthPixels
-        val screenHeight = context.resources.displayMetrics.heightPixels
-        val baseMargin = context.dpToPx(20)
-        val maxColumnHeight = screenHeight - context.dpToPx(80)
-
-        val conflictingKeys = LinkedHashSet<String>()
-
-        fun sharesContainer(a: PopupProps, b: PopupProps): Boolean {
-            return !a.coversScreen && !b.coversScreen &&
-                a.getPositionEnum() == b.getPositionEnum() &&
-                a.getStackDirectionEnum() == b.getStackDirectionEnum()
-        }
-
-        fun isOutOfBounds(rect: Rect, coversScreen: Boolean): Boolean {
-            val margin = if (coversScreen) 0 else baseMargin
-            return rect.left < margin || rect.right > screenWidth - margin ||
-                rect.top < margin || rect.bottom > screenHeight - margin
-        }
-
-        if (props.coversScreen) {
-            existingItems.forEach { conflictingKeys.add(it.key) }
+    private fun collectDirectAndFullscreenConflicts(
+        ctx: AdmissionContext,
+        candidateRect: Rect,
+        conflictingKeys: MutableSet<String>,
+    ) {
+        if (ctx.props.coversScreen) {
+            ctx.existingItems.forEach { conflictingKeys.add(it.key) }
         } else {
-            existingItems.filter { it.props.coversScreen }.forEach { conflictingKeys.add(it.key) }
+            ctx.existingItems.filter { it.props.coversScreen }.forEach { conflictingKeys.add(it.key) }
         }
 
-        // 1. Pairwise overlap check between candidate and all existing slots in other containers
-        for (other in existingItems) {
-            val otherRect = simulatedRects[other.key]
-            if (!sharesContainer(props, other.props) && otherRect != null &&
+        for (other in ctx.existingItems) {
+            val otherRect = ctx.simulatedRects[other.key]
+            if (!sharesContainer(ctx.props, other.props) && otherRect != null &&
                 rectsOverlapWithGap(candidateRect, otherRect)
             ) {
                 conflictingKeys.add(other.key)
             }
         }
+    }
 
-        // 2. Induced overlap check: adding candidate may shift existing slots at candidatePos
-        val shiftedExisting = existingItems.filter {
-            !it.props.coversScreen && it.props.getPositionEnum() == candidatePos
-        }
+    private fun collectInducedOverlaps(
+        ctx: AdmissionContext,
+        shiftedExisting: List<LayoutItem>,
+        conflictingKeys: MutableSet<String>,
+    ) {
         for (itemA in shiftedExisting) {
-            val rectA = simulatedRects[itemA.key]
-            if (rectA != null) {
-                for (itemB in existingItems) {
-                    val rectB = simulatedRects[itemB.key]
-                    if (itemA.key != itemB.key && !sharesContainer(itemA.props, itemB.props) && rectB != null &&
-                        rectsOverlapWithGap(rectA, rectB)
-                    ) {
-                        conflictingKeys.add(itemB.key)
-                        conflictingKeys.add(itemA.key)
-                    }
+            val rectA = ctx.simulatedRects[itemA.key] ?: continue
+            for (itemB in ctx.existingItems) {
+                if (isDistinctContainerOverlap(
+                        itemA.key, itemA.props, itemB.key, itemB.props, rectA to ctx.simulatedRects[itemB.key],
+                    )
+                ) {
+                    conflictingKeys.add(itemB.key)
+                    conflictingKeys.add(itemA.key)
                 }
             }
         }
+    }
 
-        // 3. Screen bounds & stack overflow check when at least one active slot exists
-        var isBoundsOverflow = false
-        if (existingItems.isNotEmpty()) {
-            val candidateOutOfBounds = isOutOfBounds(candidateRect, props.coversScreen)
-            val shiftedOutOfBounds = shiftedExisting.any { item ->
-                val r = simulatedRects[item.key] ?: return@any false
-                isOutOfBounds(r, item.props.coversScreen)
-            }
+    private fun isDistinctContainerOverlap(
+        keyA: String,
+        propsA: PopupProps,
+        keyB: String,
+        propsB: PopupProps,
+        rects: Pair<Rect, Rect?>,
+    ): Boolean {
+        val (rectA, rectB) = rects
+        return keyA != keyB && !sharesContainer(propsA, propsB) && rectB != null && rectsOverlapWithGap(rectA, rectB)
+    }
 
-            val sameContainerItems = existingItems.filter { sharesContainer(props, it.props) }
+    private fun checkBoundsAndStackOverflow(
+        ctx: AdmissionContext,
+        candidateRect: Rect,
+        shiftedExisting: List<LayoutItem>,
+        conflictingKeys: MutableSet<String>,
+    ): Boolean {
+        if (ctx.existingItems.isEmpty()) return false
 
-            val isVerticalStack = candidateDir == PopupProps.StackDirection.VERTICAL &&
-                sameContainerItems.isNotEmpty()
-            val verticalStackSpan = if (isVerticalStack) {
-                val allInStack = sameContainerItems + candidateItem
-                val minTop = allInStack.minOf { simulatedRects[it.key]?.top ?: baseMargin }
-                val maxBottom = allInStack.maxOf { simulatedRects[it.key]?.bottom ?: baseMargin }
-                maxBottom - minTop
-            } else {
-                0
-            }
-
-            val isCenterHorizontal = candidatePos == PopupProps.Position.Center &&
-                candidateDir == PopupProps.StackDirection.HORIZONTAL
-            val isCenterDualOverflow = if (isCenterHorizontal) {
-                val vItemsAtCenter = existingItems.filter {
-                    it.props.getPositionEnum() == PopupProps.Position.Center &&
-                        it.props.getStackDirectionEnum() == PopupProps.StackDirection.VERTICAL
-                }
-                if (vItemsAtCenter.isNotEmpty()) {
-                    val gapPx = context.dpToPx(STACK_GAP_DP)
-                    val vH = vItemsAtCenter.sumOf { it.height + gapPx }
-                    val spaceAvailable = (screenHeight - vH) / 2 - gapPx
-                    candidateH > spaceAvailable || candidateOutOfBounds
-                } else {
-                    false
-                }
-            } else {
-                false
-            }
-
-            isBoundsOverflow = candidateOutOfBounds ||
-                shiftedOutOfBounds ||
-                verticalStackSpan > maxColumnHeight ||
-                isCenterDualOverflow
-
-            if (isBoundsOverflow) {
-                if (candidateDir == PopupProps.StackDirection.HORIZONTAL) {
-                    existingItems.filter {
-                        it.props.getPositionEnum() == candidatePos &&
-                            it.props.getStackDirectionEnum() == PopupProps.StackDirection.VERTICAL
-                    }.forEach { conflictingKeys.add(it.key) }
-                }
-                sameContainerItems.forEach { conflictingKeys.add(it.key) }
-                existingItems.filter { it.props.getPositionEnum() == candidatePos }
-                    .forEach { conflictingKeys.add(it.key) }
-            }
+        val candidateOutOfBounds = isOutOfBounds(candidateRect, ctx.props.coversScreen, ctx.bounds)
+        val shiftedOutOfBounds = shiftedExisting.any { item ->
+            val r = ctx.simulatedRects[item.key] ?: return@any false
+            isOutOfBounds(r, item.props.coversScreen, ctx.bounds)
         }
 
-        val isGeometryBlocked = conflictingKeys.isNotEmpty() || isBoundsOverflow
+        val sameContainerItems = ctx.existingItems.filter { sharesContainer(ctx.props, it.props) }
+        val maxColumnHeight = ctx.bounds.screenHeight - context.dpToPx(MAX_COLUMN_MARGIN_DP)
+        val verticalStackSpan = computeVerticalStackSpan(ctx, sameContainerItems)
+        val isCenterDualOverflow = isCenterDualAxisOverflow(ctx, candidateOutOfBounds)
 
-        val status = when {
-            isCapacityFull && isGeometryBlocked -> AdmissionStatus.CAPACITY_AND_GEOMETRY_BLOCKED
-            isCapacityFull -> AdmissionStatus.CAPACITY_FULL
-            isGeometryBlocked -> AdmissionStatus.GEOMETRY_BLOCKED
-            else -> AdmissionStatus.ALLOWED
+        val isBoundsOverflow = candidateOutOfBounds ||
+            shiftedOutOfBounds ||
+            verticalStackSpan > maxColumnHeight ||
+            isCenterDualOverflow
+
+        if (isBoundsOverflow) {
+            addBoundsOverflowConflicts(ctx, sameContainerItems, conflictingKeys)
         }
+        return isBoundsOverflow
+    }
 
-        Log.d(
-            TAG,
-            "[ADMISSION] '${props.title ?: props.id}' at pos=${candidatePos.name}(${candidatePos.index}) " +
-                "stack=${candidateDir.name} -> status=$status, candidateBox=$candidateRect, " +
-                "conflicting=$conflictingKeys"
-        )
-        return AdmissionDecision(status, conflictingKeys)
+    private fun computeVerticalStackSpan(ctx: AdmissionContext, sameContainerItems: List<LayoutItem>): Int {
+        if (ctx.props.getStackDirectionEnum() != PopupProps.StackDirection.VERTICAL || sameContainerItems.isEmpty()) {
+            return 0
+        }
+        val allInStack = sameContainerItems + ctx.candidateItem
+        val minTop = allInStack.minOf { ctx.simulatedRects[it.key]?.top ?: ctx.bounds.baseMargin }
+        val maxBottom = allInStack.maxOf { ctx.simulatedRects[it.key]?.bottom ?: ctx.bounds.baseMargin }
+        return maxBottom - minTop
+    }
+
+    private fun isCenterDualAxisOverflow(ctx: AdmissionContext, candidateOutOfBounds: Boolean): Boolean {
+        val isCenterHorizontal = ctx.props.getPositionEnum() == PopupProps.Position.Center &&
+            ctx.props.getStackDirectionEnum() == PopupProps.StackDirection.HORIZONTAL
+        if (!isCenterHorizontal) return false
+
+        val vItemsAtCenter = ctx.existingItems.filter {
+            it.props.getPositionEnum() == PopupProps.Position.Center &&
+                it.props.getStackDirectionEnum() == PopupProps.StackDirection.VERTICAL
+        }
+        return vItemsAtCenter.isNotEmpty() && run {
+            val vH = vItemsAtCenter.sumOf { it.height + ctx.bounds.gapPx }
+            val spaceAvailable = (ctx.bounds.screenHeight - vH) / 2 - ctx.bounds.gapPx
+            ctx.candidateItem.height > spaceAvailable || candidateOutOfBounds
+        }
+    }
+
+    private fun addBoundsOverflowConflicts(
+        ctx: AdmissionContext,
+        sameContainerItems: List<LayoutItem>,
+        conflictingKeys: MutableSet<String>,
+    ) {
+        val candidatePos = ctx.props.getPositionEnum()
+        if (ctx.props.getStackDirectionEnum() == PopupProps.StackDirection.HORIZONTAL) {
+            ctx.existingItems.filter {
+                it.props.getPositionEnum() == candidatePos &&
+                    it.props.getStackDirectionEnum() == PopupProps.StackDirection.VERTICAL
+            }.forEach { conflictingKeys.add(it.key) }
+        }
+        sameContainerItems.forEach { conflictingKeys.add(it.key) }
+        ctx.existingItems.filter { it.props.getPositionEnum() == candidatePos }
+            .forEach { conflictingKeys.add(it.key) }
     }
 
     private fun findAtomicEvictionPlan(
@@ -748,39 +823,37 @@ class NotificationManager(
         var possible = true
 
         while (possible && currentDecision.status != AdmissionStatus.ALLOWED) {
-            if (currentDecision.status == AdmissionStatus.UNPLACEABLE) {
+            val nextVictim = if (currentDecision.status == AdmissionStatus.UNPLACEABLE) {
+                null
+            } else {
+                selectNextEvictionVictim(currentDecision, activePool, plan, replaceSlotKey)
+            }
+            if (nextVictim == null) {
                 possible = false
             } else {
-                val conflictVictim = currentDecision.conflictingKeys.firstOrNull { key ->
-                    key != replaceSlotKey && key !in plan && key !in internalUpdateKeys
-                }
-                val capacityVictim = if (conflictVictim == null) {
-                    activePool.sortedBy { it.shownAt }
-                        .map { it.key }
-                        .firstOrNull { key ->
-                            key != replaceSlotKey && key !in plan && key !in internalUpdateKeys
-                        }
-                } else {
-                    null
-                }
-
-                val nextVictim = conflictVictim ?: capacityVictim
-                if (nextVictim == null) {
-                    possible = false
-                } else {
-                    plan.add(nextVictim)
-                    currentDecision = evaluateAdmission(
-                        props = props,
-                        excludedKeys = plan,
-                        activeSlotsOverride = activePool,
-                        candidateMeasuredDimensions = candidateMeasuredDimensions,
-                        replaceSlotKey = replaceSlotKey
-                    )
-                }
+                plan.add(nextVictim)
+                currentDecision = evaluateAdmission(
+                    props = props,
+                    excludedKeys = plan,
+                    activeSlotsOverride = activePool,
+                    candidateMeasuredDimensions = candidateMeasuredDimensions,
+                    replaceSlotKey = replaceSlotKey,
+                )
             }
         }
 
         return if (possible && plan.isNotEmpty()) plan.toList() else null
+    }
+
+    private fun selectNextEvictionVictim(
+        decision: AdmissionDecision,
+        activePool: List<ShownSlot>,
+        plan: Set<String>,
+        replaceSlotKey: String?,
+    ): String? {
+        fun isEvictable(key: String) = key != replaceSlotKey && key !in plan && key !in internalUpdateKeys
+        return decision.conflictingKeys.firstOrNull(::isEvictable)
+            ?: activePool.sortedBy { it.shownAt }.map { it.key }.firstOrNull(::isEvictable)
     }
 
     private fun resolveVisibleConflictsAfterResize(slot: ShownSlot) {
@@ -852,61 +925,55 @@ class NotificationManager(
 
     private fun adjustDualAxisContainerMargins(position: PopupProps.Position) {
         val hContainer = containers[ContainerKey(position, PopupProps.StackDirection.HORIZONTAL)]
+        val hLp = hContainer?.layoutParams as? FrameLayout.LayoutParams ?: return
         val vContainer = containers[ContainerKey(position, PopupProps.StackDirection.VERTICAL)]
         val gapPx = context.dpToPx(STACK_GAP_DP)
-        val baseMargin = context.dpToPx(20)
+        val baseMargin = context.dpToPx(BASE_MARGIN_DP)
 
         val (vWidth, vHeight) = measureContainerSize(vContainer)
         val (_, hHeight) = measureContainerSize(hContainer)
 
         when (position) {
-            PopupProps.Position.TopCenter -> {
-                val hLp = hContainer?.layoutParams as? FrameLayout.LayoutParams
-                if (hLp != null) {
-                    hLp.topMargin = if (vHeight > 0) baseMargin + vHeight + gapPx else baseMargin
-                    hContainer.requestLayout()
-                }
-            }
-            PopupProps.Position.BottomCenter -> {
-                val hLp = hContainer?.layoutParams as? FrameLayout.LayoutParams
-                if (hLp != null) {
-                    hLp.bottomMargin = if (vHeight > 0) baseMargin + vHeight + gapPx else baseMargin
-                    hContainer.requestLayout()
-                }
-            }
-            PopupProps.Position.Center -> {
-                val hLp = hContainer?.layoutParams as? FrameLayout.LayoutParams
-                if (hLp != null) {
-                    if (vHeight > 0) {
-                        val screenHeight = context.resources.displayMetrics.heightPixels
-                        val spaceBelow = (screenHeight - vHeight) / 2 - gapPx
-                        if (spaceBelow >= hHeight) {
-                            hLp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-                            hLp.topMargin = (screenHeight + vHeight) / 2 + gapPx
-                            hLp.bottomMargin = 0
-                        } else {
-                            hLp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                            hLp.bottomMargin = (screenHeight + vHeight) / 2 + gapPx
-                            hLp.topMargin = 0
-                        }
-                    } else {
-                        hLp.gravity = Gravity.CENTER
-                        hLp.topMargin = 0
-                        hLp.bottomMargin = 0
-                    }
-                    hContainer.requestLayout()
-                }
-            }
+            PopupProps.Position.TopCenter ->
+                hLp.topMargin = if (vHeight > 0) baseMargin + vHeight + gapPx else baseMargin
+            PopupProps.Position.BottomCenter ->
+                hLp.bottomMargin = if (vHeight > 0) baseMargin + vHeight + gapPx else baseMargin
+            PopupProps.Position.Center ->
+                adjustCenterHorizontalMargins(hLp, vHeight, hHeight, gapPx)
             else -> {
-                val lp = hContainer?.layoutParams as? FrameLayout.LayoutParams ?: return
                 val extraShift = if (vWidth > 0) vWidth + gapPx else 0
                 when (position.getScreenSide()) {
-                    PopupProps.ScreenSide.RIGHT -> lp.rightMargin = baseMargin + extraShift
-                    PopupProps.ScreenSide.LEFT -> lp.leftMargin = baseMargin + extraShift
+                    PopupProps.ScreenSide.RIGHT -> hLp.rightMargin = baseMargin + extraShift
+                    PopupProps.ScreenSide.LEFT -> hLp.leftMargin = baseMargin + extraShift
                     PopupProps.ScreenSide.CENTER -> {}
                 }
-                hContainer.requestLayout()
             }
+        }
+        hContainer.requestLayout()
+    }
+
+    private fun adjustCenterHorizontalMargins(
+        hLp: FrameLayout.LayoutParams,
+        vHeight: Int,
+        hHeight: Int,
+        gapPx: Int,
+    ) {
+        if (vHeight <= 0) {
+            hLp.gravity = Gravity.CENTER
+            hLp.topMargin = 0
+            hLp.bottomMargin = 0
+            return
+        }
+        val screenHeight = context.resources.displayMetrics.heightPixels
+        val spaceBelow = (screenHeight - vHeight) / 2 - gapPx
+        if (spaceBelow >= hHeight) {
+            hLp.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+            hLp.topMargin = (screenHeight + vHeight) / 2 + gapPx
+            hLp.bottomMargin = 0
+        } else {
+            hLp.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            hLp.bottomMargin = (screenHeight + vHeight) / 2 + gapPx
+            hLp.topMargin = 0
         }
     }
 
@@ -949,23 +1016,13 @@ class NotificationManager(
         position: PopupProps.Position,
         fullscreen: Boolean = false
     ) {
-        val margin = if (fullscreen) 0 else context.dpToPx(20)
-        params.gravity = when (position) {
-            PopupProps.Position.TopRight -> Gravity.TOP or Gravity.END
-            PopupProps.Position.TopLeft -> Gravity.TOP or Gravity.START
-            PopupProps.Position.BottomRight -> Gravity.BOTTOM or Gravity.END
-            PopupProps.Position.BottomLeft -> Gravity.BOTTOM or Gravity.START
-            PopupProps.Position.Center -> Gravity.CENTER
-            PopupProps.Position.TopCenter -> Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            PopupProps.Position.BottomCenter -> Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            PopupProps.Position.CenterLeft -> Gravity.CENTER_VERTICAL or Gravity.START
-            PopupProps.Position.CenterRight -> Gravity.CENTER_VERTICAL or Gravity.END
-        }
+        val margin = if (fullscreen) 0 else context.dpToPx(BASE_MARGIN_DP)
+        params.gravity = POSITION_GRAVITIES[position] ?: (Gravity.TOP or Gravity.END)
         params.setMargins(
             if (position.getScreenSide() == PopupProps.ScreenSide.LEFT) margin else 0,
             if (position.getVerticalAnchor() == PopupProps.VerticalAnchor.TOP) margin else 0,
             if (position.getScreenSide() == PopupProps.ScreenSide.RIGHT) margin else 0,
-            if (position.getVerticalAnchor() == PopupProps.VerticalAnchor.BOTTOM) margin else 0
+            if (position.getVerticalAnchor() == PopupProps.VerticalAnchor.BOTTOM) margin else 0,
         )
     }
 
@@ -1366,41 +1423,35 @@ class NotificationManager(
             (!isStrictSequential && totalPending >= MAX_PARALLEL_PREPARING)
         if (cannotPrepare) return false
 
-        val snapshot = queue.toList()
         var mutated = false
         var stopPass = false
-        val iterator = snapshot.iterator()
-
+        val iterator = queue.toList().iterator()
         while (!stopPass && iterator.hasNext()) {
-            val item = iterator.next()
-            val decision = evaluateAdmission(item)
-            val canOverwrite = item.overwrite &&
-                findAtomicEvictionPlan(item, decision)?.isNotEmpty() == true
-
-            when {
-                decision.status == AdmissionStatus.UNPLACEABLE -> {
-                    queue.remove(item)
-                    (item.media as? PopupProps.Media.LocalFile)?.let { lf ->
-                        PayloadParser.deleteFileAsync(lf.path)
-                    }
-                    Log.w(TAG, "Discarded unplaceable queued popup: ${item.title ?: item.id}")
-                    checkIdleAndCleanupOverlay()
-                    mutated = true
-                    stopPass = true
-                }
-                decision.status == AdmissionStatus.ALLOWED || canOverwrite -> {
-                    queue.remove(item)
-                    startPreparingPopup(item)
-                    mutated = true
-                    stopPass = true
-                }
-                isStrictSequential -> {
-                    stopPass = true
-                }
-            }
+            val (itemMutated, shouldStop) = attemptProcessQueuedItem(iterator.next(), isStrictSequential)
+            mutated = mutated || itemMutated
+            stopPass = shouldStop
         }
-
         return mutated
+    }
+
+    private fun attemptProcessQueuedItem(item: PopupProps, isStrictSequential: Boolean): Pair<Boolean, Boolean> {
+        val decision = evaluateAdmission(item)
+        val canOverwrite = item.overwrite && findAtomicEvictionPlan(item, decision)?.isNotEmpty() == true
+        return when {
+            decision.status == AdmissionStatus.UNPLACEABLE -> {
+                queue.remove(item)
+                (item.media as? PopupProps.Media.LocalFile)?.let { PayloadParser.deleteFileAsync(it.path) }
+                Log.w(TAG, "Discarded unplaceable queued popup: ${item.title ?: item.id}")
+                checkIdleAndCleanupOverlay()
+                true to true
+            }
+            decision.status == AdmissionStatus.ALLOWED || canOverwrite -> {
+                queue.remove(item)
+                startPreparingPopup(item)
+                true to true
+            }
+            else -> false to isStrictSequential
+        }
     }
 
     private fun canUpdateInPlace(oldProps: PopupProps, newProps: PopupProps): Boolean {
@@ -1431,21 +1482,19 @@ class NotificationManager(
         }
     }
 
-    private fun performCancelById(id: String): CancelResult {
-        synchronized(this) {
-            if (mShown.containsKey(id) || mExiting.containsKey(id)) {
+    private fun performCancelById(id: String): CancelResult = synchronized(this) {
+        when {
+            mShown.containsKey(id) || mExiting.containsKey(id) -> {
                 removePopupByKey(id, "cancelled")
                 removeWaitingOrQueuedById(id)
-                return CancelResult.CANCELLED_ACTIVE
+                CancelResult.CANCELLED_ACTIVE
             }
-
-            if (removeWaitingOrQueuedById(id)) {
+            removeWaitingOrQueuedById(id) -> {
                 processNextLocked()
                 checkIdleAndCleanupOverlay()
-                return CancelResult.REMOVED_FROM_QUEUE
+                CancelResult.REMOVED_FROM_QUEUE
             }
-
-            return CancelResult.NOT_FOUND
+            else -> CancelResult.NOT_FOUND
         }
     }
 
@@ -1472,32 +1521,26 @@ class NotificationManager(
         }
     }
 
+    private fun resolveButtonRemovalKey(idOrKey: String): String? = when {
+        idOrKey.isNotEmpty() && (mShown.containsKey(idOrKey) || mExiting.containsKey(idOrKey)) -> idOrKey
+        idOrKey.isNotEmpty() -> mShown.entries.firstOrNull { it.value.props.id == idOrKey }?.key
+            ?: mExiting.entries.firstOrNull { it.value.props.id == idOrKey }?.key
+        mShown.size == 1 -> mShown.keys.first()
+        mExiting.size == 1 -> mExiting.keys.first()
+        else -> mShown.keys.lastOrNull()
+    }
+
     private fun performButtonRemoval(idOrKey: String) {
         synchronized(this) {
-            val key = when {
-                idOrKey.isNotEmpty() && mShown.containsKey(idOrKey) -> idOrKey
-                idOrKey.isNotEmpty() && mExiting.containsKey(idOrKey) -> idOrKey
-                idOrKey.isNotEmpty() -> mShown.entries.firstOrNull { it.value.props.id == idOrKey }?.key
-                    ?: mExiting.entries.firstOrNull { it.value.props.id == idOrKey }?.key
-                mShown.size == 1 -> mShown.keys.first()
-                mExiting.size == 1 -> mExiting.keys.first()
-                else -> mShown.keys.lastOrNull()
-            }
-            if (key != null) {
-                val shown = mShown.remove(key) ?: mExiting.remove(key)
-                if (shown != null) {
-                    handler.removeCallbacksAndMessages(shown)
-                    if (!shown.removedEventFired) {
-                        shown.removedEventFired = true
-                        onPopupRemoved?.invoke("button", shown.props.id ?: shown.key)
-                    }
-                    shown.container?.removeView(shown.view)
-                    shown.view.cleanup()
-                    updateOverlayFocusability()
-                    processNextLocked()
-                    checkIdleAndCleanupOverlay()
-                }
-            }
+            val key = resolveButtonRemovalKey(idOrKey) ?: return
+            val shown = mShown.remove(key) ?: mExiting.remove(key) ?: return
+            handler.removeCallbacksAndMessages(shown)
+            triggerRemovalEvent(shown, "button")
+            shown.container?.removeView(shown.view)
+            shown.view.cleanup()
+            updateOverlayFocusability()
+            processNextLocked()
+            checkIdleAndCleanupOverlay()
         }
     }
 
@@ -1660,7 +1703,13 @@ class NotificationManager(
             applyFullscreenWindowAttributes(params)
             try {
                 windowManager.updateViewLayout(overlayView, params)
-            } catch (e: Exception) {
+            } catch (e: WindowManager.BadTokenException) {
+                Log.e(TAG, "WindowManager update flags error: ${e.message}")
+            } catch (e: SecurityException) {
+                Log.e(TAG, "WindowManager update flags error: ${e.message}")
+            } catch (e: IllegalArgumentException) {
+                Log.e(TAG, "WindowManager update flags error: ${e.message}")
+            } catch (e: IllegalStateException) {
                 Log.e(TAG, "WindowManager update flags error: ${e.message}")
             }
         }
@@ -1744,17 +1793,30 @@ class NotificationManager(
             windowManager.addView(view, params)
             overlay = view
             view
-        } catch (e: Exception) {
-            Log.e(TAG, "WindowManager error: ${e.message}")
-            val now = SystemClock.elapsedRealtime()
-            if (lastOverlayErrorToastAt == 0L || now - lastOverlayErrorToastAt >= OVERLAY_ERROR_TOAST_COOLDOWN_MS) {
-                lastOverlayErrorToastAt = now
-                context.showToast(
-                    context.getLocalizedContext(PiPupApp.settings.language)
-                        .getString(R.string.error_permission_denied_overlay)
-                )
-            }
+        } catch (e: WindowManager.BadTokenException) {
+            handleOverlayAddError(e)
             null
+        } catch (e: SecurityException) {
+            handleOverlayAddError(e)
+            null
+        } catch (e: IllegalArgumentException) {
+            handleOverlayAddError(e)
+            null
+        } catch (e: IllegalStateException) {
+            handleOverlayAddError(e)
+            null
+        }
+    }
+
+    private fun handleOverlayAddError(e: Exception) {
+        Log.e(TAG, "WindowManager error: ${e.message}")
+        val now = SystemClock.elapsedRealtime()
+        if (lastOverlayErrorToastAt == 0L || now - lastOverlayErrorToastAt >= OVERLAY_ERROR_TOAST_COOLDOWN_MS) {
+            lastOverlayErrorToastAt = now
+            context.showToast(
+                context.getLocalizedContext(PiPupApp.settings.language)
+                    .getString(R.string.error_permission_denied_overlay),
+            )
         }
     }
 

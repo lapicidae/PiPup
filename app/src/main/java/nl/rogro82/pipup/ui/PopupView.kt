@@ -356,103 +356,94 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
-    private fun isMediaContentSame(m1: PopupProps.Media?, m2: PopupProps.Media?): Boolean {
-        if (m1 == null || m2 == null) return m1 == m2
-        if (m1::class != m2::class) return false
-        return when (m1) {
-            is PopupProps.Media.Image -> (m2 as PopupProps.Media.Image).let {
-                m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale
-            }
-            is PopupProps.Media.Video -> (m2 as PopupProps.Media.Video).let { m1.uri == it.uri && m1.scale == it.scale }
-            is PopupProps.Media.Web -> (m2 as PopupProps.Media.Web).let {
-                m1.uri == it.uri && m1.cache == it.cache && m1.scale == it.scale
-            }
-            is PopupProps.Media.Whep -> (m2 as PopupProps.Media.Whep).let {
-                m1.uri == it.uri && m1.scale == it.scale && m1.height == it.height && m1.videoFit == it.videoFit
-            }
-            is PopupProps.Media.LocalFile -> m1.path == (m2 as PopupProps.Media.LocalFile).path
-            else -> m1 == m2
-        }
+    private fun mediaContentKey(m: PopupProps.Media): Any = when (m) {
+        is PopupProps.Media.Image -> listOf("img", m.uri, m.cache, m.scale)
+        is PopupProps.Media.Video -> listOf("vid", m.uri, m.scale)
+        is PopupProps.Media.Web -> listOf("web", m.uri, m.cache, m.scale)
+        is PopupProps.Media.Whep -> listOf("whep", m.uri, m.scale, m.height, m.videoFit)
+        is PopupProps.Media.LocalFile -> listOf("file", m.path)
+        is PopupProps.Media.Bitmap -> m
     }
+
+    private fun isMediaContentSame(m1: PopupProps.Media?, m2: PopupProps.Media?): Boolean =
+        if (m1 == null || m2 == null) m1 == m2 else mediaContentKey(m1) == mediaContentKey(m2)
 
     private fun isFullBleedActive(): Boolean {
         return (props.mediaFullBleed ?: settings.mediaFullBleed) && props.hasMedia
     }
 
+    private fun scalePx(px: Int): Int = if (props.scale) context.getScaledPixels(px) else px
+
     private fun updateVisuals() {
         if (layoutParams == null) {
-            layoutParams = ViewGroup.LayoutParams(
-                LayoutParams.WRAP_CONTENT,
-                LayoutParams.WRAP_CONTENT
-            )
+            layoutParams = ViewGroup.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
         }
         alpha = 1.0f
         if (background != null) background = null
         setPadding(0, 0, 0, 0)
 
-        // 1. Padding & Full-Bleed Layout
-        val fullBleed = isFullBleedActive()
-        val hasAnyText = !props.title.isNullOrBlank() || !props.message.isNullOrBlank()
-        val hasButtons = props.buttons.isNotEmpty()
-        val paddingVal = props.contentPadding ?: settings.contentPadding
-        val scaledPadding = if (props.scale) context.getScaledPixels(paddingVal) else paddingVal
-        val borderPx = if (props.borderWidth > 0) {
-            if (props.scale) context.getScaledPixels(props.borderWidth) else props.borderWidth
-        } else {
-            0
-        }
-        val radiusPx = if (props.scale) {
-            context.getScaledPixels(props.borderRadius).toFloat()
-        } else {
-            props.borderRadius.toFloat()
+        val scaledPadding = scalePx(props.contentPadding ?: settings.contentPadding)
+        val borderPx = if (props.borderWidth > 0) scalePx(props.borderWidth) else 0
+        val radiusPx = scalePx(props.borderRadius).toFloat()
+
+        applyContainerPaddingAndOutline(scaledPadding, borderPx, radiusPx)
+        binding.popupMessage.maxLines = Integer.MAX_VALUE
+        binding.popupMessage.ellipsize = null
+
+        binding.popupContainer.background = GradientDrawable().apply {
+            setColor(props.getBackgroundColorInt())
+            cornerRadius = radiusPx
+            if (borderPx > 0) setStroke(borderPx, props.getBorderColorInt())
         }
 
-        if (fullBleed) {
-            val gap = (scaledPadding * 2) / FULL_BLEED_GAP_DIVISOR
-            val pos = props.mediaPosition ?: MEDIA_POS_TOP
-            val bottomContainerPad = if ((pos == MEDIA_POS_TOP) && (hasAnyText || hasButtons)) gap else borderPx
-            val topContainerPad = if (pos == MEDIA_POS_BOTTOM && hasAnyText) gap else borderPx
-            binding.popupContainer.setPadding(borderPx, topContainerPad, borderPx, bottomContainerPad)
-            if (hasAnyText || (props.buttonsInline && hasButtons)) {
-                val textTop = if (pos == MEDIA_POS_TOP) gap else scaledPadding
-                val textBottom = when (pos) {
-                    MEDIA_POS_BOTTOM -> gap
-                    MEDIA_POS_LEFT, MEDIA_POS_RIGHT -> scaledPadding
-                    else -> 0
-                }
-                binding.textContainer.setPadding(scaledPadding, textTop, scaledPadding, textBottom)
-            } else {
-                binding.textContainer.setPadding(0, 0, 0, 0)
-            }
-            applyFullBleedOutline(pos, radiusPx, borderPx, hasAnyText || hasButtons)
-        } else {
+        val maxTextWidth = scalePx(MAX_TEXT_WIDTH_PX)
+        binding.popupTitle.maxWidth = maxTextWidth
+        binding.popupMessage.maxWidth = maxTextWidth
+
+        reorderViews()
+        bindTextContent()
+        updateButtons()
+        updateCloseButton()
+        applyHeightConstraints(notifyCallback = false)
+    }
+
+    private fun applyContainerPaddingAndOutline(scaledPadding: Int, borderPx: Int, radiusPx: Float) {
+        if (!isFullBleedActive()) {
             val effectivePad = maxOf(scaledPadding, borderPx)
             binding.popupContainer.setPadding(effectivePad, effectivePad, effectivePad, effectivePad)
             binding.textContainer.setPadding(0, 0, 0, 0)
             binding.popupMediaContainer.clipToOutline = false
             binding.popupMediaContainer.outlineProvider = android.view.ViewOutlineProvider.BACKGROUND
+            return
         }
 
-        binding.popupMessage.maxLines = Integer.MAX_VALUE
-        binding.popupMessage.ellipsize = null
+        val hasAnyText = !props.title.isNullOrBlank() || !props.message.isNullOrBlank()
+        val hasButtons = props.buttons.isNotEmpty()
+        val gap = (scaledPadding * 2) / FULL_BLEED_GAP_DIVISOR
+        val pos = props.mediaPosition ?: MEDIA_POS_TOP
+        val bottomPad = if (pos == MEDIA_POS_TOP && (hasAnyText || hasButtons)) gap else borderPx
+        val topPad = if (pos == MEDIA_POS_BOTTOM && hasAnyText) gap else borderPx
+        binding.popupContainer.setPadding(borderPx, topPad, borderPx, bottomPad)
 
-        // 2. Background
-        binding.popupContainer.background = GradientDrawable().apply {
-            setColor(props.getBackgroundColorInt())
-            cornerRadius = radiusPx
-            if (borderPx > 0) {
-                setStroke(borderPx, props.getBorderColorInt())
-            }
+        applyFullBleedTextPadding(pos, scaledPadding, gap, hasAnyText || (props.buttonsInline && hasButtons))
+        applyFullBleedOutline(pos, radiusPx, borderPx, hasAnyText || hasButtons)
+    }
+
+    private fun applyFullBleedTextPadding(pos: Int, scaledPadding: Int, gap: Int, hasPaddedContent: Boolean) {
+        if (!hasPaddedContent) {
+            binding.textContainer.setPadding(0, 0, 0, 0)
+            return
         }
+        val textTop = if (pos == MEDIA_POS_TOP) gap else scaledPadding
+        val textBottom = when (pos) {
+            MEDIA_POS_BOTTOM -> gap
+            MEDIA_POS_LEFT, MEDIA_POS_RIGHT -> scaledPadding
+            else -> 0
+        }
+        binding.textContainer.setPadding(scaledPadding, textTop, scaledPadding, textBottom)
+    }
 
-        // 3. Constraints
-        val maxTextWidth = if (props.scale) context.getScaledPixels(500) else 500
-        binding.popupTitle.maxWidth = maxTextWidth
-        binding.popupMessage.maxWidth = maxTextWidth
-
-        reorderViews()
-
-        // 4. Content
+    private fun bindTextContent() {
         props.title?.let {
             binding.popupTitle.text = it
             binding.popupTitle.setTextColor(props.getTitleColorInt())
@@ -472,17 +463,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
             binding.popupMessage.isVisible = true
             binding.popupScrollView.isVisible = true
             (binding.popupScrollView.layoutParams as? LinearLayout.LayoutParams)?.gravity = gravity
-
-            // Additionally align the text container content block within the popup
             (binding.textContainer.layoutParams as? LinearLayout.LayoutParams)?.gravity = gravity
         } ?: run {
             binding.popupMessage.isVisible = false
             binding.popupScrollView.isVisible = false
         }
-
-        updateButtons()
-        updateCloseButton()
-        applyHeightConstraints(notifyCallback = false)
     }
 
     private fun applyFullBleedOutline(mediaPos: Int, radiusPx: Float, borderPx: Int, hasOtherContent: Boolean) {
@@ -524,38 +509,16 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val pos = props.mediaPosition ?: MEDIA_POS_TOP
         val hasTextSection = hasTextOrInlineButtons()
         textContainer.isVisible = hasTextSection
-        val noMediaGap = isFullBleedActive() || !hasTextSection
-        val marginV = if (noMediaGap) 0 else context.dpToPx(8)
-        val marginH = if (noMediaGap) 0 else context.dpToPx(12)
 
         if (container.tag == pos && textContainer.parent == container && mediaFrame.parent == container) {
-            // Already in correct order. Update existing layout params & margins.
-            (mediaFrame.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
-                if (targetMediaWidth > 0 && targetMediaHeight > 0) {
-                    lp.width = targetMediaWidth
-                    lp.height = targetMediaHeight
-                }
-                when (pos) {
-                    MEDIA_POS_TOP -> lp.setMargins(0, 0, 0, marginV)
-                    MEDIA_POS_BOTTOM -> lp.setMargins(0, marginV, 0, 0)
-                    MEDIA_POS_LEFT -> lp.setMargins(0, 0, marginH, 0)
-                    MEDIA_POS_RIGHT -> lp.setMargins(marginH, 0, 0, 0)
-                }
-            }
+            updateExistingMediaMargins(mediaFrame, pos, isFullBleedActive() || !hasTextSection)
             return
         }
 
         // Extremely careful reordering: only detach if absolutely necessary
         // to avoid WebView surface destruction.
-        if (textContainer.parent != null && textContainer.parent != container) {
-            (textContainer.parent as ViewGroup).removeView(textContainer)
-        }
-        if (mediaFrame.parent != null && mediaFrame.parent != container) {
-            (mediaFrame.parent as ViewGroup).removeView(mediaFrame)
-        }
-
-        if (textContainer.parent == container) container.removeView(textContainer)
-        if (mediaFrame.parent == container) container.removeView(mediaFrame)
+        detachFromParent(textContainer)
+        detachFromParent(mediaFrame)
 
         container.tag = pos
         when (pos) {
@@ -566,38 +529,42 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         }
     }
 
+    private fun detachFromParent(view: View) {
+        (view.parent as? ViewGroup)?.removeView(view)
+    }
+
+    private fun updateExistingMediaMargins(mediaFrame: View, pos: Int, noMediaGap: Boolean) {
+        val marginV = if (noMediaGap) 0 else context.dpToPx(MEDIA_GAP_VERTICAL_DP)
+        val marginH = if (noMediaGap) 0 else context.dpToPx(MEDIA_GAP_HORIZONTAL_DP)
+        val lp = mediaFrame.layoutParams as? LinearLayout.LayoutParams ?: return
+        if (targetMediaWidth > 0 && targetMediaHeight > 0) {
+            lp.width = targetMediaWidth
+            lp.height = targetMediaHeight
+        }
+        when (pos) {
+            MEDIA_POS_TOP -> lp.setMargins(0, 0, 0, marginV)
+            MEDIA_POS_BOTTOM -> lp.setMargins(0, marginV, 0, 0)
+            MEDIA_POS_LEFT -> lp.setMargins(0, 0, marginH, 0)
+            MEDIA_POS_RIGHT -> lp.setMargins(marginH, 0, 0, 0)
+        }
+    }
+
+    private fun createChildLayoutParams(view: View): LinearLayout.LayoutParams {
+        val isMedia = view == binding.popupMediaContainer
+        val w = if (isMedia && targetMediaWidth > 0) targetMediaWidth else LinearLayout.LayoutParams.WRAP_CONTENT
+        val h = if (isMedia && targetMediaHeight > 0) targetMediaHeight else LinearLayout.LayoutParams.WRAP_CONTENT
+        return LinearLayout.LayoutParams(w, h)
+    }
+
     private fun setupVertical(container: LinearLayout, first: View, second: View, mediaFirst: Boolean) {
         container.orientation = LinearLayout.VERTICAL
-        val margin = if (isFullBleedActive() || !hasTextOrInlineButtons()) 0 else context.dpToPx(8)
+        val margin = if (isFullBleedActive() || !hasTextOrInlineButtons()) 0 else context.dpToPx(MEDIA_GAP_VERTICAL_DP)
 
-        val firstWidth = if (first == binding.popupMediaContainer && targetMediaWidth > 0) {
-            targetMediaWidth
-        } else {
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        }
-        val firstHeight = if (first == binding.popupMediaContainer && targetMediaHeight > 0) {
-            targetMediaHeight
-        } else {
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        }
-
-        val firstParams = LinearLayout.LayoutParams(firstWidth, firstHeight).apply {
+        val firstParams = createChildLayoutParams(first).apply {
             if (first != binding.textContainer && mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
             setMargins(0, 0, 0, if (mediaFirst) margin else 0)
         }
-
-        val secondWidth = if (second == binding.popupMediaContainer && targetMediaWidth > 0) {
-            targetMediaWidth
-        } else {
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        }
-        val secondHeight = if (second == binding.popupMediaContainer && targetMediaHeight > 0) {
-            targetMediaHeight
-        } else {
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        }
-
-        val secondParams = LinearLayout.LayoutParams(secondWidth, secondHeight).apply {
+        val secondParams = createChildLayoutParams(second).apply {
             if (second != binding.textContainer && !mediaFirst) gravity = Gravity.CENTER_HORIZONTAL
             setMargins(0, if (!mediaFirst) margin else 0, 0, 0)
         }
@@ -608,36 +575,17 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
     private fun setupHorizontal(container: LinearLayout, first: View, second: View, mediaFirst: Boolean) {
         container.orientation = LinearLayout.HORIZONTAL
-        val margin = if (isFullBleedActive() || !hasTextOrInlineButtons()) 0 else context.dpToPx(12)
-
-        val firstWidth = if (first == binding.popupMediaContainer && targetMediaWidth > 0) {
-            targetMediaWidth
+        val margin = if (isFullBleedActive() || !hasTextOrInlineButtons()) {
+            0
         } else {
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        }
-        val firstHeight = if (first == binding.popupMediaContainer && targetMediaHeight > 0) {
-            targetMediaHeight
-        } else {
-            LinearLayout.LayoutParams.WRAP_CONTENT
+            context.dpToPx(MEDIA_GAP_HORIZONTAL_DP)
         }
 
-        val firstParams = LinearLayout.LayoutParams(firstWidth, firstHeight).apply {
+        val firstParams = createChildLayoutParams(first).apply {
             gravity = Gravity.CENTER_VERTICAL
             setMargins(0, 0, if (mediaFirst) margin else 0, 0)
         }
-
-        val secondWidth = if (second == binding.popupMediaContainer && targetMediaWidth > 0) {
-            targetMediaWidth
-        } else {
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        }
-        val secondHeight = if (second == binding.popupMediaContainer && targetMediaHeight > 0) {
-            targetMediaHeight
-        } else {
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        }
-
-        val secondParams = LinearLayout.LayoutParams(secondWidth, secondHeight).apply {
+        val secondParams = createChildLayoutParams(second).apply {
             gravity = Gravity.CENTER_VERTICAL
             setMargins(if (!mediaFirst) margin else 0, 0, 0, 0)
         }
@@ -829,13 +777,26 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         if (isCleanedUp) return
         if (props.coversScreen) {
             applyFullscreenLayoutConstraints()
-            if (notifyCallback) {
-                onLayoutAdjusted?.invoke()
-            }
+            if (notifyCallback) onLayoutAdjusted?.invoke()
             return
         }
         updateLiveBadgeMargins()
+        resetNonFullscreenContainers()
+        syncTargetMediaDimensions()
 
+        val maxTextWidth = scalePx(MAX_TEXT_WIDTH_PX)
+        binding.popupTitle.maxWidth = maxTextWidth
+        binding.popupMessage.maxWidth = maxTextWidth
+        measureIfUnmeasured(binding.popupTitle, maxTextWidth)
+
+        val screenHeight = resources.displayMetrics.heightPixels
+        val maxScrollHeight = computeMaxScrollHeight(screenHeight, maxTextWidth)
+        applyMessageScrollConstraints(maxTextWidth, maxScrollHeight)
+
+        if (notifyCallback) onLayoutAdjusted?.invoke()
+    }
+
+    private fun resetNonFullscreenContainers() {
         binding.popupContainer.layoutParams?.let { lp ->
             lp.width = LayoutParams.WRAP_CONTENT
             lp.height = LayoutParams.WRAP_CONTENT
@@ -849,80 +810,70 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         (binding.textContainer.layoutParams as? LinearLayout.LayoutParams)?.width =
             LinearLayout.LayoutParams.WRAP_CONTENT
         binding.textContainer.isVisible = hasTextOrInlineButtons()
+    }
 
-        val screenHeight = resources.displayMetrics.heightPixels
-        val maxPopupHeight = (screenHeight * 0.85).toInt()
+    private fun syncTargetMediaDimensions() {
+        if (!binding.popupMediaFrame.isVisible || targetMediaWidth <= 0 || targetMediaHeight <= 0) return
+        syncViewSize(binding.popupMediaFrame, targetMediaWidth, targetMediaHeight)
+        syncViewSize(binding.popupMediaContainer, targetMediaWidth, targetMediaHeight)
+    }
 
-        if (binding.popupMediaFrame.isVisible && targetMediaWidth > 0 && targetMediaHeight > 0) {
-            val frameLp = binding.popupMediaFrame.layoutParams
-            if (frameLp.width != targetMediaWidth || frameLp.height != targetMediaHeight) {
-                frameLp.width = targetMediaWidth
-                frameLp.height = targetMediaHeight
-                binding.popupMediaFrame.requestLayout()
-            }
-            val containerLp = binding.popupMediaContainer.layoutParams
-            if (containerLp.width != targetMediaWidth || containerLp.height != targetMediaHeight) {
-                containerLp.width = targetMediaWidth
-                containerLp.height = targetMediaHeight
-                binding.popupMediaContainer.requestLayout()
-            }
+    private fun syncViewSize(view: View, width: Int, height: Int) {
+        val lp = view.layoutParams
+        if (lp.width != width || lp.height != height) {
+            lp.width = width
+            lp.height = height
+            view.requestLayout()
         }
+    }
 
-        val maxTextWidth = if (props.scale) context.getScaledPixels(500) else 500
-        binding.popupTitle.maxWidth = maxTextWidth
-        binding.popupMessage.maxWidth = maxTextWidth
-        if (binding.popupTitle.isVisible && binding.popupTitle.measuredHeight <= 0) {
-            binding.popupTitle.measure(
-                MeasureSpec.makeMeasureSpec(maxTextWidth, MeasureSpec.AT_MOST),
-                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+    private fun measureIfUnmeasured(view: View, maxWidth: Int) {
+        if (view.isVisible && view.measuredHeight <= 0) {
+            view.measure(
+                MeasureSpec.makeMeasureSpec(maxWidth, MeasureSpec.AT_MOST),
+                MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
             )
         }
+    }
 
+    private fun computeMaxScrollHeight(screenHeight: Int, maxTextWidth: Int): Int {
+        if (binding.contentLayout.orientation == LinearLayout.HORIZONTAL) {
+            return (screenHeight * MAX_HORIZONTAL_SCROLL_RATIO).toInt()
+        }
         val buttonRow = binding.popupContainer.findViewWithTag<ViewGroup>("popup_button_row")
         val buttonRowHeight = if (buttonRow != null && buttonRow.isVisible) {
-            if (buttonRow.measuredHeight <= 0) {
-                buttonRow.measure(
-                    MeasureSpec.makeMeasureSpec(maxTextWidth, MeasureSpec.AT_MOST),
-                    MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
-                )
-            }
+            measureIfUnmeasured(buttonRow, maxTextWidth)
             buttonRow.measuredHeight + ((buttonRow.layoutParams as? MarginLayoutParams)?.topMargin ?: 0)
-        } else 0
-
-        val mediaH = if (binding.popupMediaFrame.isVisible) {
-            if (targetMediaHeight > 0) targetMediaHeight else binding.popupMediaFrame.measuredHeight
         } else {
             0
         }
-        val otherViewsHeight = (if (binding.popupTitle.isVisible) binding.popupTitle.measuredHeight else 0) +
-            mediaH +
-            binding.popupContainer.paddingTop + binding.popupContainer.paddingBottom + context.dpToPx(12) +
-            buttonRowHeight
-
-        val maxScrollHeight = if (binding.contentLayout.orientation == LinearLayout.HORIZONTAL) {
-            (screenHeight * 0.45).toInt()
-        } else {
-            (maxPopupHeight - otherViewsHeight).coerceAtLeast(context.dpToPx(150))
+        val mediaH = when {
+            !binding.popupMediaFrame.isVisible -> 0
+            targetMediaHeight > 0 -> targetMediaHeight
+            else -> binding.popupMediaFrame.measuredHeight
         }
+        val titleH = if (binding.popupTitle.isVisible) binding.popupTitle.measuredHeight else 0
+        val otherViewsHeight = titleH + mediaH +
+            binding.popupContainer.paddingTop + binding.popupContainer.paddingBottom +
+            context.dpToPx(HEIGHT_PADDING_EXTRA_DP) + buttonRowHeight
+        val maxPopupHeight = (screenHeight * MAX_POPUP_HEIGHT_RATIO).toInt()
+        return (maxPopupHeight - otherViewsHeight).coerceAtLeast(context.dpToPx(MIN_VERTICAL_SCROLL_HEIGHT_DP))
+    }
 
+    private fun applyMessageScrollConstraints(maxTextWidth: Int, maxScrollHeight: Int) {
         binding.popupMessage.measure(
             MeasureSpec.makeMeasureSpec(maxTextWidth, MeasureSpec.AT_MOST),
-            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED)
+            MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED),
         )
-
-        val contentHeight = binding.popupMessage.measuredHeight
-        if (contentHeight > maxScrollHeight) {
+        if (binding.popupMessage.measuredHeight > maxScrollHeight) {
             binding.popupScrollView.layoutParams.height = maxScrollHeight.coerceAtLeast(
-                context.dpToPx(MIN_SCROLL_HEIGHT_DP)
+                context.dpToPx(MIN_SCROLL_HEIGHT_DP),
             )
             binding.popupScrollView.requestLayout()
             if (!isScrolling) startAutoScroll()
         } else {
             binding.popupScrollView.layoutParams.height = LinearLayout.LayoutParams.WRAP_CONTENT
             binding.popupScrollView.requestLayout()
-        }
-        if (notifyCallback) {
-            onLayoutAdjusted?.invoke()
         }
     }
 
@@ -1093,94 +1044,84 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     }
 
     private fun updateButtons() {
-        val existingRowPopup = binding.popupContainer.findViewWithTag<ViewGroup>("popup_button_row")
-        existingRowPopup?.let { binding.popupContainer.removeView(it) }
-        val existingRowText = binding.textContainer.findViewWithTag<ViewGroup>("popup_button_row")
-        existingRowText?.let { binding.textContainer.removeView(it) }
+        binding.popupContainer.findViewWithTag<ViewGroup>("popup_button_row")
+            ?.let { binding.popupContainer.removeView(it) }
+        binding.textContainer.findViewWithTag<ViewGroup>("popup_button_row")
+            ?.let { binding.textContainer.removeView(it) }
 
         if (props.buttons.isEmpty()) return
 
-        val buttonRow = LinearLayout(context).apply {
-            tag = "popup_button_row"
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            if (isFullBleedActive() && !props.buttonsInline) {
-                val contentPadding = (props.contentPadding ?: settings.contentPadding).coerceAtLeast(0)
-                val scaledPadding = if (props.scale) {
-                    context.getScaledPixels(contentPadding)
-                } else {
-                    contentPadding
-                }
-                setPadding(scaledPadding, 0, scaledPadding, 0)
-            }
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-            ).apply {
-                topMargin = context.dpToPx(12)
-            }
-        }
-
+        val buttonRow = createButtonRowContainer()
         var firstButton: Button? = null
-
-        for (i in props.buttons.indices) {
-            val btn = props.buttons[i]
-            val isFirst = i == 0
-            val size = props.buttonSize?.takeIf { it >= 8f }
-                ?: settings.defaultButtonSize.takeIf { it >= 8f }
-                ?: (props.messageSize * 0.85f).coerceIn(12f, 24f)
-            val button = Button(context).apply {
-                text = btn.label
-                isFocusable = !props.isPreview
-                isClickable = !props.isPreview
-                val normalTextColor = parseColorOrDefault(
-                    props.buttonTextColor ?: settings.defaultButtonTextColor,
-                    "#FFFFFF",
-                )
-                val focusTextColor = parseColorOrDefault(
-                    props.buttonFocusTextColor ?: settings.defaultButtonFocusTextColor,
-                    "#FFFFFF",
-                )
-                if (props.isPreview && isFirst) {
-                    setTextColor(focusTextColor)
-                } else {
-                    setTextColor(createButtonTextColorStateList(normalTextColor, focusTextColor))
-                }
-                textSize = size
-                maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-                gravity = Gravity.CENTER
-                val scaleFactor = size / 14f
-                val h = context.dpToPx((24f * scaleFactor).toInt()).coerceAtLeast(8)
-                val v = context.dpToPx((10f * scaleFactor).toInt()).coerceAtLeast(4)
-                setPadding(h, v, h, v)
-                minHeight = context.dpToPx(40)
-                background = if (props.isPreview && isFirst) {
-                    createButtonBackground(props, forceFocused = true)
-                } else {
-                    createButtonBackground(props, forceFocused = false)
-                }
-                setOnClickListener { if (!props.isPreview) onButton?.invoke(btn) }
-                val m = context.dpToPx((8f * scaleFactor).toInt()).coerceAtLeast(2)
-                layoutParams = LinearLayout.LayoutParams(
-                    0,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    1f
-                ).apply {
-                    setMargins(m, m, m, context.dpToPx((4f * scaleFactor).toInt()).coerceAtLeast(2))
-                }
-            }
+        props.buttons.forEachIndexed { index, btn ->
+            val button = createActionButton(btn, isFirst = index == 0)
             if (firstButton == null) firstButton = button
             buttonRow.addView(button)
         }
 
-        if (props.buttonsInline) {
-            binding.textContainer.addView(buttonRow)
-        } else {
-            binding.popupContainer.addView(buttonRow)
-        }
+        val targetParent = if (props.buttonsInline) binding.textContainer else binding.popupContainer
+        targetParent.addView(buttonRow)
         if (!props.isPreview) {
             firstButton?.post { firstButton.requestFocus() }
+        }
+    }
+
+    private fun createButtonRowContainer(): LinearLayout = LinearLayout(context).apply {
+        tag = "popup_button_row"
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER
+        if (isFullBleedActive() && !props.buttonsInline) {
+            val scaledPadding = scalePx((props.contentPadding ?: settings.contentPadding).coerceAtLeast(0))
+            setPadding(scaledPadding, 0, scaledPadding, 0)
+        }
+        layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+        ).apply {
+            topMargin = context.dpToPx(BUTTON_ROW_TOP_MARGIN_DP)
+        }
+    }
+
+    private fun createActionButton(btn: PopupProps.Button, isFirst: Boolean): Button {
+        val size = props.buttonSize?.takeIf { it >= MIN_BUTTON_SIZE_SP }
+            ?: settings.defaultButtonSize.takeIf { it >= MIN_BUTTON_SIZE_SP }
+            ?: (props.messageSize * FALLBACK_BUTTON_SIZE_RATIO)
+                .coerceIn(FALLBACK_BUTTON_SIZE_MIN_SP, FALLBACK_BUTTON_SIZE_MAX_SP)
+        val normalTextColor = parseColorOrDefault(
+            props.buttonTextColor ?: settings.defaultButtonTextColor,
+            "#FFFFFF",
+        )
+        val focusTextColor = parseColorOrDefault(
+            props.buttonFocusTextColor ?: settings.defaultButtonFocusTextColor,
+            "#FFFFFF",
+        )
+        val scaleFactor = size / BUTTON_BASE_SIZE_SP
+        val padH = context.dpToPx((BUTTON_PAD_H_DP * scaleFactor).toInt()).coerceAtLeast(BUTTON_MIN_PAD_H_PX)
+        val padV = context.dpToPx((BUTTON_PAD_V_DP * scaleFactor).toInt()).coerceAtLeast(BUTTON_MIN_PAD_V_PX)
+        val margin = context.dpToPx((BUTTON_MARGIN_DP * scaleFactor).toInt()).coerceAtLeast(2)
+        val bottomMargin = context.dpToPx((BUTTON_MARGIN_BOTTOM_DP * scaleFactor).toInt()).coerceAtLeast(2)
+        val previewFocused = props.isPreview && isFirst
+
+        return Button(context).apply {
+            text = btn.label
+            isFocusable = !props.isPreview
+            isClickable = !props.isPreview
+            if (previewFocused) {
+                setTextColor(focusTextColor)
+            } else {
+                setTextColor(createButtonTextColorStateList(normalTextColor, focusTextColor))
+            }
+            textSize = size
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            gravity = Gravity.CENTER
+            setPadding(padH, padV, padH, padV)
+            minHeight = context.dpToPx(BUTTON_MIN_HEIGHT_DP)
+            background = createButtonBackground(props, forceFocused = previewFocused)
+            setOnClickListener { if (!props.isPreview) onButton?.invoke(btn) }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                setMargins(margin, margin, margin, bottomMargin)
+            }
         }
     }
 
@@ -1402,7 +1343,27 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         private const val MEDIA_POS_LEFT = 2
         private const val MEDIA_POS_RIGHT = 3
         private const val FULL_BLEED_GAP_DIVISOR = 3
+        private const val MAX_TEXT_WIDTH_PX = 500
+        private const val MEDIA_GAP_VERTICAL_DP = 8
+        private const val MEDIA_GAP_HORIZONTAL_DP = 12
+        private const val HEIGHT_PADDING_EXTRA_DP = 12
+        private const val MAX_POPUP_HEIGHT_RATIO = 0.85
+        private const val MAX_HORIZONTAL_SCROLL_RATIO = 0.45
+        private const val MIN_VERTICAL_SCROLL_HEIGHT_DP = 150
         private const val MIN_SCROLL_HEIGHT_DP = 100
+        private const val BUTTON_ROW_TOP_MARGIN_DP = 12
+        private const val MIN_BUTTON_SIZE_SP = 8f
+        private const val FALLBACK_BUTTON_SIZE_RATIO = 0.85f
+        private const val FALLBACK_BUTTON_SIZE_MIN_SP = 12f
+        private const val FALLBACK_BUTTON_SIZE_MAX_SP = 24f
+        private const val BUTTON_BASE_SIZE_SP = 14f
+        private const val BUTTON_PAD_H_DP = 24f
+        private const val BUTTON_PAD_V_DP = 10f
+        private const val BUTTON_MIN_PAD_H_PX = 8
+        private const val BUTTON_MIN_PAD_V_PX = 4
+        private const val BUTTON_MIN_HEIGHT_DP = 40
+        private const val BUTTON_MARGIN_DP = 8f
+        private const val BUTTON_MARGIN_BOTTOM_DP = 4f
         private const val AUTO_SCROLL_START_DELAY_MS = 2000L
         private const val AUTO_SCROLL_PAUSE_END_MS = 3000L
         private const val AUTO_SCROLL_TICK_MS = 30L
