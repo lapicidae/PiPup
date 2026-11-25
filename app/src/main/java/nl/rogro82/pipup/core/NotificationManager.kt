@@ -32,9 +32,17 @@ class NotificationManager(
         private const val TAG = "NotificationManager"
         private const val MAX_PARALLEL_PREPARING = 3
         private const val MAIN_SYNC_TIMEOUT_SECONDS = 2L
+        private const val OVERLAY_IDLE_GRACE_MS = 10_000L
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private val idleOverlayRemovalRunnable = Runnable {
+        synchronized(this) {
+            if (!isDisplaying()) {
+                overlayHost.removeOverlay()
+            }
+        }
+    }
     private val queue = ArrayDeque<PopupProps>()
     internal val preparingSlots = LinkedHashMap<String, ShownSlot>()
     internal val readyWaiting = LinkedHashMap<String, ShownSlot>()
@@ -205,14 +213,19 @@ class NotificationManager(
     internal fun checkIdleAndCleanupOverlay() {
         if (shownSlots.isEmpty() && exitingSlots.isEmpty()) {
             notifyStateChanged(false)
-            overlayHost.removeOverlay()
+            overlayHost.prepareIdleOverlay()
+            handler.removeCallbacks(idleOverlayRemovalRunnable)
             if (preparingSlots.isEmpty() && readyWaiting.isEmpty() && queue.isEmpty()) {
                 lastPopup = null
+                handler.postDelayed(idleOverlayRemovalRunnable, OVERLAY_IDLE_GRACE_MS)
             }
         }
     }
 
     internal fun notifyStateChanged(isDisplaying: Boolean) {
+        if (isDisplaying) {
+            handler.removeCallbacks(idleOverlayRemovalRunnable)
+        }
         (context.applicationContext as? PiPupApp)?.moduleManager?.notifyNotificationDisplayStateChanged(isDisplaying)
         onStateChanged?.invoke(isDisplaying)
     }
@@ -260,6 +273,7 @@ class NotificationManager(
 
     private fun handleEnqueue(props: PopupProps, isInternal: Boolean = false) {
         synchronized(this) {
+            handler.removeCallbacks(idleOverlayRemovalRunnable)
             if (props.id == UpdateManager.CONFIRM_POPUP_ID && !isInternal && !props.isInternalUpdateAction) {
                 Log.w(TAG, "Rejecting external attempt to use reserved update popup ID: ${props.id}")
                 return

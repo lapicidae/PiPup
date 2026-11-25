@@ -16,6 +16,7 @@ import android.widget.LinearLayout
 import android.window.OnBackInvokedCallback
 import android.window.OnBackInvokedDispatcher
 import androidx.core.view.isEmpty
+import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
@@ -194,17 +195,7 @@ internal class PopupOverlayHost(
         if (params.flags != targetFlags) {
             params.flags = targetFlags
             applyFullscreenWindowAttributes(params)
-            try {
-                windowManager.updateViewLayout(overlayView, params)
-            } catch (e: WindowManager.BadTokenException) {
-                Log.e(TAG, "WindowManager update flags error: ${e.message}")
-            } catch (e: SecurityException) {
-                Log.e(TAG, "WindowManager update flags error: ${e.message}")
-            } catch (e: IllegalArgumentException) {
-                Log.e(TAG, "WindowManager update flags error: ${e.message}")
-            } catch (e: IllegalStateException) {
-                Log.e(TAG, "WindowManager update flags error: ${e.message}")
-            }
+            applyOverlayLayoutParams(overlayView, params)
         }
 
         val needsFocus = callbacks.hasActiveFocusablePopup()
@@ -216,6 +207,21 @@ internal class PopupOverlayHost(
                     overlayView.requestFocus()
                 }
             }
+        }
+    }
+
+    fun prepareIdleOverlay() {
+        clearContainers()
+        val overlayView = overlay ?: return
+        overlayView.isVisible = false
+        overlayView.isFocusable = false
+        overlayView.isFocusableInTouchMode = false
+        val params = overlayView.layoutParams as? WindowManager.LayoutParams ?: return
+        val idleFlags = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+            WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        if (params.flags != idleFlags) {
+            params.flags = idleFlags
+            applyOverlayLayoutParams(overlayView, params)
         }
     }
 
@@ -331,8 +337,28 @@ internal class PopupOverlayHost(
         }
     }
 
+    private fun applyOverlayLayoutParams(overlayView: FrameLayout, params: WindowManager.LayoutParams) {
+        try {
+            windowManager.updateViewLayout(overlayView, params)
+        } catch (e: WindowManager.BadTokenException) {
+            Log.e(TAG, "WindowManager update flags error: ${e.message}")
+        } catch (e: SecurityException) {
+            Log.e(TAG, "WindowManager update flags error: ${e.message}")
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "WindowManager update flags error: ${e.message}")
+        } catch (e: IllegalStateException) {
+            Log.e(TAG, "WindowManager update flags error: ${e.message}")
+        }
+    }
+
     private fun ensureOverlay(): FrameLayout? {
-        overlay?.let { return it }
+        overlay?.let { existing ->
+            if (!existing.isVisible) {
+                existing.isVisible = true
+                updateOverlayFocusability()
+            }
+            return existing
+        }
         val view = OverlayRootFrameLayout(context)
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,

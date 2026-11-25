@@ -27,7 +27,7 @@ object Pusher {
 
     private val executor = Executors.newSingleThreadExecutor()
 
-    private class Pending(val target: String, val event: String, val body: String)
+    private class Pending(val target: String, val event: String, val bodyProvider: () -> String?)
     private val pending = ArrayDeque<Pending>()
     private var draining = false
     private var overflowLogged = false
@@ -47,7 +47,13 @@ object Pusher {
     /**
      * Enqueues a state-change webhook delivery for [event] with JSON [body].
      */
-    fun push(event: String, body: String) {
+    fun push(event: String, body: String) = push(event) { body }
+
+    /**
+     * Enqueues a state-change webhook delivery for [event] whose JSON payload is built lazily
+     * on the background delivery thread, keeping callers (such as the main thread) non-blocking.
+     */
+    fun push(event: String, bodyProvider: () -> String?) {
         val target = url?.takeIf { it.isNotBlank() } ?: return
         synchronized(pending) {
             if (pending.size >= MAX_PENDING) {
@@ -60,7 +66,7 @@ object Pusher {
                     )
                 }
             }
-            pending.addLast(Pending(target, event, body))
+            pending.addLast(Pending(target, event, bodyProvider))
             if (draining) return
             draining = true
         }
@@ -79,13 +85,14 @@ object Pusher {
     }
 
     private fun deliver(p: Pending) {
-        val code = post(p.target, p.event, p.body)
+        val body = p.bodyProvider() ?: return
+        val code = post(p.target, p.event, body)
         val terminal = code != null &&
             (code in HTTP_OK_MIN..HTTP_OK_MAX || code in HTTP_CLIENT_ERROR_MIN..HTTP_CLIENT_ERROR_MAX)
         if (terminal || synchronized(pending) { pending.isNotEmpty() }) return
         try {
             Thread.sleep(RETRY_DELAY_MS)
-            post(p.target, p.event, p.body)
+            post(p.target, p.event, body)
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
         }

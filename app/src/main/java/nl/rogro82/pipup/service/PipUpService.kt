@@ -51,6 +51,45 @@ import nl.rogro82.pipup.getLocalizedContext
 import nl.rogro82.pipup.registerProtectedReceiver
 import nl.rogro82.pipup.showToast
 
+private data class PopupStateSnapshot(
+    val activeSlots: List<Pair<PopupProps, Long>>,
+    val visible: Boolean,
+    val dreaming: Boolean,
+    val lastPopup: PopupProps?,
+    val now: Long,
+)
+
+private fun mediaInfo(p: PopupProps): Map<String, Any?>? = when (val m = p.media) {
+    is PopupProps.Media.Web -> mapOf(
+        "type" to "web",
+        "width" to m.width,
+        "height" to m.height,
+        "poster" to (m.poster != null),
+    )
+    is PopupProps.Media.Whep -> mapOf(
+        "type" to "whep",
+        "width" to m.width,
+        "height" to m.height,
+        "poster" to (m.poster != null),
+    )
+    is PopupProps.Media.Video -> mapOf(
+        "type" to "video",
+        "width" to m.width,
+        "poster" to (m.poster != null),
+        "bufferMs" to m.bufferMs,
+    )
+    is PopupProps.Media.Image -> mapOf("type" to "image", "width" to m.width)
+    is PopupProps.Media.Bitmap -> mapOf("type" to "bitmap", "width" to m.width)
+    else -> null
+}
+
+private fun mediaMuted(p: PopupProps): Boolean? = when (val m = p.media) {
+    is PopupProps.Media.Web -> m.muted
+    is PopupProps.Media.Whep -> m.muted
+    is PopupProps.Media.Video -> m.muted
+    else -> null
+}
+
 /**
  * Main background service responsible for hosting the WebServer and managing the notification queue.
  *
@@ -88,15 +127,12 @@ class PipUpService : Service() {
         NotificationManager(this, wm).apply {
             onPopupShown = { props ->
                 emit("popup_shown", mapOf("shownId" to props.id))
-                notifyLocalStateChange()
             }
             onPopupReplaced = { props, replacedId ->
                 emit("popup_replaced", mapOf("shownId" to props.id, "replacedId" to replacedId))
-                notifyLocalStateChange()
             }
             onPopupRemoved = { reason, removedId ->
                 emit("popup_removed", mapOf("reason" to reason, "removedId" to removedId))
-                notifyLocalStateChange()
             }
             onStateChanged = {
                 notifyLocalStateChange()
@@ -128,14 +164,18 @@ class PipUpService : Service() {
     @Suppress("TooGenericExceptionCaught") // Telemetry hook must never crash the service when serializing state
     private fun emit(event: String, extra: Map<String, Any?> = emptyMap()) {
         if (Pusher.url.isNullOrBlank()) return
-        try {
-            val body = buildState().apply {
-                put("event", event)
-                putAll(extra)
+        val snapshot = captureStateSnapshot()
+        Pusher.push(event) {
+            try {
+                val body = buildState(snapshot).apply {
+                    put("event", event)
+                    putAll(extra)
+                }
+                Json.writeValueAsString(body)
+            } catch (ex: Throwable) {
+                Log.e(TAG, "push $event: building state failed: ${ex.message}")
+                null
             }
-            Pusher.push(event, Json.writeValueAsString(body))
-        } catch (ex: Throwable) {
-            Log.e(TAG, "push $event: building state failed: ${ex.message}")
         }
     }
 
@@ -299,10 +339,15 @@ class PipUpService : Service() {
         super.onDestroy()
     }
 
+    @Volatile private var lastBroadcastDisplaying: Boolean? = null
+
     val isDisplaying: Boolean get() = notificationManager.isDisplaying()
 
-    /** Broadcasts a local popup state change intent to in-app listeners. */
+    /** Broadcasts a local popup state change intent to in-app listeners when display state changes. */
     fun notifyLocalStateChange() {
+        val current = isDisplaying
+        if (lastBroadcastDisplaying == current) return
+        lastBroadcastDisplaying = current
         val intent = Intent(PiPupApp.ACTION_POPUP_STATE_CHANGED).apply {
             setPackage(PiPupApp.APP_PACKAGE)
         }
@@ -383,19 +428,27 @@ class PipUpService : Service() {
         }
     }
 
-    private fun buildState(): MutableMap<String, Any?> {
-        val activeSlots = notificationManager.getActiveSlotDetails()
+    private fun captureStateSnapshot(): PopupStateSnapshot = PopupStateSnapshot(
+        activeSlots = notificationManager.getActiveSlotDetails(),
+        visible = notificationManager.isDisplaying(),
+        dreaming = dreaming,
+        lastPopup = notificationManager.lastPopup,
+        now = SystemClock.elapsedRealtime(),
+    )
+
+    private fun buildState(snapshot: PopupStateSnapshot = captureStateSnapshot()): MutableMap<String, Any?> {
         val powerManager = getSystemService(POWER_SERVICE) as PowerManager
-        val now = SystemClock.elapsedRealtime()
+        val sleepMethod = PowerController.getSleepMethod(this)
+        val now = snapshot.now
 
         val state = mutableMapOf<String, Any?>(
             "app" to getString(R.string.app_name),
             "version" to BuildConfig.VERSION_NAME,
             "id" to settings.deviceId,
             "name" to deviceName(),
-            "visible" to notificationManager.isDisplaying(),
+            "visible" to snapshot.visible,
             "screenOn" to powerManager.isInteractive,
-            "dreaming" to dreaming,
+            "dreaming" to snapshot.dreaming,
             "popupsShown" to notificationManager.popupsShown.get(),
             "watchdogCleanups" to notificationManager.watchdogCleanups.get(),
             "uptime" to (now - startedAt) / MS_PER_SECOND,
@@ -404,11 +457,11 @@ class PipUpService : Service() {
                 "manufacturer" to Build.MANUFACTURER,
                 "android" to Build.VERSION.RELEASE,
             ),
-            "popups" to buildPopupsState(activeSlots, now),
+            "popups" to buildPopupsState(snapshot.activeSlots, now),
             "power" to mapOf(
                 "canWake" to true,
-                "canSleep" to (PowerController.getSleepMethod(this) != null),
-                "sleepMethod" to PowerController.getSleepMethod(this),
+                "canSleep" to (sleepMethod != null),
+                "sleepMethod" to sleepMethod,
             ),
             "permissions" to Permissions.asMap(this),
             "update" to buildUpdateState(),
@@ -416,7 +469,7 @@ class PipUpService : Service() {
             "push" to buildPushState(),
         )
 
-        activeSlots.lastOrNull()?.let { (topProps, topShownAt) ->
+        snapshot.activeSlots.lastOrNull()?.let { (topProps, topShownAt) ->
             state["popup"] = mapOf(
                 "id" to topProps.id,
                 "title" to topProps.title,
@@ -425,7 +478,7 @@ class PipUpService : Service() {
                 "elapsed" to ((now - topShownAt) / MS_PER_SECOND),
             )
         }
-        buildLastPopupState(now)?.let { state["lastPopup"] = it }
+        buildLastPopupState(snapshot.lastPopup, now)?.let { state["lastPopup"] = it }
         moduleManager.augmentState(state)
         return state
     }
@@ -457,8 +510,8 @@ class PipUpService : Service() {
         "error" to UpdateManager.lastError,
     )
 
-    private fun buildLastPopupState(now: Long): Map<String, Any?>? {
-        val last = notificationManager.lastPopup ?: return null
+    private fun buildLastPopupState(last: PopupProps?, now: Long): Map<String, Any?>? {
+        if (last == null) return null
         return mapOf(
             "id" to last.id,
             "position" to last.getPositionEnum().name,
@@ -495,37 +548,6 @@ class PipUpService : Service() {
             "application/json",
             Json.writeValueAsString(buildState())
         )
-    }
-
-    private fun mediaInfo(p: PopupProps): Map<String, Any?>? = when (val m = p.media) {
-        is PopupProps.Media.Web -> mapOf(
-            "type" to "web",
-            "width" to m.width,
-            "height" to m.height,
-            "poster" to (m.poster != null)
-        )
-        is PopupProps.Media.Whep -> mapOf(
-            "type" to "whep",
-            "width" to m.width,
-            "height" to m.height,
-            "poster" to (m.poster != null)
-        )
-        is PopupProps.Media.Video -> mapOf(
-            "type" to "video",
-            "width" to m.width,
-            "poster" to (m.poster != null),
-            "bufferMs" to m.bufferMs
-        )
-        is PopupProps.Media.Image -> mapOf("type" to "image", "width" to m.width)
-        is PopupProps.Media.Bitmap -> mapOf("type" to "bitmap", "width" to m.width)
-        else -> null
-    }
-
-    private fun mediaMuted(p: PopupProps): Boolean? = when (val m = p.media) {
-        is PopupProps.Media.Web -> m.muted
-        is PopupProps.Media.Whep -> m.muted
-        is PopupProps.Media.Video -> m.muted
-        else -> null
     }
 
     private fun deviceName(): String {

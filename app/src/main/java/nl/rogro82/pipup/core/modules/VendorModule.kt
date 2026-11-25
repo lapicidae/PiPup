@@ -71,8 +71,14 @@ class VendorModule : PiPupModule {
 
     override fun augmentState(state: MutableMap<String, Any?>) {
         val context = moduleContext?.androidContext ?: return
+        val perms = state["permissions"] as? Map<*, *>
+        val autoStartState = if (perms != null && perms.containsKey("autoStart")) {
+            perms["autoStart"]
+        } else {
+            Permissions.autoStart(context)
+        }
         val vendorState = mutableMapOf<String, Any?>(
-            "isTcl" to (Permissions.autoStart(context) != null || BuildConfig.DEBUG)
+            "isTcl" to (autoStartState != null || BuildConfig.DEBUG)
         )
         state["vendor"] = vendorState
     }

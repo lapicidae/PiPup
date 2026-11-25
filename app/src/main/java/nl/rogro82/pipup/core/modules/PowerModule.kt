@@ -93,11 +93,18 @@ class PowerModule : PiPupModule {
 
     override fun augmentState(state: MutableMap<String, Any?>) {
         val context = moduleContext?.androidContext ?: return
+        val existingPower = state["power"] as? Map<*, *>
+        val sleepMethod = if (existingPower != null && existingPower.containsKey("sleepMethod")) {
+            existingPower["sleepMethod"] as? String
+        } else {
+            PowerController.getSleepMethod(context)
+        }
+        val screenOn = (state["screenOn"] as? Boolean) ?: PowerController.isScreenOn(context)
         state["power"] = mapOf(
             "canWake" to true,
-            "canSleep" to (PowerController.getSleepMethod(context) != null),
-            "sleepMethod" to PowerController.getSleepMethod(context),
-            "screenOn" to PowerController.isScreenOn(context)
+            "canSleep" to (sleepMethod != null),
+            "sleepMethod" to sleepMethod,
+            "screenOn" to screenOn,
         )
     }
 

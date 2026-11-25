@@ -20,6 +20,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
 import androidx.media3.common.util.UnstableApi
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import nl.rogro82.pipup.core.PowerController
 import nl.rogro82.pipup.service.AdminReceiver
@@ -64,6 +65,8 @@ object Permissions {
     @Volatile
     private var mLastFix: Map<String, Any?>? = null
 
+    private val resolvedActivityCache = ConcurrentHashMap<String, String>()
+
     private val mVisibleActivities = AtomicInteger(0)
 
     val activityVisible: Boolean
@@ -99,8 +102,6 @@ object Permissions {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
 
         val tclAllowed = try {
-            @Suppress("DEPRECATION")
-            ops.checkOpNoThrow(OP_TCL_AUTO_START, Process.myUid(), context.packageName)
             checkAppOp(ops, OP_TCL_AUTO_START, context) == AppOpsManager.MODE_ALLOWED
         } catch (_: Throwable) {
             null
@@ -134,15 +135,18 @@ object Permissions {
     }
 
     /** Builds a summary map of current permission grant and fixability states for `/state`. */
-    fun asMap(context: Context): Map<String, Any?> = mapOf(
-        "overlay" to overlay(context),
-        "installPackages" to installPackages(context),
-        "autoStart" to autoStart(context),
-        "deviceAdmin" to granted(context, KEY_ADMIN),
-        "accessibility" to granted(context, KEY_ACCESSIBILITY),
-        "complete" to overlay(context),
-        "fixable" to FIXABLE_KEYS.associateWith { fixIntent(context, it) != null },
-    )
+    fun asMap(context: Context): Map<String, Any?> {
+        val overlayGranted = overlay(context)
+        return mapOf(
+            "overlay" to overlayGranted,
+            "installPackages" to installPackages(context),
+            "autoStart" to autoStart(context),
+            "deviceAdmin" to granted(context, KEY_ADMIN),
+            "accessibility" to granted(context, KEY_ACCESSIBILITY),
+            "complete" to overlayGranted,
+            "fixable" to FIXABLE_KEYS.associateWith { fixIntent(context, it) != null },
+        )
+    }
 
     /**
      * Returns an ADB command string to grant the given permission.
@@ -236,7 +240,7 @@ object Permissions {
         "activityVisible" to activityVisible,
         "screens" to FIXABLE_KEYS.associateWith { key ->
             val intent = rawIntent(context, key)
-            val resolved = intent?.let { resolvedActivity(context, it) }
+            val resolved = intent?.let { resolvedActivity(context, it, useCache = false) }
             mapOf(
                 "granted" to granted(context, key),
                 "action" to intent?.action,
@@ -314,12 +318,20 @@ object Permissions {
     }
 
     @Suppress("TooGenericExceptionCaught") // OEM PackageManager resolvers can throw unexpected runtime exceptions
-    private fun resolvedActivity(context: Context, intent: Intent): String? = try {
-        @Suppress("DEPRECATION")
-        context.packageManager.resolveActivity(intent, 0)?.activityInfo?.name
-    } catch (ex: Throwable) {
-        Log.e(LOG_TAG, "Cannot resolve ${intent.action}: ${ex.message}")
-        null
+    private fun resolvedActivity(context: Context, intent: Intent, useCache: Boolean = true): String? {
+        val cacheKey = "${intent.action.orEmpty()}|${intent.component?.flattenToShortString().orEmpty()}"
+        if (useCache) {
+            resolvedActivityCache[cacheKey]?.let { return it.ifEmpty { null } }
+        }
+        val resolved = try {
+            @Suppress("DEPRECATION")
+            context.packageManager.resolveActivity(intent, 0)?.activityInfo?.name
+        } catch (ex: Throwable) {
+            Log.e(LOG_TAG, "Cannot resolve ${intent.action}: ${ex.message}")
+            null
+        }
+        resolvedActivityCache[cacheKey] = resolved.orEmpty()
+        return resolved
     }
 
     private fun isPlaceholder(activity: String?): Boolean =
