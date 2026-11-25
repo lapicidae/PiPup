@@ -69,13 +69,13 @@ jobs:
             --warning-mode all \
             -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
 
-      # Step 7: Run Detekt static analysis against the project baseline (warn-only in CI)
+      # Step 7: Run Detekt static analysis (warn-only in CI)
       - name: Run Detekt
         id: detekt
         continue-on-error: true
         run: |
           if ! ./gradlew :app:detekt --no-daemon; then
-            echo "::warning::Detekt reported new findings outside config/detekt/baseline.xml — inspect the detekt-report artifact."
+            echo "::warning::Detekt reported findings — inspect the detekt-report artifact."
             exit 1
           fi
 

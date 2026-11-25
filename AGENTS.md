@@ -40,7 +40,7 @@ Before proposing architectural changes, adding new features, or implementing mod
 
 - **Preserve Emulator/Device State:** Do NOT run `:app:connectedDebugAndroidTest` on a local emulator/device unless explicitly requested — AGP's teardown uninstalls both the app and test APKs, wiping all `SharedPreferences` (settings) and granted permissions. Instead, install with `:app:installDebug :app:installDebugAndroidTest` and run tests via `adb shell am instrument -w -e class <TestClass[#method]> nl.rogro82.pipup.test/nl.rogro82.pipup.PiPupTestRunner`.
 - **Restore Mutated Settings:** Any instrumented test that modifies `AppSettings` (directly, via `/settings`, or through UI controls) MUST capture the previous state and restore it in a `finally` block.
-- **Detekt Baseline & Enforcement:** `:app:detekt` enforces all rules strictly (`ignoreFailures = false`) against the project-wide baseline in `config/detekt/baseline.xml`. Fix any reported violation in new or modified code — do NOT regenerate `config/detekt/baseline.xml` to silence new findings.
+- **Detekt Enforcement:** `:app:detekt` enforces all rules in `config/detekt/detekt.yml` strictly (`ignoreFailures = false`) with zero baseline exceptions. Fix any reported violation directly rather than introducing a baseline file or broad suppressions.
 
 ## Interaction Guidelines
 

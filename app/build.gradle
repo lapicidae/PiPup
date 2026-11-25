@@ -48,7 +48,6 @@ if (localPropertiesFile.exists()) {
 detekt {
     toolVersion = libs.versions.detekt.get()
     config.setFrom(rootProject.layout.projectDirectory.file("config/detekt/detekt.yml"))
-    baseline = rootProject.file("config/detekt/baseline.xml")
     buildUponDefaultConfig = true
     allRules = false
     ignoreFailures = false

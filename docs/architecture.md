@@ -6,7 +6,7 @@ PiPup follows a strict modular "Docking" architecture. The core system is design
 
 ### 1. PipUpService
 
-The main background service (`PipUpService.kt`) hosts the NanoHTTPD web server and manages the `NotificationManager`. It acts as the primary entry point for all remote requests but delegates processing to the `ModuleManager`.
+The main background service (`PipUpService.kt`) hosts the NanoHTTPD web server and manages the `NotificationManager`. It acts as the primary entry point for all remote requests, delegates module routes to the `ModuleManager`, renders the browser landing page via `LandingPageRenderer.kt`, and handles `/settings` synchronization via `SettingsApiHandler.kt`.
 
 ### 2. ModuleManager
 
@@ -17,9 +17,13 @@ The `ModuleManager.kt` is the brain of the modular system. It:
 - Dispatches HTTP requests to the appropriate module based on `supportedRoutes`.
 - Augments the global `/state` response with module-specific data.
 
-### 3. NotificationManager
+### 3. NotificationManager & Popup UI
 
-Responsible for the display queue and view lifecycle of overlays. It ensures that only one popup is shown at a time and performs aggressive cleanup of views and resources (like WebViews) to maintain a low RAM footprint.
+Responsible for the display queue, multi-popup stacking (up to `maxPopups`), and overlay view lifecycle:
+
+- `NotificationManager.kt` coordinates the FIFO queue, in-place updates, and cancellation, delegating 2D placement and atomic eviction to `PopupLayoutSimulator.kt`, `WindowManager` overlay/container management to `PopupOverlayHost.kt`, and slot preparation/display/removal to `PopupSlotPresenter.kt`.
+- `PopupView.kt` renders each notification using `PopupLayoutController.kt` (full-bleed, fullscreen, auto-scroll) and `PopupButtonController.kt` (action buttons and overlay close button).
+- `MediaRenderer.kt` coordinates media playback and aggressive resource cleanup across lazily instantiated `ImageMediaRenderer.kt` (Glide/bitmaps/posters), `VideoMediaRenderer.kt` (Media3 ExoPlayer/RTSP), and `WebMediaRenderer.kt` (WebView/WHEP).
 
 ## Data Flow
 
@@ -46,7 +50,7 @@ In the `SettingsActivity.kt`, a centralized `moduleSubmenuFactories` registry is
     - To interact with modular features, the Core defines capability interfaces (e.g. `PeerDiscoveryProvider`) and queries `moduleManager.getActiveCapability<T>()`.
     - Modules hook into UI events via polymorphic callbacks (e.g. `onModeToggled(context, newMode)`).
 - **Resource Efficiency:** Modules in `ECO` mode are unloaded when idle to save RAM on Android TV devices.
-- **Centralized Permissions:** All strings and ADB commands for permissions live in `Permissions.kt`, but visibility is driven by module requirements.
+- **Centralized Permissions:** Permission checks, system intents, diagnostics, and ADB commands live in `Permissions.kt`, while UI labels, descriptions, and guided fix dialogs live in `PermissionsUi.kt`; visibility is driven by module requirements.
 
 ## State Model & API Contract Design
 

@@ -90,7 +90,7 @@ If your module requires specific permissions, return their keys:
 override fun getRequiredPermissions() = listOf(Permissions.KEY_OVERLAY)
 ```
 
-New permission keys must be implemented in the centralized `Permissions.kt` manager.
+New permission keys must be implemented in the centralized `Permissions.kt` manager, with corresponding UI labels and fix dialogs in `PermissionsUi.kt`.
 
 ## 6. Capability Providers & Core Interactions
 
