@@ -9,6 +9,7 @@ import nl.rogro82.pipup.core.ModuleMode
 import nl.rogro82.pipup.core.ModuleContext
 import nl.rogro82.pipup.core.PiPupModule
 import nl.rogro82.pipup.core.PowerController
+import nl.rogro82.pipup.ui.PermissionsUi
 
 /**
  * Module responsible for remote power management (screen wake/sleep).
@@ -106,7 +107,7 @@ class PowerModule : PiPupModule {
 
     override fun onModeToggled(context: android.content.Context, newMode: ModuleMode) {
         if (newMode != ModuleMode.OFF && PowerController.getSleepMethod(context) == null) {
-            Permissions.showFixDialog(context, Permissions.KEY_POWER)
+            PermissionsUi.showFixDialog(context, Permissions.KEY_POWER)
         }
     }
 }

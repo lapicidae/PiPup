@@ -21,6 +21,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.media3.common.util.UnstableApi
 import java.util.Calendar
 import nl.rogro82.pipup.service.PipUpService
+import nl.rogro82.pipup.ui.PermissionsUi
 import nl.rogro82.pipup.ui.SettingsActivity
 
 /**
@@ -189,7 +190,7 @@ class MainActivity : AppCompatActivity() {
         // Generic module permission check
         val mm = (application as PiPupApp).moduleManager
         val moduleMissing = mm.getEnabledModulesMissingPermissions(this).map { key ->
-            Permissions.getLabel(this, key)
+            PermissionsUi.getLabel(this, key)
         }
         missing.addAll(moduleMissing)
 

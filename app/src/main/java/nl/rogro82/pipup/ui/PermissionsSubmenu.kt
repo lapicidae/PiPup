@@ -65,7 +65,7 @@ class PermissionsSubmenu(
 
         val sleepMethod = PowerController.getSleepMethod(context)
         val overlayGranted = Permissions.overlay(context)
-        val installGranted = Permissions.installPackages(context)
+        val installGranted = Permissions.granted(context, Permissions.KEY_INSTALL) == true
         val energyGranted = (context.getSystemService(Context.POWER_SERVICE) as PowerManager)
             .isIgnoringBatteryOptimizations(context.packageName)
         val accGranted = Permissions.granted(context, Permissions.KEY_ACCESSIBILITY) == true
@@ -127,10 +127,10 @@ class PermissionsSubmenu(
         if (isNotSupported && !BuildConfig.DEBUG) return
 
         val row = buildPermissionRowContainer(key, isGranted)
-        val label = Permissions.getLabel(context, key)
+        val label = PermissionsUi.getLabel(context, key)
         row.addView(buildPermissionTitleView(label, isNotSupported, isGranted, isOptional))
 
-        val why = Permissions.getWhyText(context, key)
+        val why = PermissionsUi.getWhyText(context, key)
         if (why != null && shouldExplainPermission(key, isNotSupported, isGranted)) {
             row.addView(buildWhyTextView(if (isNotSupported) UNSUPPORTED_TEXT else why))
         }
@@ -165,7 +165,7 @@ class PermissionsSubmenu(
             ).apply { bottomMargin = context.dpToPx(PAD_LG_DP) }
             isFocusable = true
             isFocusableInTouchMode = true
-            setOnClickListener { if (!isGranted) Permissions.showFixDialog(context, key) }
+            setOnClickListener { if (!isGranted) PermissionsUi.showFixDialog(context, key) }
             onFocusChangeListener = View.OnFocusChangeListener { v, f -> if (f) updatePreviewPosition(v) }
             setOnKeyListener { _, keyCode, event ->
                 event.action == KeyEvent.ACTION_DOWN && keyCode == KeyEvent.KEYCODE_DPAD_RIGHT

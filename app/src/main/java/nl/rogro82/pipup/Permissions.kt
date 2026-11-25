@@ -14,19 +14,11 @@ import android.os.PowerManager
 import android.os.Process
 import android.os.SystemClock
 import android.provider.Settings
-import android.text.Spannable
-import android.text.SpannableStringBuilder
-import android.text.style.TypefaceSpan
 import android.util.Log
-import android.view.View
-import android.widget.LinearLayout
-import android.widget.TextView
-import androidx.appcompat.app.AlertDialog
+import androidx.annotation.OptIn
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import androidx.lifecycle.Lifecycle
-import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import java.util.concurrent.atomic.AtomicInteger
 import nl.rogro82.pipup.core.PowerController
@@ -37,8 +29,8 @@ import nl.rogro82.pipup.ui.SettingsActivity
 /**
  * Centralized and robust permission management for PiPup.
  *
- * All permission metadata and implementations are centralized here.
- * Modules simply request these permissions by key.
+ * All permission checks, system intent launchers, and diagnostics are centralized here.
+ * UI labels and guided fix dialogs live in [nl.rogro82.pipup.ui.PermissionsUi].
  */
 @OptIn(UnstableApi::class)
 object Permissions {
@@ -59,14 +51,12 @@ object Permissions {
     private const val OP_TCL_AUTO_START = "android:auto_start"
     private const val MS_PER_SECOND = 1000L
     private const val ENERGY_FALLBACK_DELAY_MS = 1500L
-    private const val OPTION_TITLE_TEXT_SIZE_SP = 18f
-    private const val OPTION_DESC_TEXT_SIZE_SP = 14f
     private val PLACEHOLDER_MARKERS = listOf("CTSDummy", "frameworkpackagestubs")
 
     const val BLOCKED_ERROR =
         "Android blocks starting an activity from the background unless the overlay " +
-                "permission is granted; open PiPup on the TV (or tap its notification) " +
-                "and use the button on its status screen"
+            "permission is granted; open PiPup on the TV (or tap its notification) " +
+            "and use the button on its status screen"
 
     @Volatile
     private var mInstallCheckError: String? = null
@@ -102,29 +92,13 @@ object Permissions {
     }
 
     /**
-     * Checks if the package install permission is granted.
-     */
-    @Suppress("TooGenericExceptionCaught") // OEM firmware may throw vendor runtime/linkage errors on PackageManager
-    fun installPackages(context: Context): Boolean = try {
-        context.packageManager.canRequestPackageInstalls().also {
-            mInstallCheckError = null
-        }
-    } catch (ex: Throwable) {
-        mInstallCheckError = "${ex.javaClass.simpleName}: ${ex.message}"
-        Log.e(LOG_TAG, "Cannot query install permission: ${ex.message}")
-        false
-    }
-
-    /**
      * Checks if a vendor-specific auto-start permission is granted.
      * Implements a dispatcher to handle different manufacturer guards (TCL, Xiaomi, etc.).
      */
     fun autoStart(context: Context): Boolean? {
         val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
 
-        // 1. TCL Optimization (AppOp-based)
         val tclAllowed = try {
-            // We use checkOpNoThrow to see if the op is even known to the system
             @Suppress("DEPRECATION")
             ops.checkOpNoThrow(OP_TCL_AUTO_START, Process.myUid(), context.packageName)
             checkAppOp(ops, OP_TCL_AUTO_START, context) == AppOpsManager.MODE_ALLOWED
@@ -132,40 +106,10 @@ object Permissions {
             null
         }
 
-        // 2. Xiaomi / MIUI (Intent-based)
-        // On Xiaomi devices, background activity is strictly controlled.
-        // We show the row (return false) so users can reach the MIUI management screen.
         val isXiaomi = Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true) ||
             Build.BRAND.contains("Xiaomi", ignoreCase = true)
 
-        // Return null for hardware without known specific auto-start restrictions
-        // to gracefully hide the row in modular UIs.
         return tclAllowed ?: if (isXiaomi) false else null
-    }
-
-    /** Returns the current [AppOpsManager] mode label for [op], or an unavailability reason. */
-    @Suppress("TooGenericExceptionCaught") // OEM AppOps implementations may throw arbitrary runtime errors
-    fun opMode(context: Context, op: String): String = try {
-        val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
-        when (val mode = checkAppOp(ops, op, context)) {
-            AppOpsManager.MODE_ALLOWED -> "allowed"
-            AppOpsManager.MODE_IGNORED -> "ignored"
-            AppOpsManager.MODE_ERRORED -> "errored"
-            AppOpsManager.MODE_DEFAULT -> "default"
-            else -> "mode $mode"
-        }
-    } catch (ex: Throwable) {
-        "unavailable: ${ex.message}"
-    }
-
-    private fun checkAppOp(ops: AppOpsManager, op: String, context: Context): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            @Suppress("DEPRECATION")
-            ops.unsafeCheckOpNoThrow(op, Process.myUid(), context.packageName)
-        } else {
-            @Suppress("DEPRECATION")
-            ops.checkOpNoThrow(op, Process.myUid(), context.packageName)
-        }
     }
 
     /**
@@ -215,17 +159,134 @@ object Permissions {
             KEY_AUTO_START -> {
                 if (autoStart(context) != null && !Build.MANUFACTURER.contains("Xiaomi", ignoreCase = true)) {
                     "adb shell cmd appops set --user current $pkg $OP_TCL_AUTO_START allow"
-                } else ""
+                } else {
+                    ""
+                }
             }
             KEY_ENERGY -> "adb shell dumpsys deviceidle whitelist +$pkg"
             else -> ""
         }
     }
 
-    /**
-     * Returns the raw system intent to open the settings screen for a permission.
-     */
-    fun rawIntent(context: Context, key: String): Intent? = when (key) {
+    /** Returns true if the system AppOps mode explicitly blocks [key] from being granted via UI. */
+    fun opBlocked(context: Context, key: String): Boolean {
+        val op = when (key) {
+            KEY_OVERLAY -> "android:system_alert_window"
+            KEY_INSTALL -> "android:request_install_packages"
+            else -> return false
+        }
+        return opMode(context, op) in setOf("errored", "ignored")
+    }
+
+    /** Returns true when a non-placeholder system settings screen exists to grant [key]. */
+    internal fun isFixable(context: Context, key: String): Boolean = fixIntent(context, key) != null
+
+    /** Returns true when PiPup is allowed to start an activity (foreground or overlay granted). */
+    fun canLaunchActivity(context: Context): Boolean = activityVisible || overlay(context)
+
+    /** Attempts to launch the system settings screen for the given permission key. */
+    fun launchFix(context: Context, key: String): Boolean {
+        Log.d(LOG_TAG, "launchFix($key) called")
+
+        if (context is SettingsActivity) {
+            context.focusRail()
+        }
+
+        return when (key) {
+            KEY_ENERGY -> launchEnergyFix(context)
+            KEY_ACCESSIBILITY -> openTvAccessibilitySettings(context)
+            KEY_ADMIN -> launchAdminFix(context)
+            else -> launchDefaultFix(context, key)
+        }
+    }
+
+    /** Launches [MainActivity] when background activity starts are permitted. */
+    fun launchApp(context: Context): Boolean {
+        if (!canLaunchActivity(context)) {
+            record("app", ok = false, activity = "MainActivity", error = BLOCKED_ERROR)
+            return false
+        }
+        val intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val error = startActivityOrError(context, intent)
+        record("app", ok = error == null, activity = "MainActivity", error = error)
+        return error == null
+    }
+
+    /** Returns the first missing fixable permission key, or null when all fixable ones are granted. */
+    fun firstMissing(context: Context): String? = FIXABLE_KEYS.firstOrNull {
+        granted(context, it) == false && fixIntent(context, it) != null
+    }
+
+    /** Builds a full diagnostic report of device permissions, AppOps modes, and fix screens. */
+    fun diagnose(context: Context): Map<String, Any?> = mapOf(
+        "sdk" to Build.VERSION.SDK_INT,
+        "version" to BuildConfig.VERSION_NAME,
+        "device" to mapOf(
+            "model" to Build.MODEL,
+            "manufacturer" to Build.MANUFACTURER,
+            "android" to Build.VERSION.RELEASE,
+        ),
+        "permissions" to asMap(context),
+        "opModes" to mapOf(
+            "installPackages" to opMode(context, "android:request_install_packages"),
+            "overlay" to opMode(context, "android:system_alert_window"),
+        ),
+        "installCheckError" to mInstallCheckError,
+        "backgroundLaunchExempt" to canLaunchActivity(context),
+        "activityVisible" to activityVisible,
+        "screens" to FIXABLE_KEYS.associateWith { key ->
+            val intent = rawIntent(context, key)
+            val resolved = intent?.let { resolvedActivity(context, it) }
+            mapOf(
+                "granted" to granted(context, key),
+                "action" to intent?.action,
+                "resolvedActivity" to resolved,
+                "placeholder" to isPlaceholder(resolved),
+                "fixable" to (fixIntent(context, key) != null),
+                "adb" to adbCommand(key, context),
+            )
+        },
+        "lastFix" to mLastFix?.let { fix ->
+            fix + mapOf("secondsAgo" to (SystemClock.elapsedRealtime() - (fix["at"] as Long)) / MS_PER_SECOND) - "at"
+        },
+    )
+
+    @Suppress("TooGenericExceptionCaught") // OEM firmware may throw vendor runtime/linkage errors on PackageManager
+    private fun installPackages(context: Context): Boolean = try {
+        context.packageManager.canRequestPackageInstalls().also {
+            mInstallCheckError = null
+        }
+    } catch (ex: Throwable) {
+        mInstallCheckError = "${ex.javaClass.simpleName}: ${ex.message}"
+        Log.e(LOG_TAG, "Cannot query install permission: ${ex.message}")
+        false
+    }
+
+    @Suppress("TooGenericExceptionCaught") // OEM AppOps implementations may throw arbitrary runtime errors
+    private fun opMode(context: Context, op: String): String = try {
+        val ops = context.getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
+        when (val mode = checkAppOp(ops, op, context)) {
+            AppOpsManager.MODE_ALLOWED -> "allowed"
+            AppOpsManager.MODE_IGNORED -> "ignored"
+            AppOpsManager.MODE_ERRORED -> "errored"
+            AppOpsManager.MODE_DEFAULT -> "default"
+            else -> "mode $mode"
+        }
+    } catch (ex: Throwable) {
+        "unavailable: ${ex.message}"
+    }
+
+    private fun checkAppOp(ops: AppOpsManager, op: String, context: Context): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            @Suppress("DEPRECATION")
+            ops.unsafeCheckOpNoThrow(op, Process.myUid(), context.packageName)
+        } else {
+            @Suppress("DEPRECATION")
+            ops.checkOpNoThrow(op, Process.myUid(), context.packageName)
+        }
+    }
+
+    private fun rawIntent(context: Context, key: String): Intent? = when (key) {
         KEY_OVERLAY -> Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, "package:${context.packageName}".toUri())
         KEY_INSTALL -> Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, "package:${context.packageName}".toUri())
         KEY_ADMIN -> Intent(DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN).apply {
@@ -244,15 +305,16 @@ object Permissions {
                         "com.miui.permcenter.autostart.AutoStartManagementActivity",
                     )
                 }
-            } else null
+            } else {
+                null
+            }
         }
         KEY_ENERGY -> Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)
         else -> null
     }
 
-    /** Resolves the target activity class name for [intent], or null if unresolvable. */
     @Suppress("TooGenericExceptionCaught") // OEM PackageManager resolvers can throw unexpected runtime exceptions
-    fun resolvedActivity(context: Context, intent: Intent): String? = try {
+    private fun resolvedActivity(context: Context, intent: Intent): String? = try {
         @Suppress("DEPRECATION")
         context.packageManager.resolveActivity(intent, 0)?.activityInfo?.name
     } catch (ex: Throwable) {
@@ -260,22 +322,10 @@ object Permissions {
         null
     }
 
-    /** Returns true when [activity] belongs to an AOSP/TV stub placeholder handler. */
-    fun isPlaceholder(activity: String?): Boolean =
+    private fun isPlaceholder(activity: String?): Boolean =
         (activity != null) && PLACEHOLDER_MARKERS.any { activity.contains(it, ignoreCase = true) }
 
-    /** Returns true if the system AppOps mode explicitly blocks [key] from being granted via UI. */
-    fun opBlocked(context: Context, key: String): Boolean {
-        val op = when (key) {
-            KEY_OVERLAY -> "android:system_alert_window"
-            KEY_INSTALL -> "android:request_install_packages"
-            else -> return false
-        }
-        return opMode(context, op) in setOf("errored", "ignored")
-    }
-
-    /** Returns an intent to fix the permission, or null if the device explicitly blocks it or has no screen. */
-    fun fixIntent(context: Context, key: String): Intent? {
+    private fun fixIntent(context: Context, key: String): Intent? {
         val intent = if (key != KEY_OVERLAY && opBlocked(context, key)) null else rawIntent(context, key)
         val activity = intent?.let { resolvedActivity(context, it) }
         return if (intent != null && isPlaceholder(activity)) {
@@ -283,25 +333,6 @@ object Permissions {
             null
         } else {
             intent
-        }
-    }
-
-    /** Returns true when PiPup is allowed to start an activity (foreground or overlay granted). */
-    fun canLaunchActivity(context: Context): Boolean = activityVisible || overlay(context)
-
-    /** Attempts to launch the system settings screen for the given permission key. */
-    fun launchFix(context: Context, key: String): Boolean {
-        Log.d(LOG_TAG, "launchFix($key) called")
-
-        if (context is SettingsActivity) {
-            context.focusRail()
-        }
-
-        return when (key) {
-            KEY_ENERGY -> launchEnergyFix(context)
-            KEY_ACCESSIBILITY -> openTvAccessibilitySettings(context)
-            KEY_ADMIN -> launchAdminFix(context)
-            else -> launchDefaultFix(context, key)
         }
     }
 
@@ -345,7 +376,7 @@ object Permissions {
             rawIntent(context, KEY_ADMIN),
             Intent("android.settings.DEVICE_ADMIN_SETTINGS"),
             Intent(Settings.ACTION_SECURITY_SETTINGS),
-            Intent(Settings.ACTION_SETTINGS)
+            Intent(Settings.ACTION_SETTINGS),
         )
 
         for (intent in intents) {
@@ -421,259 +452,13 @@ object Permissions {
         return true
     }
 
-    /**
-     * Returns a human-readable label for the given permission key.
-     */
-    fun getLabel(context: Context, key: String): String {
-        return when (key) {
-            KEY_OVERLAY -> context.getString(R.string.permission_overlay)
-            KEY_INSTALL -> context.getString(R.string.permission_install)
-            KEY_ENERGY -> context.getString(R.string.energy_optimization_title)
-            KEY_ADMIN -> context.getString(R.string.permission_admin)
-            KEY_ACCESSIBILITY -> context.getString(R.string.permission_accessibility)
-            KEY_AUTO_START -> context.getString(R.string.permission_autostart)
-            KEY_POWER -> {
-                val sleepMethod = PowerController.getSleepMethod(context)
-                if (sleepMethod != null) {
-                    val methodRes = if (sleepMethod == PowerController.METHOD_DEVICE_ADMIN) {
-                        R.string.permission_admin
-                    } else {
-                        R.string.permission_accessibility
-                    }
-                    context.getString(R.string.settings_module_power) + " (${context.getString(methodRes)})"
-                } else {
-                    context.getString(R.string.settings_module_power)
-                }
-            }
-            else -> key
-        }
-    }
-
-    /**
-     * Returns a human-readable reason/why-text for the given permission key.
-     */
-    fun getWhyText(context: Context, key: String): String? {
-        val resId = when (key) {
-            KEY_OVERLAY -> R.string.permission_overlay_why
-            KEY_INSTALL -> R.string.permission_install_why
-            KEY_AUTO_START -> R.string.permission_autostart_why
-            KEY_ENERGY -> R.string.permission_energy_why
-            KEY_ACCESSIBILITY -> R.string.permission_accessibility_why
-            KEY_ADMIN, KEY_POWER -> R.string.permission_power_why
-            else -> 0
-        }
-        return if (resId != 0) context.getString(resId) else null
-    }
-
-    /**
-     * Shows a guided instruction dialog for any permission.
-     */
-    fun showFixDialog(context: Context, key: String) {
-        if (key == KEY_POWER) {
-            showPowerChoiceDialog(context)
-            return
-        }
-
-        val label = getLabel(context, key)
-        val appName = context.getString(R.string.app_name)
-        val why = getWhyText(context, key)
-
-        val fixIntentAvailable = fixIntent(context, key) != null
-
-        val message = SpannableStringBuilder()
-        if (why != null) {
-            message.append(why)
-        }
-
-        if (key == KEY_ENERGY) {
-            message.append("\n\n").append(context.getString(R.string.energy_optimization_manual, appName))
-        }
-
-        if (key == KEY_ADMIN || key == KEY_ACCESSIBILITY) {
-            message.append("\n\n").append(context.getString(R.string.permission_restricted_hint))
-        }
-
-        appendAdbHint(context, message, key)
-
-        if (fixIntentAvailable) {
-            message.append("\n\n").append(context.getString(R.string.permission_ask_open_settings))
-        }
-
-        val builder = AlertDialog.Builder(context)
-            .setTitle(label)
-            .setMessage(message)
-            .setNegativeButton(android.R.string.cancel, null)
-
-        if (fixIntentAvailable) {
-            builder.setPositiveButton(R.string.settings_open) { _, _ ->
-                if (!launchFix(context, key)) {
-                    context.showToast(context.getString(R.string.permission_blocked_device))
-                }
-            }
-        }
-
-        val dialog = builder.create()
-        dialog.show()
-
-        if (fixIntentAvailable) {
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.requestFocus()
-        }
-    }
-
-    private fun appendAdbHint(context: Context, message: SpannableStringBuilder, key: String) {
-        val adb = adbCommand(key, context)
-        if (adb.isNotEmpty()) {
-            message.append("\n\n").append(context.getString(R.string.permission_adb_hint))
-            val start = message.length
-            message.append("\n").append(adb)
-            val end = message.length
-            message.setSpan(TypefaceSpan("monospace"), start, end, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        }
-    }
-
-    private fun showPowerChoiceDialog(context: Context) {
-        val adminFixable = fixIntent(context, KEY_ADMIN) != null
-        val accFixable = fixIntent(context, KEY_ACCESSIBILITY) != null
-
-        if (!adminFixable && !accFixable) {
-            context.showToast(context.getString(R.string.permission_blocked_device))
-            return
-        }
-
-        val container = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            val p = context.dpToPx(16)
-            setPadding(p, p, p, p)
-        }
-
-        val msg = TextView(context).apply {
-            text = context.getString(R.string.permission_power_why)
-            textSize = 16f
-            setPadding(0, 0, 0, context.dpToPx(16))
-            setTextColor(ContextCompat.getColor(context, R.color.colorOnSurface))
-        }
-        container.addView(msg)
-
-        val dialog = AlertDialog.Builder(context)
-            .setTitle(R.string.settings_module_power)
-            .setView(container)
-            .setNegativeButton(android.R.string.cancel, null)
-            .create()
-
-        if (adminFixable) {
-            container.addView(createOptionRow(context,
-                context.getString(R.string.permission_admin),
-                context.getString(R.string.permission_admin_desc)) {
-                dialog.dismiss()
-                showFixDialog(context, KEY_ADMIN)
-            })
-        }
-
-        if (accFixable) {
-            container.addView(createOptionRow(context,
-                context.getString(R.string.permission_accessibility),
-                context.getString(R.string.permission_accessibility_desc)) {
-                dialog.dismiss()
-                showFixDialog(context, KEY_ACCESSIBILITY)
-            })
-        }
-
-        dialog.show()
-        handler.post { container.getChildAt(1)?.requestFocus() }
-    }
-
-    private fun createOptionRow(context: Context, title: String, desc: String, onClick: () -> Unit): View {
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(context.dpToPx(16), context.dpToPx(12), context.dpToPx(16), context.dpToPx(12))
-            background = ContextCompat.getDrawable(context, R.drawable.focus_background)
-            isFocusable = true
-            isFocusableInTouchMode = true
-            setOnClickListener { onClick() }
-            val params = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            )
-            params.bottomMargin = context.dpToPx(8)
-            layoutParams = params
-        }
-
-        row.addView(TextView(context).apply {
-            text = title
-            textSize = OPTION_TITLE_TEXT_SIZE_SP
-            setTextColor(ContextCompat.getColor(context, R.color.colorOnSurface))
-        })
-
-        row.addView(TextView(context).apply {
-            text = desc
-            textSize = OPTION_DESC_TEXT_SIZE_SP
-            setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
-            setPadding(0, context.dpToPx(2), 0, 0)
-        })
-
-        return row
-    }
-
-    private val handler = Handler(Looper.getMainLooper())
-
-    /** Launches [MainActivity] when background activity starts are permitted. */
-    fun launchApp(context: Context): Boolean {
-        if (!canLaunchActivity(context)) {
-            record("app", ok = false, activity = "MainActivity", error = BLOCKED_ERROR)
-            return false
-        }
-        val intent = Intent(context, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val error = startActivityOrError(context, intent)
-        record("app", ok = error == null, activity = "MainActivity", error = error)
-        return error == null
-    }
-
-    /** Returns the first missing fixable permission key, or null when all fixable ones are granted. */
-    fun firstMissing(context: Context): String? = FIXABLE_KEYS.firstOrNull {
-        granted(context, it) == false && fixIntent(context, it) != null
-    }
-
     private fun record(what: String, ok: Boolean, activity: String?, error: String?) {
         mLastFix = mapOf(
             "what" to what,
             "ok" to ok,
             "activity" to activity,
             "error" to error,
-            "at" to SystemClock.elapsedRealtime()
+            "at" to SystemClock.elapsedRealtime(),
         )
     }
-
-    /** Builds a full diagnostic report of device permissions, AppOps modes, and fix screens. */
-    fun diagnose(context: Context): Map<String, Any?> = mapOf(
-        "sdk" to Build.VERSION.SDK_INT,
-        "version" to BuildConfig.VERSION_NAME,
-        "device" to mapOf(
-            "model" to Build.MODEL,
-            "manufacturer" to Build.MANUFACTURER,
-            "android" to Build.VERSION.RELEASE
-        ),
-        "permissions" to asMap(context),
-        "opModes" to mapOf(
-            "installPackages" to opMode(context, "android:request_install_packages"),
-            "overlay" to opMode(context, "android:system_alert_window")
-        ),
-        "installCheckError" to mInstallCheckError,
-        "backgroundLaunchExempt" to canLaunchActivity(context),
-        "activityVisible" to activityVisible,
-        "screens" to FIXABLE_KEYS.associateWith { key ->
-            val intent = rawIntent(context, key)
-            val resolved = intent?.let { resolvedActivity(context, it) }
-            mapOf(
-                "granted" to granted(context, key),
-                "action" to intent?.action,
-                "resolvedActivity" to resolved,
-                "placeholder" to isPlaceholder(resolved),
-                "fixable" to (fixIntent(context, key) != null),
-                "adb" to adbCommand(key, context)
-            )
-        },
-        "lastFix" to mLastFix?.let { fix ->
-            fix + mapOf("secondsAgo" to (SystemClock.elapsedRealtime() - (fix["at"] as Long)) / MS_PER_SECOND) - "at"
-        }
-    )
 }
