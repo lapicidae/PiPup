@@ -1,7 +1,6 @@
 package nl.rogro82.pipup
 
 import android.graphics.Color
-import androidx.core.graphics.toColorInt
 import org.json.JSONObject
 
 /**
@@ -132,6 +131,7 @@ data class PopupProps(
     companion object {
         private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
         private const val DEFAULT_BG_COLOR = "#CC000000"
+        private const val DEFAULT_BG_COLOR_INT = 0xCC000000.toInt()
         private const val DEFAULT_BORDER_COLOR = "#00000000"
         /** Default popup display duration in seconds. */
         const val DEFAULT_DURATION_SEC = 10
@@ -145,6 +145,24 @@ data class PopupProps(
         const val DEFAULT_MEDIA_WIDTH = 480
         /** Default media width in pixels for web and WHEP payloads. */
         const val DEFAULT_WEB_WIDTH = 640
+        /** Screen edge margin in dp for non-fullscreen popups. */
+        const val BASE_MARGIN_DP = 20
+        /** Gap in dp between stacked popups. */
+        const val STACK_GAP_DP = 12
+        /** Maximum unscaled text column width in pixels before wrapping. */
+        const val MAX_TEXT_WIDTH_PX = 500
+        /** Media placement above the text section. */
+        const val MEDIA_POS_TOP = 0
+        /** Media placement below the text section. */
+        const val MEDIA_POS_BOTTOM = 1
+        /** Media placement to the left of the text section. */
+        const val MEDIA_POS_LEFT = 2
+        /** Media placement to the right of the text section. */
+        const val MEDIA_POS_RIGHT = 3
+        /** Vertical gap in dp between media and text sections. */
+        const val VERTICAL_MEDIA_GAP_DP = 8
+        /** Horizontal gap in dp between media and text sections. */
+        const val HORIZONTAL_MEDIA_GAP_DP = 12
         /** Minimum allowed video buffer duration in milliseconds. */
         const val BUFFER_MS_MIN = 100
         /** Maximum allowed video buffer duration in milliseconds. */
@@ -751,16 +769,16 @@ data class PopupProps(
     }
 
     /** Parses [backgroundColor] to an ARGB color int, falling back to the default background. */
-    fun getBackgroundColorInt(): Int = safeParseColor(backgroundColor, DEFAULT_BG_COLOR.toColorInt())
+    fun getBackgroundColorInt(): Int = parseColorOrDefault(backgroundColor, DEFAULT_BG_COLOR_INT)
 
     /** Parses [borderColor] to an ARGB color int, falling back to transparent. */
-    fun getBorderColorInt(): Int = safeParseColor(borderColor, Color.TRANSPARENT)
+    fun getBorderColorInt(): Int = parseColorOrDefault(borderColor, Color.TRANSPARENT)
 
     /** Parses [titleColor] to an ARGB color int, falling back to white. */
-    fun getTitleColorInt(): Int = safeParseColor(titleColor, Color.WHITE)
+    fun getTitleColorInt(): Int = parseColorOrDefault(titleColor, Color.WHITE)
 
     /** Parses [messageColor] to an ARGB color int, falling back to white. */
-    fun getMessageColorInt(): Int = safeParseColor(messageColor, Color.WHITE)
+    fun getMessageColorInt(): Int = parseColorOrDefault(messageColor, Color.WHITE)
 
     /**
      * Computes pre-inflation 2D layout metrics for this popup.
@@ -770,13 +788,6 @@ data class PopupProps(
         settings: AppSettings = PiPupApp.settings,
     ): PopupLayoutMetrics {
         return PopupLayoutMetrics.calculate(context, this, settings)
-    }
-
-    private fun safeParseColor(hex: String, fallback: Int): Int {
-        return try {
-            val clean = if (hex.startsWith("#")) hex else "#$hex"
-            clean.toColorInt()
-        } catch (_: Exception) { fallback }
     }
 
     /**
@@ -792,18 +803,12 @@ data class PopupProps(
         companion object {
             private const val FALLBACK_LINE_HEIGHT_FACTOR = 1.2f
             private const val FALLBACK_CHARS_PER_LINE = 30
-            private const val BASE_MARGIN_DP = 20
-            private const val MAX_TEXT_WIDTH_PX = 500
             private const val MIN_TEXT_WIDTH_DP = 180
             private const val TITLE_MSG_GAP_DP = 4
             private const val BUTTON_ROW_HEIGHT_DP = 60
-            private const val HORIZONTAL_MEDIA_GAP_DP = 12
-            private const val VERTICAL_MEDIA_GAP_DP = 8
             private const val MIN_POPUP_WIDTH_DP = 240
             private const val MAX_HEIGHT_SCREEN_RATIO = 0.75
             private const val MIN_CONTENT_HEIGHT_EXTRA_DP = 36
-            private const val MEDIA_POS_LEFT = 2
-            private const val MEDIA_POS_RIGHT = 3
 
             private data class TextEstimate(val width: Int, val contentHeight: Int, val hasContent: Boolean)
 

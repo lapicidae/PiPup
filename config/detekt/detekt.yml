@@ -31,6 +31,17 @@ complexity:
     active: true
     functionThreshold: 6
     constructorThreshold: 6
+    ignoreDefaultParameters: true
+  TooManyFunctions:
+    active: true
+    thresholdInFiles: 20
+    thresholdInClasses: 15
+    thresholdInInterfaces: 15
+    thresholdInObjects: 15
+    thresholdInEnums: 11
+    ignoreDeprecated: true
+    ignorePrivate: true
+    ignoreOverridden: true
 
 naming:
   active: true

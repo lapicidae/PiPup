@@ -2,36 +2,10 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ExplicitGarbageCollectionCall:CoreUtils.kt$gc()</ID>
-    <ID>ExplicitGarbageCollectionCall:CoreUtils.kt$runFinalization()</ID>
     <ID>LargeClass:MediaRenderer.kt$MediaRenderer</ID>
     <ID>LargeClass:NotificationManager.kt$NotificationManager</ID>
     <ID>LargeClass:PipUpService.kt$PipUpService : Service</ID>
     <ID>LargeClass:PopupView.kt$PopupView : FrameLayout</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, props: PopupProps, retryCount: Int = 0, targetWidth: Int = 0, targetHeight: Int = 0 )</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, source: Any, width: Int, scale: Boolean, diskCache: DiskCacheStrategy, skipMemory: Boolean, retryCount: Int )</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer$( uiContext: Context, frame: FrameLayout, uri: String, width: Int, cache: Boolean, scale: Boolean, retryCount: Int = 0, )</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer.Companion$( availW: Int, availH: Int, sourceW: Int, sourceH: Int, pixelWidthHeightRatio: Float = 1f, upscale: Boolean = false, requestedW: Int? = null, requestedH: Int? = null )</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer.GlideRequestListener$( renderer: MediaRenderer, private val frame: WeakReference&lt;FrameLayout&gt;, private val iv: WeakReference&lt;ImageView&gt;, private val source: Any, private val width: Int, private val scale: Boolean, private val diskCache: DiskCacheStrategy, private val skipMemory: Boolean, private val retryCount: Int, private val tw: Int, uiContext: Context )</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer.VideoPlayerListener$( renderer: MediaRenderer, private val frame: WeakReference&lt;FrameLayout&gt;, private val tw: Int, private val th: Int, private val video: PopupProps.Media.Video, private val retryCount: Int, uiContext: Context )</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer.WebRendererClient$( renderer: MediaRenderer, private val frame: WeakReference&lt;FrameLayout&gt;, private val web: PopupProps.Media.Web, private val retryCount: Int, uiContext: Context, private val startTimeMs: Long )</ID>
-    <ID>LongParameterList:MediaRenderer.kt$MediaRenderer.WhepJsBridge$( private val rendererRef: WeakReference&lt;MediaRenderer&gt;, private val frameRef: WeakReference&lt;FrameLayout&gt;, private val tw: Int, private val hasExplicitHeight: Boolean, private val retryCount: Int, private val startTimeMs: Long )</ID>
-    <ID>LongParameterList:NotificationManager.kt$NotificationManager$( pos: PopupProps.Position, itemHeight: Int, left: Int, right: Int, hContainerHeight: Int, vMeasuredHeight: Int, screenHeight: Int, baseMargin: Int, gapPx: Int )</ID>
-    <ID>LongParameterList:NotificationManager.kt$NotificationManager$( pos: PopupProps.Position, itemWidth: Int, top: Int, bottom: Int, screenWidth: Int, baseMargin: Int )</ID>
-    <ID>LongParameterList:NotificationManager.kt$NotificationManager.ShownSlot$( val key: String, var container: LinearLayout? = null, var view: PopupView, var props: PopupProps, var expire: Runnable? = null, var shownAt: Long = SystemClock.elapsedRealtime(), var removedEventFired: Boolean = false, val prepToken: Any = Any() )</ID>
-    <ID>LongParameterList:SubmenuBase.kt$SubmenuBase$( root: View, resId: Int, valueResId: Int, initialValue: Int, max: Int? = null, onChanged: (Int) -&gt; Unit )</ID>
-    <ID>TooManyFunctions:AppSettings.kt$AppSettings</ID>
-    <ID>TooManyFunctions:DiscoveryModule.kt$DiscoveryModule : PiPupModulePeerDiscoveryProvider</ID>
-    <ID>TooManyFunctions:MediaRenderer.kt$MediaRenderer</ID>
-    <ID>TooManyFunctions:ModuleManager.kt$ModuleManager</ID>
-    <ID>TooManyFunctions:NotificationManager.kt$NotificationManager</ID>
-    <ID>TooManyFunctions:OpenSourceLicenses.kt$OpenSourceLicenses</ID>
     <ID>TooManyFunctions:Permissions.kt$Permissions</ID>
-    <ID>TooManyFunctions:PipUpService.kt$PipUpService : Service</ID>
-    <ID>TooManyFunctions:PopupProps.kt$PopupProps</ID>
-    <ID>TooManyFunctions:PopupView.kt$PopupView : FrameLayout</ID>
-    <ID>TooManyFunctions:SettingsActivity.kt$SettingsActivity : AppCompatActivity</ID>
-    <ID>TooManyFunctions:SubmenuBase.kt$SubmenuBase : SubmenuController</ID>
-    <ID>TooManyFunctions:UpdateManager.kt$UpdateManager</ID>
   </CurrentIssues>
 </SmellBaseline>

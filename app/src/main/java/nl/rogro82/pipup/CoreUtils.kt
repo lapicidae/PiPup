@@ -9,6 +9,7 @@ import android.os.Build
 import android.util.Log
 import android.util.TypedValue
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.graphics.toColorInt
 import androidx.core.os.LocaleListCompat
 import org.json.JSONObject
 import org.json.JSONArray
@@ -26,6 +27,20 @@ private const val RGB_MASK = 0xFFFFFF
 fun Context.colorToHex(colorRes: Int): String {
     val color = androidx.core.content.ContextCompat.getColor(this, colorRes)
     return String.format(Locale.US, "#%06X", RGB_MASK and color)
+}
+
+/**
+ * Parses a hex color string (with or without a leading `#`) to an ARGB color int,
+ * returning [fallback] if the input is null, blank, or invalid.
+ */
+fun parseColorOrDefault(hex: String?, fallback: Int): Int {
+    if (hex.isNullOrBlank()) return fallback
+    return try {
+        val clean = if (hex.startsWith("#")) hex else "#$hex"
+        clean.toColorInt()
+    } catch (_: IllegalArgumentException) {
+        fallback
+    }
 }
 
 /**
@@ -163,6 +178,7 @@ fun applyAppLocaleAndTheme(langTag: String, appTheme: Int) {
 /**
  * Triggers a manual garbage collection and finalization.
  */
+@Suppress("ExplicitGarbageCollectionCall") // Intentional manual memory reclaim for /debug/gc and low-RAM TV devices
 fun triggerSystemGc() {
     System.gc()
     Runtime.getRuntime().gc()

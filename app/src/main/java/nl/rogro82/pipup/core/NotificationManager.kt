@@ -74,11 +74,12 @@ class NotificationManager(
         var container: LinearLayout? = null,
         var view: PopupView,
         var props: PopupProps,
-        var expire: Runnable? = null,
-        var shownAt: Long = SystemClock.elapsedRealtime(),
-        var removedEventFired: Boolean = false,
-        val prepToken: Any = Any()
-    )
+        val prepToken: Any = Any(),
+    ) {
+        var expire: Runnable? = null
+        var shownAt: Long = SystemClock.elapsedRealtime()
+        var removedEventFired: Boolean = false
+    }
 
     private val handler = Handler(Looper.getMainLooper())
     private val queue = ArrayDeque<PopupProps>()
@@ -456,9 +457,7 @@ class NotificationManager(
             var cursorY = bounds.screenHeight - bounds.baseMargin
             for (item in vItems) {
                 val top = cursorY - item.height
-                result[item.key] = computeVerticalItemRect(
-                    pos, item.width, top, cursorY, bounds.screenWidth, bounds.baseMargin,
-                )
+                result[item.key] = computeVerticalItemRect(pos, item.width, top, cursorY, bounds)
                 cursorY = top - bounds.gapPx
             }
             return
@@ -471,9 +470,7 @@ class NotificationManager(
         }
         for (item in vItems) {
             val bottom = cursorY + item.height
-            result[item.key] = computeVerticalItemRect(
-                pos, item.width, cursorY, bottom, bounds.screenWidth, bounds.baseMargin,
-            )
+            result[item.key] = computeVerticalItemRect(pos, item.width, cursorY, bottom, bounds)
             cursorY = bottom + bounds.gapPx
         }
     }
@@ -495,8 +492,7 @@ class NotificationManager(
             for (item in hItems) {
                 val left = cursorX - item.width
                 result[item.key] = computeHorizontalItemRect(
-                    pos, item.height, left, cursorX, hHeight, vMeasuredHeight,
-                    bounds.screenHeight, bounds.baseMargin, bounds.gapPx,
+                    pos, item.height, left..cursorX, hHeight to vMeasuredHeight, bounds,
                 )
                 cursorX = left - bounds.gapPx
             }
@@ -511,8 +507,7 @@ class NotificationManager(
         for (item in hItems) {
             val right = cursorX + item.width
             result[item.key] = computeHorizontalItemRect(
-                pos, item.height, cursorX, right, hHeight, vMeasuredHeight,
-                bounds.screenHeight, bounds.baseMargin, bounds.gapPx,
+                pos, item.height, cursorX..right, hHeight to vMeasuredHeight, bounds,
             )
             cursorX = right + bounds.gapPx
         }
@@ -523,13 +518,12 @@ class NotificationManager(
         itemWidth: Int,
         top: Int,
         bottom: Int,
-        screenWidth: Int,
-        baseMargin: Int
+        bounds: SimulationBounds,
     ): Rect {
         val left = when (pos.getScreenSide()) {
-            PopupProps.ScreenSide.LEFT -> baseMargin
-            PopupProps.ScreenSide.RIGHT -> screenWidth - baseMargin - itemWidth
-            PopupProps.ScreenSide.CENTER -> (screenWidth - itemWidth) / 2
+            PopupProps.ScreenSide.LEFT -> bounds.baseMargin
+            PopupProps.ScreenSide.RIGHT -> bounds.screenWidth - bounds.baseMargin - itemWidth
+            PopupProps.ScreenSide.CENTER -> (bounds.screenWidth - itemWidth) / 2
         }
         return Rect(left, top, left + itemWidth, bottom)
     }
@@ -537,44 +531,42 @@ class NotificationManager(
     private fun computeHorizontalItemRect(
         pos: PopupProps.Position,
         itemHeight: Int,
-        left: Int,
-        right: Int,
-        hContainerHeight: Int,
-        vMeasuredHeight: Int,
-        screenHeight: Int,
-        baseMargin: Int,
-        gapPx: Int
+        xRange: IntRange,
+        stackHeights: Pair<Int, Int>,
+        bounds: SimulationBounds,
     ): Rect {
+        val (hContainerHeight, vMeasuredHeight) = stackHeights
         val top = when (pos) {
-            PopupProps.Position.TopLeft, PopupProps.Position.TopRight -> baseMargin
+            PopupProps.Position.TopLeft, PopupProps.Position.TopRight -> bounds.baseMargin
             PopupProps.Position.TopCenter -> {
-                baseMargin + (if (vMeasuredHeight > 0) vMeasuredHeight + gapPx else 0)
+                bounds.baseMargin + (if (vMeasuredHeight > 0) vMeasuredHeight + bounds.gapPx else 0)
             }
             PopupProps.Position.BottomLeft, PopupProps.Position.BottomRight -> {
-                screenHeight - baseMargin - itemHeight
+                bounds.screenHeight - bounds.baseMargin - itemHeight
             }
             PopupProps.Position.BottomCenter -> {
-                screenHeight - baseMargin - (if (vMeasuredHeight > 0) vMeasuredHeight + gapPx else 0) - itemHeight
+                val vOffset = if (vMeasuredHeight > 0) vMeasuredHeight + bounds.gapPx else 0
+                bounds.screenHeight - bounds.baseMargin - vOffset - itemHeight
             }
             PopupProps.Position.CenterLeft, PopupProps.Position.CenterRight -> {
-                (screenHeight - itemHeight) / 2
+                (bounds.screenHeight - itemHeight) / 2
             }
             PopupProps.Position.Center -> {
                 if (vMeasuredHeight == 0) {
-                    (screenHeight - itemHeight) / 2
+                    (bounds.screenHeight - itemHeight) / 2
                 } else {
-                    val spaceBelow = (screenHeight - vMeasuredHeight) / 2 - gapPx
+                    val spaceBelow = (bounds.screenHeight - vMeasuredHeight) / 2 - bounds.gapPx
                     if (spaceBelow >= hContainerHeight) {
-                        val containerTop = (screenHeight + vMeasuredHeight) / 2 + gapPx
+                        val containerTop = (bounds.screenHeight + vMeasuredHeight) / 2 + bounds.gapPx
                         containerTop + (hContainerHeight - itemHeight) / 2
                     } else {
-                        val containerBottom = (screenHeight - vMeasuredHeight) / 2 - gapPx
+                        val containerBottom = (bounds.screenHeight - vMeasuredHeight) / 2 - bounds.gapPx
                         containerBottom - (hContainerHeight - itemHeight) / 2 - itemHeight
                     }
                 }
             }
         }
-        return Rect(left, top, right, top + itemHeight)
+        return Rect(xRange.first, top, xRange.last, top + itemHeight)
     }
 
     private fun rectsOverlapWithGap(a: Rect, b: Rect): Boolean {

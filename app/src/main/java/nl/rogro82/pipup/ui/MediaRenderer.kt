@@ -416,15 +416,7 @@ class MediaRenderer(
         }
 
         when (media) {
-            is PopupProps.Media.Image -> renderImage(
-                uiContext,
-                frame,
-                media.uri,
-                media.width,
-                media.cache,
-                media.scale,
-                retryCount,
-            )
+            is PopupProps.Media.Image -> renderImage(uiContext, frame, media, retryCount)
             is PopupProps.Media.Video -> renderVideo(frame, media, retryCount, uiContext)
             is PopupProps.Media.Web -> renderWeb(uiContext, frame, media, retryCount)
             is PopupProps.Media.Whep -> renderWhep(frame, media, retryCount)
@@ -630,14 +622,12 @@ class MediaRenderer(
     private fun renderImage(
         uiContext: Context,
         frame: FrameLayout,
-        uri: String,
-        width: Int,
-        cache: Boolean,
-        scale: Boolean,
+        media: PopupProps.Media.Image,
         retryCount: Int = 0,
     ) {
-        val strategy = if (cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE
-        renderGlide(uiContext, frame, uri, width, scale, strategy, !cache, retryCount)
+        val strategy = if (media.cache) DiskCacheStrategy.DATA else DiskCacheStrategy.NONE
+        val spec = GlideLoadSpec(media.uri, media.width, media.scale, strategy, !media.cache)
+        renderGlide(uiContext, frame, spec, retryCount)
     }
 
     private fun resolvePosterScaleType(posterMode: String?): ImageView.ScaleType {
@@ -785,7 +775,14 @@ class MediaRenderer(
         p.repeatMode = Player.REPEAT_MODE_ONE
         preparePlayerMedia(p, video.uri, video.udp)
 
-        p.addListener(VideoPlayerListener(this, WeakReference(frame), tw, th, video, retryCount, videoContext))
+        p.addListener(
+            VideoPlayerListener(
+                this,
+                WeakReference(frame),
+                VideoListenerSpec(tw, th, video, retryCount),
+                videoContext,
+            ),
+        )
         attachPosterOrPlaceholder(videoContext, frame, video.poster, video.posterMode)
         frame.addView(
             tv,
@@ -882,7 +879,12 @@ class MediaRenderer(
         attachPosterOrPlaceholder(uiContext, frame, poster, web.posterMode)
 
         val startTimeMs = SystemClock.elapsedRealtime()
-        val client = WebRendererClient(this, WeakReference(frame), web, retryCount, uiContext, startTimeMs)
+        val client = WebRendererClient(
+            this,
+            WeakReference(frame),
+            WebClientSpec(web, retryCount, startTimeMs),
+            uiContext,
+        )
 
         Log.d("MediaRenderer", "Creating fresh WebView for Web content: $uri")
         val wv = WebView(uiContext).apply {
@@ -987,10 +989,7 @@ class MediaRenderer(
                 WhepJsBridge(
                     WeakReference(this@MediaRenderer),
                     WeakReference(frame),
-                    tw,
-                    whep.height != null,
-                    retryCount,
-                    startTimeMs,
+                    WhepBridgeSpec(tw, whep.height != null, retryCount, startTimeMs),
                 ),
                 "PiPup",
             )
@@ -1010,25 +1009,22 @@ class MediaRenderer(
     }
 
     private fun renderLocalFile(uiContext: Context, frame: FrameLayout, path: String, width: Int, scale: Boolean) {
-        renderGlide(uiContext, frame, File(path), width, scale, DiskCacheStrategy.NONE, true, 0)
+        val spec = GlideLoadSpec(File(path), width, scale, DiskCacheStrategy.NONE, skipMemory = true)
+        renderGlide(uiContext, frame, spec, retryCount = 0)
     }
 
     private fun renderGlide(
         uiContext: Context,
         frame: FrameLayout,
-        source: Any,
-        width: Int,
-        scale: Boolean,
-        diskCache: DiskCacheStrategy,
-        skipMemory: Boolean,
-        retryCount: Int
+        spec: GlideLoadSpec,
+        retryCount: Int,
     ) {
         val isFullscreen = isFullscreenActive
-        val maxDim = if (scale) appContext.getScaledPixels(1280) else 1280
+        val maxDim = if (spec.scale) appContext.getScaledPixels(1280) else 1280
         val (tw, th) = if (isFullscreen) {
             fullscreenBoundingBox()
         } else {
-            (if (scale) appContext.getScaledPixels(width) else width).coerceAtMost(maxDim) to 0
+            (if (spec.scale) appContext.getScaledPixels(spec.width) else spec.width).coerceAtMost(maxDim) to 0
         }
         callback?.onDimensionsUpdated(tw, th)
         frame.layoutParams.width = tw
@@ -1042,34 +1038,23 @@ class MediaRenderer(
         // Ensure any previous load on this view is cancelled before starting a new one
         Glide.with(appContext).clear(iv)
 
-        val requestListener = GlideRequestListener(
-            this,
-            WeakReference(frame),
-            WeakReference(iv),
-            source,
-            width,
-            scale,
-            diskCache,
-            skipMemory,
-            retryCount,
-            tw,
-            uiContext
-        )
+        val target = GlideTarget(WeakReference(frame), WeakReference(iv), tw, WeakReference(uiContext))
+        val requestListener = GlideRequestListener(this, target, spec, retryCount)
 
         // Standard Glide "no-cache" behavior:
-        val effectiveStrategy = if (skipMemory) DiskCacheStrategy.NONE else diskCache
+        val effectiveStrategy = if (spec.skipMemory) DiskCacheStrategy.NONE else spec.diskCache
 
         var builder = Glide.with(appContext)
             .`as`(Drawable::class.java)
-            .load(source)
+            .load(spec.source)
             .diskCacheStrategy(effectiveStrategy)
-            .skipMemoryCache(skipMemory)
+            .skipMemoryCache(spec.skipMemory)
             .override(tw, if (isFullscreen) th else Target.SIZE_ORIGINAL)
             .let { if (isFullscreen) (if (currentFullscreenUpscale) it.fitCenter() else it.centerInside()) else it }
             .dontAnimate()
             .listener(requestListener)
 
-        if (skipMemory) {
+        if (spec.skipMemory) {
             // Use a signature to ensure Glide handles URL re-loads correctly even if URLs are identical
             builder = builder.signature(ObjectKey(System.currentTimeMillis().toString()))
         }
@@ -1125,14 +1110,46 @@ class MediaRenderer(
         callback?.handleWhepRetry(error, retryCount)
     }
 
+    internal data class GlideLoadSpec(
+        val source: Any,
+        val width: Int,
+        val scale: Boolean,
+        val diskCache: DiskCacheStrategy,
+        val skipMemory: Boolean,
+    )
+
+    internal data class GlideTarget(
+        val frame: WeakReference<FrameLayout>,
+        val iv: WeakReference<ImageView>,
+        val tw: Int,
+        val uiContext: WeakReference<Context>,
+    )
+
+    internal data class VideoListenerSpec(
+        val tw: Int,
+        val th: Int,
+        val video: PopupProps.Media.Video,
+        val retryCount: Int,
+    )
+
+    internal data class WebClientSpec(
+        val web: PopupProps.Media.Web,
+        val retryCount: Int,
+        val startTimeMs: Long,
+    )
+
+    internal data class WhepBridgeSpec(
+        val tw: Int,
+        val hasExplicitHeight: Boolean,
+        val retryCount: Int,
+        val startTimeMs: Long,
+    )
+
     internal class VideoPlayerListener(
         renderer: MediaRenderer,
         private val frame: WeakReference<FrameLayout>,
-        private val tw: Int,
-        private val th: Int,
-        private val video: PopupProps.Media.Video,
-        private val retryCount: Int,
-        uiContext: Context
+        private val spec: VideoListenerSpec,
+        uiContext: Context,
     ) : Player.Listener {
         private val rendererRef = WeakReference(renderer)
         private val uiContextRef = WeakReference(uiContext)
@@ -1153,7 +1170,7 @@ class MediaRenderer(
                 renderer.callback?.adjustHeights()
             } else {
                 val finalHeight = heightForDisplayAspect(
-                    tw,
+                    spec.tw,
                     videoSize.width,
                     videoSize.height,
                     videoSize.pixelWidthHeightRatio,
@@ -1161,7 +1178,7 @@ class MediaRenderer(
                 if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
                     f.layoutParams.height = finalHeight
                     f.requestLayout()
-                    renderer.callback?.onDimensionsUpdated(tw, finalHeight)
+                    renderer.callback?.onDimensionsUpdated(spec.tw, finalHeight)
                     renderer.callback?.adjustHeights()
                 }
             }
@@ -1175,12 +1192,12 @@ class MediaRenderer(
                 return
             }
             val finalHeight = vs?.let {
-                heightForDisplayAspect(tw, it.width, it.height, it.pixelWidthHeightRatio)
-            } ?: f.layoutParams.height.takeIf { it > 0 } ?: th
+                heightForDisplayAspect(spec.tw, it.width, it.height, it.pixelWidthHeightRatio)
+            } ?: f.layoutParams.height.takeIf { it > 0 } ?: spec.th
             if (finalHeight > 0 && f.layoutParams.height != finalHeight) {
                 f.layoutParams.height = finalHeight
                 f.requestLayout()
-                renderer.callback?.onDimensionsUpdated(tw, finalHeight)
+                renderer.callback?.onDimensionsUpdated(spec.tw, finalHeight)
             }
         }
 
@@ -1235,14 +1252,14 @@ class MediaRenderer(
             val ui = uiContextRef.get()
             if (renderer == null || f == null || ui == null) return
 
-            if (retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
+            if (spec.retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
                 renderer.mainHandler.postAtTime({
                     val r = rendererRef.get() ?: return@postAtTime
                     if (r.callback?.isCleanedUp() == false) {
                         f.removeAllViews()
-                        r.renderVideo(f, video, retryCount + 1, ui)
+                        r.renderVideo(f, spec.video, spec.retryCount + 1, ui)
                     }
-                }, renderer.rendererToken, SystemClock.uptimeMillis() + VIDEO_RETRY_DELAY_MS * (retryCount + 1))
+                }, renderer.rendererToken, SystemClock.uptimeMillis() + VIDEO_RETRY_DELAY_MS * (spec.retryCount + 1))
             } else {
                 renderer.callback?.showPlaceholder(error.errorCodeName)
                 renderer.callback?.notifyReady()
@@ -1254,10 +1271,8 @@ class MediaRenderer(
     internal class WebRendererClient(
         renderer: MediaRenderer,
         private val frame: WeakReference<FrameLayout>,
-        private val web: PopupProps.Media.Web,
-        private val retryCount: Int,
+        private val spec: WebClientSpec,
         uiContext: Context,
-        private val startTimeMs: Long
     ) : WebViewClient() {
         private val rendererRef = WeakReference(renderer)
         private val uiContextRef = WeakReference(uiContext)
@@ -1276,7 +1291,7 @@ class MediaRenderer(
             if (renderer == null || f == null || wv == null) return
             if (renderer.callback?.isCleanedUp() != true) {
                 revealed = true
-                val elapsed = SystemClock.elapsedRealtime() - startTimeMs
+                val elapsed = SystemClock.elapsedRealtime() - spec.startTimeMs
                 renderer.crossfadeRevealStream(f, wv, elapsed)
             }
         }
@@ -1293,7 +1308,7 @@ class MediaRenderer(
 
         override fun onPageFinished(v: WebView?, u: String?) {
             Log.d("MediaRenderer", "onPageFinished: $u")
-            if (web.muted) {
+            if (spec.web.muted) {
                 v?.evaluateJavascript(MUTE_JS, null)
             }
             v?.evaluateJavascript(VIDEO_WATCH_JS, null)
@@ -1315,11 +1330,11 @@ class MediaRenderer(
             if (renderer == null || f == null || ui == null) return
 
             renderer.lastMediaError = description
-            if (retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
+            if (spec.retryCount < renderer.appSettings.mediaRetries && renderer.callback?.isCleanedUp() == false) {
                 renderer.mainHandler.postAtTime({
                     val r = rendererRef.get() ?: return@postAtTime
-                    if (r.callback?.isCleanedUp() == false) r.renderWeb(ui, f, web, retryCount + 1)
-                }, renderer.rendererToken, SystemClock.uptimeMillis() + WEB_RETRY_DELAY_MS * (retryCount + 1))
+                    if (r.callback?.isCleanedUp() == false) r.renderWeb(ui, f, spec.web, spec.retryCount + 1)
+                }, renderer.rendererToken, SystemClock.uptimeMillis() + WEB_RETRY_DELAY_MS * (spec.retryCount + 1))
             } else {
                 renderer.callback?.showPlaceholder(description)
                 renderer.callback?.notifyReady()
@@ -1372,19 +1387,11 @@ class MediaRenderer(
 
     internal class GlideRequestListener(
         renderer: MediaRenderer,
-        private val frame: WeakReference<FrameLayout>,
-        private val iv: WeakReference<ImageView>,
-        private val source: Any,
-        private val width: Int,
-        private val scale: Boolean,
-        private val diskCache: DiskCacheStrategy,
-        private val skipMemory: Boolean,
+        private val target: GlideTarget,
+        private val spec: GlideLoadSpec,
         private val retryCount: Int,
-        private val tw: Int,
-        uiContext: Context
     ) : RequestListener<Drawable> {
         private val rendererRef = WeakReference(renderer)
-        private val uiContextRef = WeakReference(uiContext)
 
         override fun onLoadFailed(
             e: GlideException?,
@@ -1396,8 +1403,8 @@ class MediaRenderer(
             e?.logRootCauses("MediaRenderer")
 
             val renderer = rendererRef.get()
-            val f = frame.get()
-            val ui = uiContextRef.get()
+            val f = this.target.frame.get()
+            val ui = this.target.uiContext.get()
             if (renderer == null || f == null || ui == null) return false
 
             val shouldRetry = retryCount < renderer.appSettings.mediaRetries &&
@@ -1406,7 +1413,7 @@ class MediaRenderer(
                 renderer.mainHandler.postAtTime({
                     val r = rendererRef.get() ?: return@postAtTime
                     if (r.callback?.isCleanedUp() == false) {
-                        r.renderGlide(ui, f, source, width, scale, diskCache, skipMemory, retryCount + 1)
+                        r.renderGlide(ui, f, spec, retryCount + 1)
                     }
                 }, renderer.rendererToken, SystemClock.uptimeMillis() + GLIDE_RETRY_DELAY_MS * (retryCount + 1))
                 true
@@ -1425,8 +1432,8 @@ class MediaRenderer(
             isFirstResource: Boolean
         ): Boolean {
             val renderer = rendererRef.get()
-            val f = frame.get()
-            val imageView = iv.get()
+            val f = this.target.frame.get()
+            val imageView = this.target.iv.get()
             if (renderer == null || f == null || imageView == null) return false
 
             if (renderer.callback?.isReadyCalled() != true && renderer.callback?.isCleanedUp() != true) {
@@ -1437,7 +1444,8 @@ class MediaRenderer(
                     } else {
                         val maxH = (renderer.appContext.resources.displayMetrics.heightPixels * MAX_IMAGE_HEIGHT_RATIO)
                             .toInt()
-                        val targetH = ((tw * resource.intrinsicHeight) / resource.intrinsicWidth).coerceAtMost(maxH)
+                        val targetH = ((this.target.tw * resource.intrinsicHeight) / resource.intrinsicWidth)
+                            .coerceAtMost(maxH)
                         val fittedW = (targetH * resource.intrinsicWidth) / resource.intrinsicHeight
                         f.layoutParams.width = fittedW
                         f.layoutParams.height = targetH
@@ -1474,19 +1482,16 @@ class MediaRenderer(
     internal class WhepJsBridge(
         private val rendererRef: WeakReference<MediaRenderer>,
         private val frameRef: WeakReference<FrameLayout>,
-        private val tw: Int,
-        private val hasExplicitHeight: Boolean,
-        private val retryCount: Int,
-        private val startTimeMs: Long
+        private val spec: WhepBridgeSpec,
     ) {
         @JavascriptInterface
         fun onSourceDimensions(sourceWidth: Int, sourceHeight: Int) {
             val renderer = rendererRef.get()
             val frame = frameRef.get()
-            if (hasExplicitHeight || renderer == null || frame == null) return
+            if (spec.hasExplicitHeight || renderer == null || frame == null) return
             renderer.mainHandler.postAtTime({
                 if (renderer.callback?.isCleanedUp() == false) {
-                    renderer.onWhepSourceDimensions(frame, tw, sourceWidth, sourceHeight)
+                    renderer.onWhepSourceDimensions(frame, spec.tw, sourceWidth, sourceHeight)
                 }
             }, renderer.rendererToken, SystemClock.uptimeMillis())
         }
@@ -1494,7 +1499,7 @@ class MediaRenderer(
         @JavascriptInterface
         fun onMediaPlaying() {
             val renderer = rendererRef.get() ?: return
-            val elapsed = SystemClock.elapsedRealtime() - startTimeMs
+            val elapsed = SystemClock.elapsedRealtime() - spec.startTimeMs
             renderer.mainHandler.postAtTime({
                 if (renderer.callback?.isCleanedUp() == false) {
                     renderer.onWhepReady(elapsed)
@@ -1507,7 +1512,7 @@ class MediaRenderer(
             val renderer = rendererRef.get() ?: return
             renderer.mainHandler.postAtTime({
                 if (renderer.callback?.isCleanedUp() == false) {
-                    renderer.onWhepError(error, retryCount)
+                    renderer.onWhepError(error, spec.retryCount)
                 }
             }, renderer.rendererToken, SystemClock.uptimeMillis())
         }
