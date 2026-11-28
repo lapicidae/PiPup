@@ -12,188 +12,173 @@
         android:textColor="@color/colorOnSurface"
         android:textSize="28sp"
         android:textStyle="bold"
-        android:layout_marginBottom="32dp"/>
+        android:layout_marginBottom="24dp"/>
 
-    <!-- 1. Expert Tools -->
+    <!-- Section 1: Expert Tools -->
     <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/settings_tools"
-        android:textColor="@color/colorOnSurfaceVariant"
-        android:layout_marginBottom="8dp" />
+        style="@style/SettingsSectionHeader"
+        android:text="@string/settings_tools"/>
 
-    <LinearLayout
-        android:id="@+id/container_advanced"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:focusable="true"
-        android:background="@drawable/focus_background"
-        android:padding="12dp"
-        android:layout_marginTop="4dp"
-        android:gravity="center_vertical">
+    <LinearLayout style="@style/SettingsSectionCard">
         <LinearLayout
-            android:layout_width="0dp"
-            android:layout_weight="1"
+            android:id="@+id/container_advanced"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
-            <TextView
-                android:layout_width="match_parent"
+            android:orientation="horizontal"
+            android:focusable="true"
+            android:background="@drawable/focus_background"
+            android:padding="12dp"
+            android:layout_marginBottom="12dp"
+            android:gravity="center_vertical">
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_weight="1"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_advanced_mode"
-                android:textColor="@color/colorOnSurface"
-                android:textSize="16sp"/>
-            <TextView
-                android:layout_width="match_parent"
+                android:orientation="vertical">
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_advanced_mode"
+                    android:textColor="@color/colorOnSurface"
+                    android:textSize="16sp"/>
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_advanced_mode_desc"
+                    android:textColor="@color/colorOnSurfaceVariant"
+                    android:textSize="12sp"
+                    android:layout_marginTop="2dp"/>
+            </LinearLayout>
+            <androidx.appcompat.widget.SwitchCompat
+                android:id="@+id/switch_advanced"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/settings_advanced_mode_desc"
-                android:textColor="@color/colorOnSurfaceVariant"
-                android:textSize="12sp"
-                android:layout_marginTop="2dp"/>
+                android:focusable="false"
+                android:clickable="false"/>
         </LinearLayout>
-        <androidx.appcompat.widget.SwitchCompat
-            android:id="@+id/switch_advanced"
-            android:layout_width="wrap_content"
+
+        <Button
+            android:id="@+id/btn_clear_active_popups"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:focusable="false"
-            android:clickable="false"/>
+            android:text="@string/settings_clear_active_popups"
+            android:focusable="true"
+            android:background="@drawable/focus_background"
+            android:padding="12dp"
+            android:gravity="start|center_vertical"
+            android:textAllCaps="false"
+            android:textColor="@color/colorOnSurface"/>
     </LinearLayout>
 
-    <Button
-        android:id="@+id/btn_clear_active_popups"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/settings_clear_active_popups"
-        android:focusable="true"
-        android:background="@drawable/focus_background"
-        android:padding="12dp"
-        android:gravity="start|center_vertical"
-        android:textAllCaps="false"
-        android:textColor="@color/colorOnSurface"/>
-
-    <!-- 2. Media Loading -->
+    <!-- Section 2: Media Loading -->
     <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/settings_media_loading"
-        android:textColor="@color/colorOnSurfaceVariant"
-        android:layout_marginTop="32dp"
-        android:layout_marginBottom="12dp" />
+        style="@style/SettingsSectionHeader"
+        android:text="@string/settings_media_loading"/>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="4dp">
-
-        <TextView
-            android:id="@+id/text_media_timeout"
-            android:layout_width="0dp"
+    <LinearLayout style="@style/SettingsSectionCard">
+        <LinearLayout
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/settings_media_timeout"
-            android:textColor="@color/colorOnSurfaceVariant"
-            android:layout_marginStart="12dp" />
+            android:orientation="horizontal">
+            <TextView
+                android:id="@+id/text_media_timeout"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/settings_media_timeout"
+                android:textColor="@color/colorOnSurfaceVariant"
+                android:layout_marginStart="12dp" />
+            <TextView
+                android:id="@+id/text_media_timeout_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/colorOnSurfaceVariant"
+                tools:text="10s" />
+        </LinearLayout>
 
-        <TextView
-            android:id="@+id/text_media_timeout_value"
-            android:layout_width="wrap_content"
+        <SeekBar
+            android:id="@+id/seekbar_media_timeout"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/colorOnSurfaceVariant"
-            tools:text="10s" />
+            android:max="30"
+            android:focusable="true"
+            android:background="@drawable/focus_background"
+            android:padding="12dp"
+            android:thumbTint="@color/tv_thumb_selector"
+            android:progressTint="@color/tv_thumb_selector"
+            android:progressBackgroundTint="@color/tv_track_selector"
+            android:layout_marginBottom="16dp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal">
+            <TextView
+                android:id="@+id/text_media_retries"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/settings_media_retries"
+                android:textColor="@color/colorOnSurfaceVariant"
+                android:layout_marginStart="12dp" />
+            <TextView
+                android:id="@+id/text_media_retries_value"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/colorOnSurfaceVariant"
+                tools:text="3" />
+        </LinearLayout>
+
+        <SeekBar
+            android:id="@+id/seekbar_media_retries"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="10"
+            android:focusable="true"
+            android:background="@drawable/focus_background"
+            android:padding="12dp"
+            android:thumbTint="@color/tv_thumb_selector"
+            android:progressTint="@color/tv_thumb_selector"
+            android:progressBackgroundTint="@color/tv_track_selector" />
     </LinearLayout>
 
-    <SeekBar
-        android:id="@+id/seekbar_media_timeout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:max="30"
-        android:focusable="true"
-        android:background="@drawable/focus_background"
-        android:padding="12dp"
-        android:thumbTint="@color/tv_thumb_selector"
-        android:progressTint="@color/tv_thumb_selector"
-        android:progressBackgroundTint="@color/tv_track_selector"
-        android:layout_marginBottom="16dp" />
+    <!-- Section 3: Migration & Sync -->
+    <TextView
+        style="@style/SettingsSectionHeader"
+        android:text="@string/settings_migration"/>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="8dp">
-
-        <TextView
-            android:id="@+id/text_media_retries"
-            android:layout_width="0dp"
+    <LinearLayout style="@style/SettingsSectionCard">
+        <Button
+            android:id="@+id/btn_import_network"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/settings_media_retries"
-            android:textColor="@color/colorOnSurfaceVariant"
-            android:layout_marginStart="12dp" />
-
-        <TextView
-            android:id="@+id/text_media_retries_value"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:textColor="@color/colorOnSurfaceVariant"
-            tools:text="3" />
+            android:text="@string/settings_import_network"
+            android:focusable="true"
+            android:background="@drawable/focus_background"
+            android:padding="12dp"
+            android:gravity="start|center_vertical"
+            android:textAllCaps="false"
+            android:textColor="@color/colorOnSurface"/>
     </LinearLayout>
 
-    <SeekBar
-        android:id="@+id/seekbar_media_retries"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:max="10"
-        android:focusable="true"
-        android:background="@drawable/focus_background"
-        android:padding="12dp"
-        android:thumbTint="@color/tv_thumb_selector"
-        android:progressTint="@color/tv_thumb_selector"
-        android:progressBackgroundTint="@color/tv_track_selector"
-        android:layout_marginBottom="8dp" />
-
-    <!-- 3. Migration & Sync -->
+    <!-- Section 4: Danger Zone -->
     <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/settings_migration"
-        android:textColor="@color/colorOnSurfaceVariant"
-        android:layout_marginTop="32dp" />
-
-    <Button
-        android:id="@+id/btn_import_network"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/settings_import_network"
-        android:focusable="true"
-        android:background="@drawable/focus_background"
-        android:padding="12dp"
-        android:gravity="start|center_vertical"
-        android:textAllCaps="false"
-        android:textColor="@color/colorOnSurface"/>
-
-    <!-- 4. Danger Zone -->
-    <TextView
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
+        style="@style/SettingsSectionHeader"
         android:text="@string/settings_danger_zone"
-        android:textColor="@color/status_red"
-        android:layout_marginTop="48dp"
-        android:textStyle="bold"/>
+        android:textColor="@color/status_red"/>
 
-    <Button
-        android:id="@+id/btn_reset"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:text="@string/settings_reset_settings"
-        android:textColor="@color/colorOnSurface"
-        android:focusable="true"
-        android:background="@drawable/focus_background"
-        android:padding="12dp"
-        android:gravity="start|center_vertical"
-        android:textAllCaps="false"/>
+    <LinearLayout style="@style/SettingsSectionCard">
+        <Button
+            android:id="@+id/btn_reset"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/settings_reset_settings"
+            android:textColor="@color/colorOnSurface"
+            android:focusable="true"
+            android:background="@drawable/focus_background"
+            android:padding="12dp"
+            android:gravity="start|center_vertical"
+            android:textAllCaps="false"/>
+    </LinearLayout>
 
 </LinearLayout>

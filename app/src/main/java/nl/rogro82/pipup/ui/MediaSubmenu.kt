@@ -6,11 +6,13 @@ import android.widget.ArrayAdapter
 import android.widget.FrameLayout
 import androidx.media3.common.util.UnstableApi
 import nl.rogro82.pipup.AppSettings
+import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 
 /**
  * Settings submenu controller for visual media display preferences including media position,
- * full-bleed layout, fullscreen upscaling, live indicator badge, and loading placeholder.
+ * full-bleed layout, fullscreen upscaling, live indicator badge, loading placeholder, and
+ * default header icon position and size.
  */
 @UnstableApi
 class MediaSubmenu(
@@ -28,10 +30,8 @@ class MediaSubmenu(
         setupSpinner(
             root,
             R.id.spinner_media_position,
-            ArrayAdapter(context, android.R.layout.simple_spinner_item, mediaPosItems).apply {
-                setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            },
-            settings.mediaPosition
+            createSpinnerAdapter(mediaPosItems),
+            settings.mediaPosition,
         ) {
             settings.mediaPosition = it
         }
@@ -61,10 +61,8 @@ class MediaSubmenu(
         setupSpinner(
             root,
             R.id.spinner_live_badge_position,
-            ArrayAdapter(context, android.R.layout.simple_spinner_item, liveBadgePosItems).apply {
-                setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            },
-            currentLiveBadgePosIndex
+            createSpinnerAdapter(liveBadgePosItems),
+            currentLiveBadgePosIndex,
         ) {
             settings.liveBadgePosition = liveBadgePosKeys.getOrElse(it) { "bottom_right" }
         }
@@ -77,5 +75,40 @@ class MediaSubmenu(
         ) {
             settings.mediaLoadingPlaceholder = it
         }
+
+        bindIconControls(root, suffix)
     }
+
+    private fun bindIconControls(root: View, suffix: String) {
+        val iconPosItems = context.resources.getStringArray(R.array.icon_position_options)
+            .mapIndexed { i, s -> if (i == 0) "$s $suffix" else s }
+        val iconPosKeys = listOf(PopupProps.ICON_POSITION_LEFT, PopupProps.ICON_POSITION_RIGHT)
+        val currentIconPosIndex = iconPosKeys.indexOf(settings.iconPosition).coerceAtLeast(0)
+        setupSpinner(
+            root,
+            R.id.spinner_icon_position,
+            createSpinnerAdapter(iconPosItems),
+            currentIconPosIndex,
+        ) {
+            settings.iconPosition = iconPosKeys.getOrElse(it) { PopupProps.DEFAULT_ICON_POSITION }
+        }
+
+        val iconSteps = (PopupProps.ICON_WIDTH_MAX - PopupProps.ICON_WIDTH_MIN) / PopupProps.ICON_WIDTH_STEP_PX
+        val initialStep = ((settings.iconWidth - PopupProps.ICON_WIDTH_MIN) / PopupProps.ICON_WIDTH_STEP_PX)
+            .coerceIn(0, iconSteps)
+        setupSeekBar(
+            root,
+            R.id.seekbar_icon_width,
+            R.id.text_icon_width_value,
+            initialStep,
+            max = iconSteps,
+        ) { step ->
+            settings.iconWidth = PopupProps.ICON_WIDTH_MIN + step * PopupProps.ICON_WIDTH_STEP_PX
+        }
+    }
+
+    private fun createSpinnerAdapter(items: List<String>): ArrayAdapter<String> =
+        ArrayAdapter(context, android.R.layout.simple_spinner_item, items).apply {
+            setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        }
 }

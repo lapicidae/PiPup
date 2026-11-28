@@ -35,8 +35,11 @@ class ModuleSubmenu(
 
         // Module-specific settings (Protected Area: category == null)
         val metadata = module.getSettingsMetadata().filter { it.category == null }
-        metadata.forEach { def ->
-            renderSetting(rootContainer, module, def)
+        if (metadata.isNotEmpty()) {
+            val card = addSectionCard(rootContainer, context.getString(module.nameRes))
+            metadata.forEach { def ->
+                renderSetting(card, module, def)
+            }
         }
 
         settingsActivity?.setupSubmenuFocus()

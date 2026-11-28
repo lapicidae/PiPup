@@ -85,6 +85,22 @@
     <string name="live_badge_text_label">LIVE</string>
     <string name="settings_media_loading_placeholder">Lade-Vorschau anzeigen</string>
     <string name="settings_media_loading_placeholder_desc">Zeigt eine dezente Kachel an, während Video- oder Web-Streams die Verbindung aufbauen.</string>
+    <string name="settings_icon_position">Standard-Icon-Position</string>
+    <string name="settings_icon_width">Standard-Icon-Größe</string>
+    <string name="settings_section_media_layout">Layout &amp; Darstellung</string>
+    <string name="settings_section_live_indicator">Live-Indikator</string>
+    <string name="settings_section_header_icon">Header-Icon</string>
+    <string name="settings_section_popup_layout">Popup-Layout</string>
+    <string name="settings_section_app">App</string>
+    <string name="settings_section_title">Titel</string>
+    <string name="settings_section_message">Nachricht</string>
+    <string name="settings_section_button_shape">Form &amp; Größe</string>
+    <string name="settings_section_button_colors">Farben</string>
+    <string name="settings_section_close_button">Schließen-Button</string>
+    <string name="settings_section_update_check">Update-Prüfung</string>
+    <string name="settings_section_update_notifications">Benachrichtigungen</string>
+    <string name="settings_section_perf_popups">Popups</string>
+    <string name="settings_section_perf_streaming">Streaming</string>
 
     <!-- Animations-Einstellungen -->
     <string name="settings_animation_type">Animations-Typ</string>
@@ -95,7 +111,7 @@
     <string name="settings_animation_slide_bounce">Schieben &amp; Prellen</string>
     <string name="settings_animation_scale">Skalieren</string>
     <string name="settings_animation_scale_bounce">Skalieren &amp; Prellen</string>
-    <string name="settings_animation_scale_tada">Skalieren Ta-da</string>
+    <string name="settings_animation_scale_tada">Skalieren &amp; Ta-da</string>
     <string name="settings_animation_slide_zoom">Schieben &amp; Zoom</string>
     <string name="settings_animation_slide_flip">Schieben &amp; Flip</string>
     <string name="settings_animation_slide_tada">Schieben &amp; Ta-da</string>

@@ -54,4 +54,9 @@
         <item>@string/settings_live_badge_pos_bottom_right</item>
         <item>@string/settings_live_badge_pos_bottom_left</item>
     </string-array>
+
+    <string-array name="icon_position_options">
+        <item>@string/settings_media_pos_left</item>
+        <item>@string/settings_media_pos_right</item>
+    </string-array>
 </resources>

@@ -44,4 +44,27 @@
         <item name="android:paddingRight">16dp</item>
         <item name="android:minWidth">88dp</item>
     </style>
+
+    <style name="SettingsSectionHeader">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textColor">@color/colorPrimary</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:letterSpacing">0.04</item>
+        <item name="android:layout_marginStart">4dp</item>
+        <item name="android:layout_marginBottom">10dp</item>
+        <item name="android:focusable">false</item>
+    </style>
+
+    <style name="SettingsSectionCard">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:orientation">vertical</item>
+        <item name="android:background">@drawable/settings_section_card_background</item>
+        <item name="android:padding">16dp</item>
+        <item name="android:layout_marginBottom">24dp</item>
+        <item name="android:clipToPadding">false</item>
+        <item name="android:clipChildren">false</item>
+    </style>
 </resources>

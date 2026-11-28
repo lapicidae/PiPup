@@ -5,14 +5,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.ColorStateList
-import android.graphics.Bitmap
-import android.graphics.Paint
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -28,8 +25,6 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.applyCanvas
-import androidx.core.graphics.createBitmap
 import androidx.core.graphics.toColorInt
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
@@ -37,7 +32,6 @@ import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.MainActivity
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.Permissions
-import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.applyAppLocaleAndTheme
 import nl.rogro82.pipup.colorToHex
@@ -60,10 +54,13 @@ class SettingsActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
 
     private var currentLayoutRes: Int = -1
-    private var currentNavId: Int = -1
+    internal var currentNavId: Int = -1
     private var isInitializing = false
     private var lastFocusedViewId: Int = View.NO_ID
     private var shouldFocusSubmenuOnStart = false
+    private val previewController by lazy {
+        SettingsPreviewController(this, settings, binding.previewArea, allRailIds)
+    }
 
     private val adminLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -242,8 +239,6 @@ class SettingsActivity : AppCompatActivity() {
             ColorEntry(R.string.color_sky_blue,     colorToHex(R.color.preset_sky_blue))
         )
     }
-
-    private var cachedPlaceholder: Bitmap? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Apply theme and locale before super.onCreate to ensure the UI reflects settings
@@ -447,6 +442,7 @@ class SettingsActivity : AppCompatActivity() {
                     scroll.smoothScrollTo(0, (rect.top - pivotY).toInt().coerceAtLeast(0))
                 }
 
+                previewController.setIconVisible(false)
                 if (currentNavId != item.id) {
                     loadSubmenuForItem(item)
                 }
@@ -621,7 +617,10 @@ class SettingsActivity : AppCompatActivity() {
         child.setOnFocusChangeListener { v, hasFocus ->
             if (hasFocus) scrollSubmenuToPivot(v)
             old?.onFocusChange(v, hasFocus)
-            if (hasFocus) getControllerForNav(currentNavId).updatePreviewPosition(v)
+            if (hasFocus) {
+                previewController.setIconVisible(v.id in SettingsPreviewController.ICON_PREVIEW_VIEW_IDS)
+                getControllerForNav(currentNavId).updatePreviewPosition(v)
+            }
         }
     }
 
@@ -657,135 +656,7 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun updatePreview(animate: Boolean = false) {
-        handler.removeCallbacksAndMessages(null)
-        handler.postDelayed({
-            val props = buildPreviewProps()
-            val existingPreview = binding.previewArea.getChildAt(0) as? PopupView
-            if (existingPreview != null && !animate) {
-                updateExistingPreview(existingPreview, props)
-            } else {
-                recreatePreview(props, animate)
-            }
-        }, PREVIEW_UPDATE_DELAY_MS)
-    }
-
-    private fun getOrCreatePreviewPlaceholder(): Bitmap {
-        return cachedPlaceholder ?: createBitmap(PREVIEW_PLACEHOLDER_WIDTH, PREVIEW_PLACEHOLDER_HEIGHT).applyCanvas {
-            drawColor(ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_bg))
-            val paint = Paint().apply {
-                color = ContextCompat.getColor(this@SettingsActivity, R.color.preview_placeholder_text)
-                textSize = PREVIEW_PLACEHOLDER_TEXT_SIZE
-                textAlign = Paint.Align.CENTER
-            }
-            drawText(
-                getString(R.string.settings_preview_media),
-                PREVIEW_PLACEHOLDER_TEXT_X,
-                PREVIEW_PLACEHOLDER_TEXT_Y,
-                paint,
-            )
-        }.also { cachedPlaceholder = it }
-    }
-
-    private fun buildPreviewProps(): PopupProps {
-        val placeholder = getOrCreatePreviewPlaceholder()
-        val sampleButtons = if (currentNavId == R.id.nav_item_button) {
-            listOf(
-                PopupProps.Button("preview_1", getString(android.R.string.ok)),
-                PopupProps.Button("preview_2", getString(android.R.string.cancel)),
-            )
-        } else {
-            emptyList()
-        }
-        return PopupProps(
-            title = getString(R.string.settings_preview_title),
-            message = getString(R.string.settings_preview_message),
-            backgroundColor = settings.getFullBackgroundColor(),
-            borderRadius = settings.borderRadius,
-            borderWidth = settings.borderWidth,
-            borderColor = settings.borderColor,
-            contentPadding = settings.contentPadding,
-            titleColor = settings.titleColor,
-            titleSize = settings.titleSize,
-            messageColor = settings.messageColor,
-            messageSize = settings.messageSize,
-            titleAlignment = settings.titleAlignment,
-            messageAlignment = settings.messageAlignment,
-            mediaPosition = settings.mediaPosition,
-            mediaFullBleed = settings.mediaFullBleed,
-            liveBadge = settings.liveBadge,
-            liveBadgePosition = settings.liveBadgePosition,
-            animationType = settings.animationType,
-            animationDuration = settings.animationDuration,
-            animationExit = settings.animationExit,
-            media = PopupProps.Media.Bitmap(placeholder, PREVIEW_MEDIA_WIDTH),
-            buttons = sampleButtons,
-            buttonSize = settings.defaultButtonSize,
-            buttonColor = settings.defaultButtonColor,
-            buttonFocusColor = settings.defaultButtonFocusColor,
-            buttonTextColor = settings.defaultButtonTextColor,
-            buttonFocusTextColor = settings.defaultButtonFocusTextColor,
-            buttonBorderColor = settings.defaultButtonBorderColor,
-            buttonCornerRadius = settings.defaultButtonCornerRadius,
-            closeButton = settings.closeButton,
-            closeButtonSize = settings.closeButtonSize,
-            isPreview = true,
-        )
-    }
-
-    private fun updateExistingPreview(existingPreview: PopupView, props: PopupProps) {
-        existingPreview.updateFromProps(props)
-        val focus = currentFocus
-        if (focus != null && focus.id != View.NO_ID && focus.id !in allRailIds) {
-            getControllerForNav(currentNavId).updatePreviewPosition(focus)
-            return
-        }
-        // Ensure default position when focused on the navigation rail
-        (existingPreview.layoutParams as? FrameLayout.LayoutParams)?.let { params ->
-            val defaultGravity = Gravity.BOTTOM or Gravity.END
-            if (params.gravity != defaultGravity) {
-                params.gravity = defaultGravity
-                val m = (resources.displayMetrics.density * PREVIEW_MARGIN_DP).toInt()
-                params.setMargins(0, m, m, m)
-                existingPreview.layoutParams = params
-            }
-        }
-    }
-
-    private fun recreatePreview(props: PopupProps, animate: Boolean) {
-        binding.previewArea.removeAllViews()
-        val preview = PopupView.build(this, props)
-        val initialGravity = resolvePreviewGravity()
-
-        binding.previewArea.addView(
-            preview,
-            FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                gravity = initialGravity
-                val m = (resources.displayMetrics.density * PREVIEW_MARGIN_DP).toInt()
-                setMargins(0, m, m, m)
-            },
-        )
-
-        if (animate && props.animationType != 0) {
-            preview.postDelayed(
-                { if (preview.parent != null) preview.animateIn() },
-                PREVIEW_ANIMATE_DELAY_MS,
-            )
-        }
-    }
-
-    private fun resolvePreviewGravity(): Int {
-        val focus = currentFocus
-        val isFlipped = if (focus != null && focus.id !in allRailIds) {
-            val location = IntArray(SCREEN_LOCATION_COORDS)
-            focus.getLocationOnScreen(location)
-            location[1] > resources.displayMetrics.heightPixels * PREVIEW_FLIP_THRESHOLD
-        } else {
-            false
-        }
-        return if (isFlipped) Gravity.TOP or Gravity.END else Gravity.BOTTOM or Gravity.END
+        previewController.update(animate)
     }
 
     override fun onResume() {
@@ -804,27 +675,14 @@ class SettingsActivity : AppCompatActivity() {
         try {
             unregisterReceiver(settingsReceiver)
         } catch (_: Exception) {}
-        // Note: We don't manually recycle the placeholder here to avoid "recycled bitmap" errors
-        // if the UI performs a final layout pass after activity destruction.
-        cachedPlaceholder = null
+        previewController.cleanup()
     }
 
-    /** Intent extras and preview timing constants for [SettingsActivity]. */
+    /** Intent extras and focus timing constants for [SettingsActivity]. */
     companion object {
         const val EXTRA_NAV_ID = "${PiPupApp.APP_PACKAGE}.extra.NAV_ID"
         private const val POST_RESUME_FOCUS_DELAY_MS = 300L
-        private const val PREVIEW_UPDATE_DELAY_MS = 10L
-        private const val PREVIEW_ANIMATE_DELAY_MS = 500L
-        private const val PREVIEW_MARGIN_DP = 10
-        private const val SCREEN_LOCATION_COORDS = 2
-        private const val PREVIEW_FLIP_THRESHOLD = 0.4
         private const val PIVOT_SCROLL_RATIO = 0.3f
-        private const val PREVIEW_PLACEHOLDER_WIDTH = 320
-        private const val PREVIEW_PLACEHOLDER_HEIGHT = 180
-        private const val PREVIEW_PLACEHOLDER_TEXT_SIZE = 40f
-        private const val PREVIEW_PLACEHOLDER_TEXT_X = 160f
-        private const val PREVIEW_PLACEHOLDER_TEXT_Y = 100f
-        private const val PREVIEW_MEDIA_WIDTH = 180
 
         private val NAV_STUB_IDS = mapOf(
             R.id.nav_item_general to R.id.stub_general,

@@ -85,6 +85,22 @@
     <string name="live_badge_text_label">LIVE</string>
     <string name="settings_media_loading_placeholder">Media Loading Placeholder</string>
     <string name="settings_media_loading_placeholder_desc">Displays a placeholder preview while video or web streams are connecting.</string>
+    <string name="settings_icon_position">Default Icon Position</string>
+    <string name="settings_icon_width">Default Icon Size</string>
+    <string name="settings_section_media_layout">Layout &amp; Display</string>
+    <string name="settings_section_live_indicator">Live Indicator</string>
+    <string name="settings_section_header_icon">Header Icon</string>
+    <string name="settings_section_popup_layout">Popup Layout</string>
+    <string name="settings_section_app">App</string>
+    <string name="settings_section_title">Title</string>
+    <string name="settings_section_message">Message</string>
+    <string name="settings_section_button_shape">Shape &amp; Size</string>
+    <string name="settings_section_button_colors">Colors</string>
+    <string name="settings_section_close_button">Close Button</string>
+    <string name="settings_section_update_check">Update Check</string>
+    <string name="settings_section_update_notifications">Notifications</string>
+    <string name="settings_section_perf_popups">Popups</string>
+    <string name="settings_section_perf_streaming">Streaming</string>
 
     <!-- Animation Settings -->
     <string name="settings_animation_type">Animation Type</string>
@@ -95,7 +111,7 @@
     <string name="settings_animation_slide_bounce">Slide &amp; Bounce</string>
     <string name="settings_animation_scale">Scale In</string>
     <string name="settings_animation_scale_bounce">Scale &amp; Bounce</string>
-    <string name="settings_animation_scale_tada">Scale Ta-da</string>
+    <string name="settings_animation_scale_tada">Scale &amp; Ta-da</string>
     <string name="settings_animation_slide_zoom">Slide &amp; Zoom</string>
     <string name="settings_animation_slide_flip">Slide &amp; Flip</string>
     <string name="settings_animation_slide_tada">Slide &amp; Ta-da</string>

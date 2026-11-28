@@ -88,33 +88,21 @@ class PermissionsSubmenu(
         }
 
         // 2. REQUIRED SECTION
-        addSectionHeader(submenuRoot, context.getString(R.string.permission_header_required))
-        addPermissionRow(submenuRoot, Permissions.KEY_OVERLAY, isOptional = false)
+        val requiredCard = addSectionCard(submenuRoot, context.getString(R.string.permission_header_required))
+        addPermissionRow(requiredCard, Permissions.KEY_OVERLAY, isOptional = false)
 
         modulePermissions.forEach { key ->
-            addPermissionRow(submenuRoot, key, isOptional = false)
+            addPermissionRow(requiredCard, key, isOptional = false)
         }
 
         // 3. OPTIONAL SECTION
-        addSectionHeader(submenuRoot, context.getString(R.string.permission_header_optional), marginTop = 32)
-        addPermissionRow(submenuRoot, Permissions.KEY_INSTALL, isOptional = true)
-        addPermissionRow(submenuRoot, Permissions.KEY_ENERGY, isOptional = true)
+        val optionalCard = addSectionCard(submenuRoot, context.getString(R.string.permission_header_optional))
+        addPermissionRow(optionalCard, Permissions.KEY_INSTALL, isOptional = true)
+        addPermissionRow(optionalCard, Permissions.KEY_ENERGY, isOptional = true)
 
         renderModuleSettings(submenuRoot, SettingCategory.PERMISSIONS)
 
         settingsActivity?.setupSubmenuFocus()
-    }
-
-    private fun addSectionHeader(container: LinearLayout, title: String, marginTop: Int = PAD_LG_DP) {
-        container.addView(
-            TextView(context).apply {
-                text = title.uppercase()
-                textSize = HEADER_TEXT_SIZE_SP
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
-                setPadding(context.dpToPx(PAD_LG_DP), context.dpToPx(marginTop), 0, context.dpToPx(PAD_SM_DP))
-            }
-        )
     }
 
     private fun addPermissionRow(container: LinearLayout, key: String, isOptional: Boolean = false) {
@@ -162,7 +150,7 @@ class PermissionsSubmenu(
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-            ).apply { bottomMargin = context.dpToPx(PAD_LG_DP) }
+            ).apply { bottomMargin = context.dpToPx(PAD_SM_DP) }
             isFocusable = true
             isFocusableInTouchMode = true
             setOnClickListener { if (!isGranted) PermissionsUi.showFixDialog(context, key) }
@@ -214,7 +202,6 @@ class PermissionsSubmenu(
     companion object {
         private const val REFRESH_INTERVAL_MS = 2000L
         private const val POSITIVE_INT_MASK = 0x7FFFFFFF
-        private const val HEADER_TEXT_SIZE_SP = 14f
         private const val TITLE_TEXT_SIZE_SP = 18f
         private const val WHY_TEXT_SIZE_SP = 14f
         private const val WHY_TEXT_ALPHA = 0.8f

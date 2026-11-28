@@ -5,7 +5,6 @@ import android.content.Intent
 import android.content.res.ColorStateList
 import android.os.Handler
 import android.os.Looper
-import android.view.Gravity
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.View
@@ -14,6 +13,7 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.Spinner
 import android.widget.TextView
@@ -67,31 +67,8 @@ abstract class SubmenuBase(
      * @param v The currently focused view.
      */
     override fun updatePreviewPosition(v: View) {
-        val location = IntArray(2)
-        v.getLocationOnScreen(location)
-        val screenHeight = context.resources.displayMetrics.heightPixels
-        // Only move to top if the focused item is in the lower 40% of the screen
-        val shouldBeAtTop = location[1] > screenHeight * 0.6
-
         val popup = previewArea.getChildAt(0) ?: return
-        val params = popup.layoutParams as? FrameLayout.LayoutParams ?: return
-        val newGravity = (if (shouldBeAtTop) Gravity.TOP else Gravity.BOTTOM) or Gravity.END
-
-        if (params.gravity != newGravity) {
-            params.gravity = newGravity
-            val density = context.resources.displayMetrics.density
-            val marginSide = (density * 10).toInt()
-            // More margin at top to avoid covering the menu titles/values
-            val marginTop = (density * 40).toInt()
-            val marginBottom = (density * 10).toInt()
-
-            if (shouldBeAtTop) {
-                params.setMargins(0, marginTop, marginSide, 0)
-            } else {
-                params.setMargins(0, 0, marginSide, marginBottom)
-            }
-            popup.layoutParams = params
-        }
+        SettingsPreviewController.applyPosition(popup, v)
     }
 
     protected fun setupSeekBar(
@@ -211,6 +188,8 @@ abstract class SubmenuBase(
             R.id.seekbar_title_size,
             R.id.seekbar_message_size,
             R.id.seekbar_button_size -> "${bar.progress + PopupProps.TEXT_SIZE_UI_MIN} sp"
+            R.id.seekbar_icon_width ->
+                "${PopupProps.ICON_WIDTH_MIN + bar.progress * PopupProps.ICON_WIDTH_STEP_PX} px"
             else -> context.getString(R.string.settings_slider_value_format, bar.progress, bar.max)
         }
     }
@@ -313,22 +292,39 @@ abstract class SubmenuBase(
     }
 
     /**
-     * Renders settings from all active modules that belong to the specified category.
+     * Adds an optional M3 section header and a tonal section card container to [parent]
+     * and returns the card [LinearLayout] for populating controls.
+     */
+    protected fun addSectionCard(parent: ViewGroup, title: String? = null): LinearLayout {
+        val inflater = LayoutInflater.from(context)
+        if (!title.isNullOrBlank()) {
+            val header = inflater.inflate(R.layout.item_settings_section_header, parent, false) as TextView
+            header.text = title
+            parent.addView(header)
+        }
+        return (inflater.inflate(R.layout.item_settings_section_card, parent, false) as LinearLayout)
+            .also { parent.addView(it) }
+    }
+
+    /**
+     * Renders settings from all active modules that belong to the specified category inside a section card.
      */
     protected fun renderModuleSettings(container: ViewGroup, category: SettingCategory) {
         val mm = (context.applicationContext as PiPupApp).moduleManager
-        val modules = mm.getAllModules()
-
-        modules.forEach { module ->
-            // Only show settings for logically active modules (Eco or On)
-            if (ModuleMode.OFF in module.supportedModes && settings.getModuleMode(module.id) == ModuleMode.OFF) {
-                return@forEach
+        val entries = mm.getAllModules()
+            .filter { module ->
+                ModuleMode.OFF !in module.supportedModes || settings.getModuleMode(module.id) != ModuleMode.OFF
             }
-
-            val metadata = module.getSettingsMetadata().filter { it.category == category }
-            metadata.forEach { def ->
-                renderSetting(container, module, def)
+            .flatMap { module ->
+                module.getSettingsMetadata()
+                    .filter { it.category == category }
+                    .map { module to it }
             }
+        if (entries.isEmpty()) return
+
+        val card = addSectionCard(container, context.getString(R.string.settings_nav_modules))
+        entries.forEach { (module, def) ->
+            renderSetting(card, module, def)
         }
     }
 

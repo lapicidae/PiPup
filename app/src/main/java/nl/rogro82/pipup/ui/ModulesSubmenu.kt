@@ -42,15 +42,21 @@ class ModulesSubmenu(
         val mm = (context.applicationContext as PiPupApp).moduleManager
         val modules = mm.getAllModules().filter { it.isUserConfigurable }
 
-        modules.forEach { module ->
-            renderModuleToggle(module)
+        if (modules.isNotEmpty()) {
+            val card = addSectionCard(rootContainer)
+            modules.forEachIndexed { index, module ->
+                renderModuleToggle(card, module, isLast = index == modules.lastIndex)
+            }
         }
 
         settingsActivity?.setupSubmenuFocus()
     }
 
-    private fun renderModuleToggle(module: PiPupModule) {
-        val view = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle_with_desc, rootContainer, false)
+    private fun renderModuleToggle(container: LinearLayout, module: PiPupModule, isLast: Boolean) {
+        val view = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle_with_desc, container, false)
+        if (isLast) {
+            (view.layoutParams as? LinearLayout.LayoutParams)?.bottomMargin = 0
+        }
 
         view.findViewById<TextView>(R.id.setting_label)?.text = context.getString(module.nameRes)
         view.findViewById<TextView>(R.id.setting_desc)?.apply {
@@ -61,6 +67,10 @@ class ModulesSubmenu(
         val sw = view.findViewById<SwitchCompat>(R.id.setting_switch)
         val currentMode = settings.getModuleMode(module.id)
         sw?.isChecked = currentMode != ModuleMode.OFF
+
+        view.onFocusChangeListener = View.OnFocusChangeListener { v, hasFocus ->
+            if (hasFocus) updatePreviewPosition(v)
+        }
 
         view.setOnClickListener {
             val next = if (settings.getModuleMode(module.id) == ModuleMode.OFF) {
@@ -81,6 +91,6 @@ class ModulesSubmenu(
             onSettingsChanged(false)
         }
 
-        rootContainer.addView(view)
+        container.addView(view)
     }
 }

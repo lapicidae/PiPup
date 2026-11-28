@@ -1,6 +1,5 @@
 package nl.rogro82.pipup.ui
 
-import android.graphics.Typeface
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -15,7 +14,6 @@ import nl.rogro82.pipup.BuildConfig
 import nl.rogro82.pipup.Permissions
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.core.PiPupModule
-import nl.rogro82.pipup.dpToPx
 import nl.rogro82.pipup.service.PiPupAccessibilityService
 
 /**
@@ -58,21 +56,24 @@ class VendorSubmenu(
 
         // 1. Settings Section
         val metadata = module.getSettingsMetadata()
-        metadata.forEach { def ->
-            renderSetting(rootContainer, module, def)
+        if (metadata.isNotEmpty()) {
+            val settingsCard = addSectionCard(rootContainer, context.getString(module.nameRes))
+            metadata.forEach { def ->
+                renderSetting(settingsCard, module, def)
+            }
         }
 
         // 2. Status Section
-        addSectionHeader(rootContainer, context.getString(R.string.settings_vendor_status))
+        val statusCard = addSectionCard(rootContainer, context.getString(R.string.settings_vendor_status))
 
-        val statusView = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle, rootContainer, false)
+        val statusView = LayoutInflater.from(context).inflate(R.layout.item_setting_toggle, statusCard, false)
         statusView.id = R.id.vendor_status_row
         statusView.findViewById<View>(R.id.setting_switch)?.visibility = View.GONE
         statusView.findViewById<TextView>(R.id.setting_label)?.text =
             context.getString(R.string.settings_vendor_tcl_keepalive)
         statusView.isFocusable = false
 
-        rootContainer.addView(statusView)
+        statusCard.addView(statusView)
         updateStatus()
 
         settingsActivity?.setupSubmenuFocus()
@@ -108,29 +109,8 @@ class VendorSubmenu(
         label.setTextColor(ContextCompat.getColor(context, colorRes))
     }
 
-    private fun addSectionHeader(container: LinearLayout, title: String) {
-        container.addView(
-            TextView(context).apply {
-                text = title.uppercase()
-                textSize = HEADER_TEXT_SIZE_SP
-                setTypeface(null, Typeface.BOLD)
-                setTextColor(ContextCompat.getColor(context, R.color.colorOnSurfaceVariant))
-                setPadding(
-                    context.dpToPx(HEADER_PADDING_START_DP),
-                    context.dpToPx(HEADER_PADDING_TOP_DP),
-                    0,
-                    context.dpToPx(HEADER_PADDING_BOTTOM_DP),
-                )
-            }
-        )
-    }
-
-    /** Timing and layout constants for [VendorSubmenu]. */
+    /** Timing constants for [VendorSubmenu]. */
     companion object {
         private const val INITIAL_REFRESH_DELAY_MS = 1000L
-        private const val HEADER_TEXT_SIZE_SP = 14f
-        private const val HEADER_PADDING_START_DP = 16
-        private const val HEADER_PADDING_TOP_DP = 24
-        private const val HEADER_PADDING_BOTTOM_DP = 8
     }
 }
