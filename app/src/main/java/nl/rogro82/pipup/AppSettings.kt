@@ -229,6 +229,10 @@ class AppSettings(context: Context) {
     var liveBadge by BooleanPref("live_badge", false)
     /** Default corner position for the Live indicator pill. */
     var liveBadgePosition by StringPref("live_badge_position", "bottom_right")
+    /** Default placement for optional header icons (`"left"` or `"right"`). */
+    var iconPosition by StringPref("icon_position", PopupProps.DEFAULT_ICON_POSITION)
+    /** Default width in pixels for optional header icons (`16..512`). */
+    var iconWidth by IntPref("icon_width", PopupProps.DEFAULT_ICON_WIDTH)
     /** Default overlay close button corner position ("none" = disabled). */
     var closeButton by StringPref("close_button", "none")
     /** Default auto-hide delay in seconds for the overlay close button (0 = always visible). */
@@ -327,6 +331,8 @@ class AppSettings(context: Context) {
         val fullscreenUpscale: Boolean = false,
         val liveBadge: Boolean = false,
         val liveBadgePosition: String = "bottom_right",
+        val iconPosition: String = PopupProps.DEFAULT_ICON_POSITION,
+        val iconWidth: Int = PopupProps.DEFAULT_ICON_WIDTH,
         val closeButton: String = "none",
         val closeButtonTimeout: Int = PopupProps.CLOSE_BUTTON_TIMEOUT_DEFAULT,
         val closeButtonSize: Int = PopupProps.CLOSE_BUTTON_SIZE_DEFAULT,
@@ -364,7 +370,7 @@ class AppSettings(context: Context) {
                 put("titleAlignment", titleAlignment)
                 put("messageAlignment", messageAlignment)
                 put("mediaPosition", mediaPosition)
-                put("animationType", animationType)
+                put("animation", animationType)
                 put("animationDuration", animationDuration)
                 put("animationExit", animationExit)
                 put("mediaTimeout", mediaTimeout)
@@ -377,6 +383,8 @@ class AppSettings(context: Context) {
                 put("fullscreenUpscale", fullscreenUpscale)
                 put("liveBadge", liveBadge)
                 put("liveBadgePosition", liveBadgePosition)
+                put("iconPosition", iconPosition)
+                put("iconWidth", iconWidth)
                 put("closeButton", closeButton)
                 put("closeButtonTimeout", closeButtonTimeout)
                 put("closeButtonSize", closeButtonSize)
@@ -468,7 +476,7 @@ class AppSettings(context: Context) {
                     titleAlignment = j.optInt("titleAlignment", base.titleAlignment),
                     messageAlignment = j.optInt("messageAlignment", base.messageAlignment),
                     mediaPosition = j.optInt("mediaPosition", base.mediaPosition),
-                    animationType = j.optInt("animationType", base.animationType),
+                    animationType = PopupProps.parseAnimationFromJson(j) ?: base.animationType,
                     animationDuration = j.optInt("animationDuration", base.animationDuration),
                     animationExit = j.optBoolean("animationExit", base.animationExit),
                     mediaTimeout = j.optInt("mediaTimeout", base.mediaTimeout),
@@ -499,6 +507,12 @@ class AppSettings(context: Context) {
             }
 
             private fun SettingsData.withExtraJsonFields(j: JSONObject, base: SettingsData): SettingsData = copy(
+                iconPosition = j.optParsed("iconPosition", base.iconPosition) {
+                    PopupProps.parseIconPosition(it.toString())
+                },
+                iconWidth = j.optParsed("iconWidth", base.iconWidth) {
+                    PopupProps.parseIconWidth(it)
+                },
                 closeButton = j.optParsed("closeButton", base.closeButton) {
                     PopupProps.parseCloseButton(it) ?: "none"
                 },
@@ -553,6 +567,8 @@ class AppSettings(context: Context) {
             fullscreenUpscale = fullscreenUpscale,
             liveBadge = liveBadge,
             liveBadgePosition = liveBadgePosition,
+            iconPosition = iconPosition,
+            iconWidth = iconWidth,
             closeButton = closeButton,
             closeButtonTimeout = closeButtonTimeout,
             closeButtonSize = closeButtonSize,
@@ -592,7 +608,7 @@ class AppSettings(context: Context) {
         titleAlignment = data.titleAlignment.coerceIn(0, 2)
         messageAlignment = data.messageAlignment.coerceIn(0, 2)
         mediaPosition = data.mediaPosition.coerceIn(0, MAX_MEDIA_POSITION)
-        animationType = data.animationType.coerceIn(0, MAX_ANIMATION_TYPE)
+        animationType = data.animationType.coerceIn(PopupProps.ANIM_NONE, PopupProps.MAX_ANIMATION_TYPE)
         animationDuration = data.animationDuration.coerceIn(0, MAX_ANIMATION_DURATION_MS)
         animationExit = data.animationExit
         mediaTimeout = data.mediaTimeout.coerceIn(1, MAX_MEDIA_TIMEOUT_SEC)
@@ -607,12 +623,19 @@ class AppSettings(context: Context) {
         liveBadgePosition = data.liveBadgePosition.takeIf {
             it in listOf("top_left", "top_right", "bottom_left", "bottom_right")
         } ?: "bottom_right"
+        iconPosition = PopupProps.parseIconPosition(data.iconPosition) ?: PopupProps.DEFAULT_ICON_POSITION
+        iconWidth = data.iconWidth.coerceIn(PopupProps.ICON_WIDTH_MIN, PopupProps.ICON_WIDTH_MAX)
         closeButton = PopupProps.normalizeCloseButtonPosition(data.closeButton)
         closeButtonTimeout = data.closeButtonTimeout.coerceIn(0, PopupProps.CLOSE_BUTTON_TIMEOUT_MAX)
         closeButtonSize = data.closeButtonSize.coerceIn(
             PopupProps.CLOSE_BUTTON_SIZE_MIN,
             PopupProps.CLOSE_BUTTON_SIZE_MAX
         )
+        applySystemAndUpdateSettings(data)
+        cachedFullBgColor = null
+    }
+
+    private fun applySystemAndUpdateSettings(data: SettingsData) {
         appTheme = data.appTheme.coerceIn(0, 1)
         advancedMode = data.advancedMode
 
@@ -636,8 +659,6 @@ class AppSettings(context: Context) {
         pendingUpdateTagName = data.pendingUpdateTagName
         language = data.language
         webhookHeartbeat = normalizeWebhookHeartbeat(data.webhookHeartbeat) ?: 0
-
-        cachedFullBgColor = null
     }
 
     private fun validateHexColor(hex: String, fallback: String): String {
@@ -695,11 +716,12 @@ class AppSettings(context: Context) {
      * Applies user-configured default settings to a PopupProps instance.
      */
     fun applyDefaults(props: PopupProps): PopupProps {
+        val (resolvedBorderWidth, resolvedBorderColor, resolvedBorderRadius) = resolveBorderDefaults(props)
         return props.copy(
             backgroundColor = props.backgroundColor.orIfDefault("#CC000000", getFullBackgroundColor()),
-            borderColor = props.borderColor.orIfDefault("#00000000", borderColor),
-            borderRadius = props.borderRadius.orIfDefault(0, borderRadius),
-            borderWidth = props.borderWidth.orIfDefault(0, borderWidth),
+            borderColor = resolvedBorderColor,
+            borderRadius = resolvedBorderRadius,
+            borderWidth = resolvedBorderWidth,
             contentPadding = props.contentPadding ?: contentPadding,
             titleColor = props.titleColor.orIfDefault("#FFFFFF", titleColor),
             titleSize = props.titleSize.orIfDefault(PopupProps.DEFAULT_TITLE_SIZE_SP, titleSize),
@@ -709,21 +731,48 @@ class AppSettings(context: Context) {
             messageAlignment = props.messageAlignment.orIfDefault(0, messageAlignment),
             media = applyMediaDefaults(props.media),
             mediaPosition = props.mediaPosition ?: mediaPosition,
-            animationType = props.animationType.orIfDefault(0, animationType),
+            animationType = props.animationType ?: animationType,
             animationDuration = props.animationDuration.orIfDefault(
                 PopupProps.DEFAULT_ANIMATION_DURATION_MS,
                 animationDuration
             ),
             animationExit = props.animationExit || animationExit,
-            mediaFullBleed = props.mediaFullBleed ?: mediaFullBleed,
-            fullscreenUpscale = props.fullscreenUpscale ?: fullscreenUpscale,
-            liveBadge = props.liveBadge ?: liveBadge,
-            liveBadgePosition = props.liveBadgePosition ?: liveBadgePosition,
-            closeButton = props.closeButton ?: closeButton,
-            closeButtonTimeout = props.closeButtonTimeout ?: closeButtonTimeout,
-            closeButtonSize = props.closeButtonSize ?: closeButtonSize
-        )
+        ).applyOverlayDefaults(props)
     }
+
+    private fun resolveBorderDefaults(props: PopupProps): Triple<Int, String, Int> {
+        val urgencyPreset = props.urgency?.let { PopupProps.URGENCY_PRESETS[it] }
+        val resolvedWidth = props.borderWidth
+            ?: urgencyPreset?.first
+            ?: if (props.borderColor != null && borderWidth <= 0) {
+                PopupProps.DEFAULT_EXPLICIT_BORDER_WIDTH
+            } else {
+                borderWidth
+            }
+        val urgencyHex = urgencyPreset?.second?.let { colorRes ->
+            appContext.getLocalizedContext(language, appTheme).colorToHex(colorRes)
+        }
+        val resolvedColor = props.borderColor ?: urgencyHex ?: borderColor
+        val resolvedRadius = props.borderRadius
+            ?: if (urgencyPreset != null && borderRadius <= 0) {
+                PopupProps.DEFAULT_URGENCY_CORNER_RADIUS
+            } else {
+                borderRadius
+            }
+        return Triple(resolvedWidth, resolvedColor, resolvedRadius)
+    }
+
+    private fun PopupProps.applyOverlayDefaults(original: PopupProps): PopupProps = copy(
+        mediaFullBleed = original.mediaFullBleed ?: mediaFullBleed,
+        fullscreenUpscale = original.fullscreenUpscale ?: fullscreenUpscale,
+        liveBadge = original.liveBadge ?: liveBadge,
+        liveBadgePosition = original.liveBadgePosition ?: liveBadgePosition,
+        iconPosition = original.iconPosition ?: iconPosition,
+        iconWidth = original.iconWidth ?: iconWidth,
+        closeButton = original.closeButton ?: closeButton,
+        closeButtonTimeout = original.closeButtonTimeout ?: closeButtonTimeout,
+        closeButtonSize = original.closeButtonSize ?: closeButtonSize,
+    )
 
     private fun <T> T.orIfDefault(sentinel: T, fallback: T): T = if (this == sentinel) fallback else this
 
@@ -821,6 +870,8 @@ class AppSettings(context: Context) {
         const val DEFAULT_MEDIA_TIMEOUT_SEC = 10
         const val DEFAULT_MEDIA_RETRIES = 3
         const val DEFAULT_UPDATE_INTERVAL = 4
+        /** Default update release source identifier. */
+        const val DEFAULT_UPDATE_SOURCE = "github"
         const val MAX_POPUPS_LIMIT = 5
         const val MIN_WEBHOOK_HEARTBEAT_SEC = 10
         const val MAX_WEBHOOK_HEARTBEAT_SEC = 86_400
@@ -834,7 +885,6 @@ class AppSettings(context: Context) {
         private const val MAX_BORDER_WIDTH = 50
         private const val MAX_CONTENT_PADDING = 200
         private const val MAX_MEDIA_POSITION = 3
-        private const val MAX_ANIMATION_TYPE = 10
         private const val MAX_ANIMATION_DURATION_MS = 5000
         private const val MAX_MEDIA_TIMEOUT_SEC = 60
         private const val MAX_MEDIA_RETRIES = 10

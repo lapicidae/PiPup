@@ -21,15 +21,23 @@ data class PopupProps(
 
     val media: Media? = null,
     val mediaPosition: Int? = null, // 0: Top, 1: Bottom, 2: Left, 3: Right
-    val animationType: Int = 0, // 0: None, 1: Fade, 2: Slide
+    val animationType: Int? = null, // null: inherit settings; 0: None, 1: Fade, 2: Slide, 3..10: extended
     val animationDuration: Int = 500,
     val animationExit: Boolean = false,
     val overwrite: Boolean = false,
 
-    // Advanced Styling (from Settings)
-    val borderRadius: Int = 0,
-    val borderWidth: Int = 0,
-    val borderColor: String = DEFAULT_BORDER_COLOR,
+    // Advanced Styling (null = inherit global AppSettings; explicit 0 disables)
+    val borderRadius: Int? = null,
+    val borderWidth: Int? = null,
+    val borderColor: String? = null,
+    val urgency: String? = null, // "info", "warning", "critical" border preset
+    val opacity: Float? = null, // 0.0..1.0 whole-popup alpha
+    val bringToFront: Boolean = false,
+    val dismissScreensaver: Boolean = true,
+    val showProgress: Boolean = false,
+    val icon: String? = null,
+    val iconPosition: String? = null, // null: inherit AppSettings; "left" or "right"
+    val iconWidth: Int? = null, // null: inherit AppSettings (default 96 px)
 
     // Internal/Extra
     val contentPadding: Int? = null,
@@ -65,6 +73,25 @@ data class PopupProps(
     val closeButtonTimeout: Int? = null,
     val closeButtonSize: Int? = null
 ) {
+    /** Effective animation type index (`0` when unset). */
+    val effectiveAnimationType: Int
+        get() = animationType ?: ANIM_NONE
+
+    /** Effective border radius in pixels (`0` when unset). */
+    val effectiveBorderRadius: Int
+        get() = borderRadius ?: 0
+
+    /** Effective border width in pixels (`0` when unset). */
+    val effectiveBorderWidth: Int
+        get() = borderWidth ?: 0
+
+    /** Resting opacity of the popup window (`1f` when unset), clamped to `0f..1f`. */
+    val targetAlpha: Float
+        get() = (opacity ?: 1f).coerceIn(0f, 1f)
+
+    /** Effective header icon width in pixels ([DEFAULT_ICON_WIDTH] when unset). */
+    val effectiveIconWidth: Int
+        get() = iconWidth ?: DEFAULT_ICON_WIDTH
     /**
      * Whether this popup covers the entire display (including system bars and cutouts).
      */
@@ -132,7 +159,6 @@ data class PopupProps(
         private const val DEFAULT_TEXT_COLOR = "#FFFFFF"
         private const val DEFAULT_BG_COLOR = "#CC000000"
         private const val DEFAULT_BG_COLOR_INT = 0xCC000000.toInt()
-        private const val DEFAULT_BORDER_COLOR = "#00000000"
         /** Default popup display duration in seconds. */
         const val DEFAULT_DURATION_SEC = 10
         /** Default title font size in sp. */
@@ -201,6 +227,44 @@ data class PopupProps(
         const val CLOSE_BUTTON_SIZE_MAX = 72
         /** Default diameter in dp for the overlay close button. */
         const val CLOSE_BUTTON_SIZE_DEFAULT = 32
+        /** Animation index for no entrance/exit animation. */
+        const val ANIM_NONE = 0
+        /** Animation index for fade animation. */
+        const val ANIM_FADE = 1
+        /** Animation index for position-aware slide animation. */
+        const val ANIM_SLIDE = 2
+        /** Maximum supported animation type index (`0..10`). */
+        const val MAX_ANIMATION_TYPE = 10
+        /** Header icon placement on the left side of title/message. */
+        const val ICON_POSITION_LEFT = "left"
+        /** Header icon placement on the right side of title/message. */
+        const val ICON_POSITION_RIGHT = "right"
+        /** Default header icon placement (`"left"` or `"right"`). */
+        const val DEFAULT_ICON_POSITION = ICON_POSITION_LEFT
+        /** Default width in pixels for the optional header icon beside title/message. */
+        const val DEFAULT_ICON_WIDTH = 96
+        /** Minimum allowed icon width in pixels. */
+        const val ICON_WIDTH_MIN = 16
+        /** Maximum allowed icon width in pixels. */
+        const val ICON_WIDTH_MAX = 512
+        /** SeekBar step size in pixels for configuring default icon width on TV. */
+        const val ICON_WIDTH_STEP_PX = 8
+        /** Maximum UTF-16 length accepted for a non-URI emoji/glyph `icon` value. */
+        const val MAX_ICON_EMOJI_CHARS = 16
+        /** Default border width in pixels when `borderColor` is specified without `borderWidth`. */
+        const val DEFAULT_EXPLICIT_BORDER_WIDTH = 4
+        /** Default corner radius in pixels when an urgency border preset is applied. */
+        const val DEFAULT_URGENCY_CORNER_RADIUS = 8
+        private const val URGENCY_INFO_WIDTH = 4
+        private const val URGENCY_WARNING_WIDTH = 6
+        private const val URGENCY_CRITICAL_WIDTH = 8
+
+        /** Urgency preset shorthand mapped to `(borderWidthPx, M3 colorRes)`. */
+        val URGENCY_PRESETS: Map<String, Pair<Int, Int>> = mapOf(
+            "info" to (URGENCY_INFO_WIDTH to R.color.urgency_info_border),
+            "warning" to (URGENCY_WARNING_WIDTH to R.color.urgency_warning_border),
+            "critical" to (URGENCY_CRITICAL_WIDTH to R.color.urgency_critical_border),
+        )
 
         /**
          * Manual JSON parser for PopupProps to avoid reflection overhead.
@@ -220,13 +284,13 @@ data class PopupProps(
                 backgroundColor = j.optString("backgroundColor", DEFAULT_BG_COLOR) ?: DEFAULT_BG_COLOR,
                 media = MediaParser.parseMedia(j),
                 mediaPosition = JsonFields.optNullableInt(j, "mediaPosition"),
-                animationType = j.optInt("animationType", 0),
+                animationType = parseAnimationFromJson(j),
                 animationDuration = j.optInt("animationDuration", DEFAULT_ANIMATION_DURATION_MS),
                 animationExit = j.optBoolean("animationExit", false),
                 overwrite = j.optBoolean("overwrite", false),
-                borderRadius = JsonFields.optDoubleAsInt(j, "borderRadius", "cornerRadius"),
-                borderWidth = j.optInt("borderWidth", 0),
-                borderColor = j.optString("borderColor", DEFAULT_BORDER_COLOR) ?: DEFAULT_BORDER_COLOR,
+                borderRadius = JsonFields.optNullableDoubleAsInt(j, "borderRadius", "cornerRadius"),
+                borderWidth = JsonFields.optNullableInt(j, "borderWidth"),
+                borderColor = JsonFields.optNullableString(j, "borderColor"),
                 contentPadding = JsonFields.optNullableInt(j, "contentPadding")
                     ?: JsonFields.optNullableInt(j, "padding"),
                 titleAlignment = j.optInt("titleAlignment", 0),
@@ -237,32 +301,43 @@ data class PopupProps(
                 scale = j.optBoolean("scale", true),
                 buttons = MediaParser.parseButtons(j),
                 callback = JsonFields.optNullableString(j, "callback"),
-                buttonSize = JsonFields.optNullableFloat(j, "buttonSize")
-                    ?.coerceIn(BUTTON_SIZE_MIN_SP, BUTTON_SIZE_MAX_SP),
-                buttonColor = JsonFields.optNullableString(j, "buttonColor"),
-                buttonFocusColor = JsonFields.optNullableString(j, "buttonFocusColor"),
-                buttonTextColor = JsonFields.optNullableString(j, "buttonTextColor"),
-                buttonFocusTextColor = JsonFields.optNullableString(j, "buttonFocusTextColor"),
-                buttonBorderColor = JsonFields.optNullableString(j, "buttonBorderColor"),
-                buttonCornerRadius = JsonFields.optNullableFloat(j, "buttonCornerRadius")
-                    ?.coerceIn(0f, BUTTON_CORNER_RADIUS_MAX_DP),
-                buttonsInline = j.optBoolean("buttonsInline", false),
                 isInternalUpdateAction = false,
-                stack = JsonFields.optNullableString(j, "stack")?.trim()?.lowercase()
-                    ?.takeIf { it == "vertical" || it == "horizontal" },
-                liveBadge = JsonFields.optNullableBoolean(j, "liveBadge"),
-                liveBadgeColor = JsonFields.optNullableString(j, "liveBadgeColor"),
-                liveBadgePosition = JsonFields.optNullableString(j, "liveBadgePosition"),
-                mediaFullBleed = JsonFields.optNullableBoolean(j, "mediaFullBleed"),
-                fullscreen = j.optBoolean("fullscreen", false),
-                fullscreenUpscale = JsonFields.optNullableBoolean(j, "fullscreenUpscale")
-                    ?: JsonFields.optNullableBoolean(j, "upscale"),
-                dismissOnBack = j.optBoolean("dismissOnBack", false),
-                closeButton = JsonFields.optRaw(j, "closeButton")?.let { parseCloseButton(it) },
-                closeButtonTimeout = JsonFields.optRaw(j, "closeButtonTimeout")?.let { parseCloseButtonTimeout(it) },
-                closeButtonSize = JsonFields.optRaw(j, "closeButtonSize")?.let { parseCloseButtonSize(it) },
-            )
+            ).withExtendedJsonFields(j)
         }
+
+        private fun PopupProps.withExtendedJsonFields(j: JSONObject): PopupProps = copy(
+            urgency = parseUrgency(JsonFields.optNullableString(j, "urgency")),
+            opacity = parseOpacity(JsonFields.optRaw(j, "opacity")),
+            bringToFront = j.optBoolean("bringToFront", false),
+            dismissScreensaver = j.optBoolean("dismissScreensaver", true),
+            showProgress = j.optBoolean("showProgress", false),
+            icon = Icon.parse(JsonFields.optNullableString(j, "icon")),
+            iconPosition = parseIconPosition(JsonFields.optNullableString(j, "iconPosition")),
+            iconWidth = parseIconWidth(JsonFields.optRaw(j, "iconWidth")),
+            buttonSize = JsonFields.optNullableFloat(j, "buttonSize")
+                ?.coerceIn(BUTTON_SIZE_MIN_SP, BUTTON_SIZE_MAX_SP),
+            buttonColor = JsonFields.optNullableString(j, "buttonColor"),
+            buttonFocusColor = JsonFields.optNullableString(j, "buttonFocusColor"),
+            buttonTextColor = JsonFields.optNullableString(j, "buttonTextColor"),
+            buttonFocusTextColor = JsonFields.optNullableString(j, "buttonFocusTextColor"),
+            buttonBorderColor = JsonFields.optNullableString(j, "buttonBorderColor"),
+            buttonCornerRadius = JsonFields.optNullableFloat(j, "buttonCornerRadius")
+                ?.coerceIn(0f, BUTTON_CORNER_RADIUS_MAX_DP),
+            buttonsInline = j.optBoolean("buttonsInline", false),
+            stack = JsonFields.optNullableString(j, "stack")?.trim()?.lowercase()
+                ?.takeIf { it == "vertical" || it == "horizontal" },
+            liveBadge = JsonFields.optNullableBoolean(j, "liveBadge"),
+            liveBadgeColor = JsonFields.optNullableString(j, "liveBadgeColor"),
+            liveBadgePosition = JsonFields.optNullableString(j, "liveBadgePosition"),
+            mediaFullBleed = JsonFields.optNullableBoolean(j, "mediaFullBleed"),
+            fullscreen = j.optBoolean("fullscreen", false),
+            fullscreenUpscale = JsonFields.optNullableBoolean(j, "fullscreenUpscale")
+                ?: JsonFields.optNullableBoolean(j, "upscale"),
+            dismissOnBack = j.optBoolean("dismissOnBack", false),
+            closeButton = JsonFields.optRaw(j, "closeButton")?.let { parseCloseButton(it) },
+            closeButtonTimeout = JsonFields.optRaw(j, "closeButtonTimeout")?.let { parseCloseButtonTimeout(it) },
+            closeButtonSize = JsonFields.optRaw(j, "closeButtonSize")?.let { parseCloseButtonSize(it) },
+        )
 
         private object JsonFields {
             fun optRaw(obj: JSONObject, key: String): Any? =
@@ -283,10 +358,10 @@ data class PopupProps(
             fun optPositiveInt(obj: JSONObject, key: String): Int? =
                 if (obj.has(key) && !obj.isNull(key)) obj.optInt(key, 0).takeIf { it > 0 } else null
 
-            fun optDoubleAsInt(obj: JSONObject, primary: String, alias: String): Int = when {
+            fun optNullableDoubleAsInt(obj: JSONObject, primary: String, alias: String): Int? = when {
                 obj.has(primary) && !obj.isNull(primary) -> obj.optDouble(primary, 0.0).toInt()
                 obj.has(alias) && !obj.isNull(alias) -> obj.optDouble(alias, 0.0).toInt()
-                else -> 0
+                else -> null
             }
         }
 
@@ -454,6 +529,59 @@ data class PopupProps(
         }
 
         /**
+         * Reads the primary `"animation"` key (falling back to legacy `"animationType"`)
+         * from [j] and parses it via [parseAnimation].
+         */
+        fun parseAnimationFromJson(j: JSONObject): Int? {
+            val raw = JsonFields.optRaw(j, "animation") ?: JsonFields.optRaw(j, "animationType")
+            return parseAnimation(raw)
+        }
+
+        /**
+         * Parses an animation specification (integer index `0..10`, numeric string, or
+         * compatibility string `"none"`, `"fade"`, `"slide_left"`, `"slide_right"`,
+         * `"slide_top"`, `"slide_bottom"`) into an internal animation type index, or null if unset/unknown.
+         */
+        fun parseAnimation(raw: Any?): Int? = when (raw) {
+            is Number -> raw.toInt().coerceIn(ANIM_NONE, MAX_ANIMATION_TYPE)
+            is String -> {
+                val normalized = raw.trim().lowercase()
+                normalized.toIntOrNull()?.coerceIn(ANIM_NONE, MAX_ANIMATION_TYPE) ?: when (normalized) {
+                    "", "none" -> ANIM_NONE
+                    "fade" -> ANIM_FADE
+                    "slide_left", "slide_right", "slide_top", "slide_bottom" -> ANIM_SLIDE
+                    else -> null
+                }
+            }
+            else -> null
+        }
+
+        /** Parses an urgency preset name (`"info"`, `"warning"`, `"critical"`), or null if unset/unknown. */
+        fun parseUrgency(raw: String?): String? =
+            raw?.trim()?.lowercase()?.takeIf { it in URGENCY_PRESETS }
+
+        /** Parses a popup opacity value (`0.0..1.0`), or null if unset/invalid. */
+        fun parseOpacity(raw: Any?): Float? = when (raw) {
+            is Number -> raw.toFloat().takeIf { !it.isNaN() }?.coerceIn(0f, 1f)
+            is String -> raw.trim().toFloatOrNull()?.takeIf { !it.isNaN() }?.coerceIn(0f, 1f)
+            else -> null
+        }
+
+        /** Parses a header icon placement (`"left"` or `"right"`), or null if unset/invalid. */
+        fun parseIconPosition(raw: String?): String? =
+            raw?.trim()?.lowercase()?.takeIf { it == ICON_POSITION_LEFT || it == ICON_POSITION_RIGHT }
+
+        /** Parses a header icon width in pixels (clamped to `16..512`), or null if unset/invalid. */
+        fun parseIconWidth(raw: Any?): Int? {
+            val parsed = when (raw) {
+                is Number -> raw.toInt()
+                is String -> raw.trim().toIntOrNull()
+                else -> null
+            }
+            return parsed?.takeIf { it > 0 }?.coerceIn(ICON_WIDTH_MIN, ICON_WIDTH_MAX)
+        }
+
+        /**
          * Parses a raw poster scaling mode string ("fit", "fill", "stretch", "center") into a [PosterMode].
          */
         fun parsePosterMode(raw: String?): PosterMode? = when (raw?.trim()?.lowercase()) {
@@ -465,12 +593,34 @@ data class PopupProps(
         }
     }
 
+    /** Parsing and classification helpers for optional header `icon` values (image URIs or emojis). */
+    object Icon {
+        /** Returns `true` when [icon] looks like an image URI (`http(s)://`, `data:`, etc.) rather than an emoji. */
+        fun isUri(icon: String): Boolean {
+            val trimmed = icon.trim()
+            return trimmed.contains("://") || trimmed.startsWith("data:", ignoreCase = true)
+        }
+
+        /**
+         * Parses a header `icon` value: accepts image URIs of any length or short emoji/glyph
+         * strings up to [MAX_ICON_EMOJI_CHARS] UTF-16 characters without control characters;
+         * returns `null` if blank, oversized, or containing control characters.
+         */
+        fun parse(raw: String?): String? {
+            val trimmed = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+            val isValid = isUri(trimmed) ||
+                (trimmed.length <= MAX_ICON_EMOJI_CHARS && trimmed.none { Character.isISOControl(it) })
+            return trimmed.takeIf { isValid }
+        }
+    }
+
     /**
      * Converts properties to a JSON string.
      */
     fun toJson(): String {
         val j = JSONObject()
         putCoreFields(j)
+        putStyleAndIconFields(j)
         putButtonFields(j)
         putOverlayFields(j)
         media?.let { j.put("media", serializeMedia(it)) }
@@ -489,14 +639,10 @@ data class PopupProps(
         j.put("messageColor", messageColor)
         j.put("backgroundColor", backgroundColor)
         j.put("mediaPosition", mediaPosition ?: JSONObject.NULL)
-        j.put("animationType", animationType)
+        animationType?.let { j.put("animation", it) }
         j.put("animationDuration", animationDuration)
         j.put("animationExit", animationExit)
         j.put("overwrite", overwrite)
-        j.put("borderRadius", borderRadius)
-        j.put("borderWidth", borderWidth)
-        j.put("borderColor", borderColor)
-        j.put("contentPadding", contentPadding ?: JSONObject.NULL)
         j.put("titleAlignment", titleAlignment)
         j.put("messageAlignment", messageAlignment)
         j.put("image", image ?: JSONObject.NULL)
@@ -504,6 +650,21 @@ data class PopupProps(
         j.put("cache", cache)
         j.put("scale", scale)
         j.put("isPreview", isPreview)
+    }
+
+    private fun putStyleAndIconFields(j: JSONObject) {
+        borderRadius?.let { j.put("borderRadius", it) }
+        borderWidth?.let { j.put("borderWidth", it) }
+        borderColor?.let { j.put("borderColor", it) }
+        urgency?.let { j.put("urgency", it) }
+        opacity?.let { j.put("opacity", it.toDouble()) }
+        j.put("bringToFront", bringToFront)
+        j.put("dismissScreensaver", dismissScreensaver)
+        j.put("showProgress", showProgress)
+        icon?.let { j.put("icon", it) }
+        iconPosition?.let { j.put("iconPosition", it) }
+        iconWidth?.let { j.put("iconWidth", it) }
+        j.put("contentPadding", contentPadding ?: JSONObject.NULL)
     }
 
     private fun putButtonFields(j: JSONObject) {
@@ -860,7 +1021,11 @@ data class PopupProps(
                 val scaledPadding = props.scaleValue(context, props.contentPadding ?: settings.contentPadding)
                 val hasMedia = props.hasMedia
                 val fullBleed = (props.mediaFullBleed ?: settings.mediaFullBleed) && hasMedia
-                val borderInset = if (props.borderWidth > 0) props.scaleValue(context, props.borderWidth) else 0
+                val borderInset = if (props.effectiveBorderWidth > 0) {
+                    props.scaleValue(context, props.effectiveBorderWidth)
+                } else {
+                    0
+                }
                 val mediaPad = if (fullBleed) borderInset else scaledPadding
 
                 val (mediaW, mediaH) = estimateMediaDimensions(context, props)

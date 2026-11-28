@@ -1,7 +1,9 @@
 package nl.rogro82.pipup
 
+import nl.rogro82.pipup.core.PayloadParser
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -125,7 +127,7 @@ class PayloadParserTest {
 
         val jsonInvalid = """{"title": "Invalid Stack", "stack": "invalid_mode"}"""
         val propsInvalid = PopupProps.fromJson(jsonInvalid)
-        org.junit.Assert.assertNull(propsInvalid.stack)
+        assertNull(propsInvalid.stack)
     }
 
     @Test
@@ -250,7 +252,7 @@ class PayloadParserTest {
         val web = webProps.media as PopupProps.Media.Web
         assertEquals(360, web.height)
         assertEquals("http://cam/web.jpg", web.poster)
-        org.junit.Assert.assertNull(web.posterMode)
+        assertNull(web.posterMode)
     }
 
     @Test
@@ -291,14 +293,14 @@ class PayloadParserTest {
         val props = PopupProps.fromJson(json)
         assertTrue(props.fullscreen)
         assertTrue(props.coversScreen)
-        org.junit.Assert.assertNull(props.effectiveStack)
+        assertNull(props.effectiveStack)
         assertEquals(PopupProps.Position.Center, props.getPositionEnum())
         assertEquals(PopupProps.StackDirection.VERTICAL, props.getStackDirectionEnum())
 
         val roundTrip = PopupProps.fromJson(props.toJson())
         assertTrue(roundTrip.fullscreen)
         assertTrue(roundTrip.coversScreen)
-        org.junit.Assert.assertNull(roundTrip.fullscreenUpscale)
+        assertNull(roundTrip.fullscreenUpscale)
 
         val upscaleJson = """{"fullscreen": true, "fullscreenUpscale": true}"""
         val upscaleProps = PopupProps.fromJson(upscaleJson)
@@ -313,7 +315,7 @@ class PayloadParserTest {
         val autoVideoProps = PopupProps.fromJson(autoVideoJson)
         val autoVideo = autoVideoProps.media as PopupProps.Media.Video
         assertFalse(autoVideo.explicitWidth)
-        org.junit.Assert.assertNull(autoVideo.height)
+        assertNull(autoVideo.height)
         val autoRoundTrip = PopupProps.fromJson(autoVideoProps.toJson()).media as PopupProps.Media.Video
         assertFalse(autoRoundTrip.explicitWidth)
 
@@ -410,9 +412,9 @@ class PayloadParserTest {
     @Test
     fun testCloseButtonParsingFocusAndBackSeparation() {
         val defaultProps = PopupProps.fromJson("""{"title": "Plain"}""")
-        org.junit.Assert.assertNull(defaultProps.closeButton)
-        org.junit.Assert.assertNull(defaultProps.closeButtonTimeout)
-        org.junit.Assert.assertNull(defaultProps.closeButtonSize)
+        assertNull(defaultProps.closeButton)
+        assertNull(defaultProps.closeButtonTimeout)
+        assertNull(defaultProps.closeButtonSize)
         assertFalse(defaultProps.hasCloseButton)
         assertFalse(defaultProps.requiresInputFocus)
         assertFalse(defaultProps.dismissibleByBack)
@@ -453,5 +455,190 @@ class PayloadParserTest {
         assertTrue(combinedProps.hasCloseButton)
         assertTrue(combinedProps.requiresInputFocus)
         assertTrue(combinedProps.dismissibleByBack)
+    }
+
+    @Test
+    fun testAnimationParsingCompatStringsAndLegacyAlias() {
+        // Omitted -> null (inherits AppSettings)
+        val omitted = PopupProps.fromJson("""{"title": "Default"}""")
+        assertNull(omitted.animationType)
+        assertEquals(0, omitted.effectiveAnimationType)
+
+        // Primary "animation" field: numeric & numeric string
+        assertEquals(0, PopupProps.fromJson("""{"animation": 0}""").animationType)
+        assertEquals(7, PopupProps.fromJson("""{"animation": 7}""").animationType)
+        assertEquals(10, PopupProps.fromJson("""{"animation": 99}""").animationType)
+        assertEquals(4, PopupProps.fromJson("""{"animation": "4"}""").animationType)
+
+        // Exact 6 compatibility strings only
+        assertEquals(0, PopupProps.fromJson("""{"animation": "none"}""").animationType)
+        assertEquals(0, PopupProps.fromJson("""{"animation": ""}""").animationType)
+        assertEquals(1, PopupProps.fromJson("""{"animation": "fade"}""").animationType)
+        assertEquals(1, PopupProps.fromJson("""{"animation": "FADE"}""").animationType)
+        assertEquals(2, PopupProps.fromJson("""{"animation": "slide_left"}""").animationType)
+        assertEquals(2, PopupProps.fromJson("""{"animation": "slide_right"}""").animationType)
+        assertEquals(2, PopupProps.fromJson("""{"animation": "slide_top"}""").animationType)
+        assertEquals(2, PopupProps.fromJson("""{"animation": "slide_bottom"}""").animationType)
+
+        // Unrecognized string names are NOT mapped (null -> inherit default)
+        assertNull(PopupProps.fromJson("""{"animation": "slide_bounce"}""").animationType)
+        assertNull(PopupProps.fromJson("""{"animation": "zoom"}""").animationType)
+
+        // Legacy "animationType" alias supports both ints and compatibility strings
+        assertEquals(5, PopupProps.fromJson("""{"animationType": 5}""").animationType)
+        assertEquals(1, PopupProps.fromJson("""{"animationType": "fade"}""").animationType)
+
+        // Primary "animation" takes precedence over legacy "animationType"
+        assertEquals(1, PopupProps.fromJson("""{"animation": "fade", "animationType": 9}""").animationType)
+
+        // Round-trip via toJson uses "animation"
+        val rt = PopupProps.fromJson(PopupProps.fromJson("""{"animation": 8}""").toJson())
+        assertEquals(8, rt.animationType)
+    }
+
+    @Test
+    fun testExplicitZeroVsUnsetBordersAndStage1Fields() {
+        val unset = PopupProps.fromJson("""{"title": "Unset"}""")
+        assertNull(unset.borderWidth)
+        assertNull(unset.borderRadius)
+        assertNull(unset.borderColor)
+        assertNull(unset.urgency)
+        assertNull(unset.opacity)
+        assertFalse(unset.bringToFront)
+        assertTrue(unset.dismissScreensaver)
+        assertFalse(unset.showProgress)
+        assertNull(unset.icon)
+        assertNull(unset.iconPosition)
+        assertNull(unset.iconWidth)
+        assertEquals(PopupProps.DEFAULT_ICON_WIDTH, unset.effectiveIconWidth)
+
+        val explicitZero = PopupProps.fromJson(
+            """{
+                "borderWidth": 0,
+                "borderRadius": 0,
+                "animation": "none",
+                "urgency": "CRITICAL",
+                "opacity": 0.75,
+                "bringToFront": true,
+                "dismissScreensaver": false,
+                "showProgress": true,
+                "icon": "https://example.com/icon.png",
+                "iconPosition": "RIGHT",
+                "iconWidth": 128
+            }"""
+        )
+        assertEquals(0, explicitZero.borderWidth)
+        assertEquals(0, explicitZero.borderRadius)
+        assertEquals(0, explicitZero.animationType)
+        assertEquals("critical", explicitZero.urgency)
+        assertEquals(0.75f, explicitZero.opacity)
+        assertEquals(0.75f, explicitZero.targetAlpha)
+        assertTrue(explicitZero.bringToFront)
+        assertFalse(explicitZero.dismissScreensaver)
+        assertTrue(explicitZero.showProgress)
+        assertEquals("https://example.com/icon.png", explicitZero.icon)
+        assertEquals("right", explicitZero.iconPosition)
+        assertEquals(128, explicitZero.iconWidth)
+
+        // Round-trip preserves all new fields
+        val rt = PopupProps.fromJson(explicitZero.toJson())
+        assertEquals(0, rt.borderWidth)
+        assertEquals(0, rt.borderRadius)
+        assertEquals(0, rt.animationType)
+        assertEquals("critical", rt.urgency)
+        assertEquals(0.75f, rt.opacity)
+        assertTrue(rt.bringToFront)
+        assertFalse(rt.dismissScreensaver)
+        assertTrue(rt.showProgress)
+        assertEquals("https://example.com/icon.png", rt.icon)
+        assertEquals("right", rt.iconPosition)
+        assertEquals(128, rt.iconWidth)
+
+        // Bounds clamping for opacity and iconWidth
+        assertEquals(1f, PopupProps.fromJson("""{"opacity": 2.5}""").opacity)
+        assertEquals(0f, PopupProps.fromJson("""{"opacity": -0.5}""").opacity)
+        assertEquals(16, PopupProps.fromJson("""{"iconWidth": 4}""").iconWidth)
+        assertEquals(512, PopupProps.fromJson("""{"iconWidth": 9999}""").iconWidth)
+    }
+
+    @Test
+    fun testReadBytesWithLimitEnforcesCeiling() {
+        val small = """{"title":"ok"}""".toByteArray(Charsets.UTF_8)
+        val read = PayloadParser.readBytesWithLimit(small.inputStream(), 1024)
+        assertEquals("""{"title":"ok"}""", String(read, Charsets.UTF_8))
+
+        val oversized = ByteArray(100) { 'a'.code.toByte() }
+        var threw = false
+        try {
+            PayloadParser.readBytesWithLimit(oversized.inputStream(), 64)
+        } catch (_: IllegalArgumentException) {
+            threw = true
+        }
+        assertTrue("Expected IllegalArgumentException for oversized stream", threw)
+    }
+
+    @Test
+    fun testSettingsDataAnimationAndLegacyAlias() {
+        val fromPrimary = AppSettings.SettingsData.fromJson("""{"animation": "fade"}""")
+        assertEquals(1, fromPrimary.animationType)
+
+        val fromNumber = AppSettings.SettingsData.fromJson("""{"animation": 6}""")
+        assertEquals(6, fromNumber.animationType)
+
+        val fromLegacy = AppSettings.SettingsData.fromJson("""{"animationType": 3}""")
+        assertEquals(3, fromLegacy.animationType)
+
+        val primaryWins = AppSettings.SettingsData.fromJson("""{"animation": "slide_left", "animationType": 9}""")
+        assertEquals(2, primaryWins.animationType)
+
+        val serialized = fromNumber.toJSONObject()
+        assertEquals(6, serialized.getInt("animation"))
+        assertFalse(serialized.has("animationType"))
+
+        // SettingsData iconPosition and iconWidth defaults & JSON parsing
+        val iconSettings = AppSettings.SettingsData.fromJson("""{"iconPosition": "RIGHT", "iconWidth": 144}""")
+        assertEquals("right", iconSettings.iconPosition)
+        assertEquals(144, iconSettings.iconWidth)
+        val iconJson = iconSettings.toJSONObject()
+        assertEquals("right", iconJson.getString("iconPosition"))
+        assertEquals(144, iconJson.getInt("iconWidth"))
+    }
+
+    @Test
+    fun testParseFlexibleBoolean() {
+        assertEquals(true, PayloadParser.parseFlexibleBoolean("true"))
+        assertEquals(true, PayloadParser.parseFlexibleBoolean(" 1 "))
+        assertEquals(true, PayloadParser.parseFlexibleBoolean("ON"))
+        assertEquals(false, PayloadParser.parseFlexibleBoolean("false"))
+        assertEquals(false, PayloadParser.parseFlexibleBoolean("0"))
+        assertEquals(false, PayloadParser.parseFlexibleBoolean("off"))
+        assertNull(PayloadParser.parseFlexibleBoolean(null))
+        assertNull(PayloadParser.parseFlexibleBoolean("maybe"))
+    }
+
+    @Test
+    fun testIconUriAndEmojiParsing() {
+        assertTrue(PopupProps.Icon.isUri("https://example.com/bell.png"))
+        assertTrue(PopupProps.Icon.isUri("data:image/png;base64,AAAA"))
+        assertFalse(PopupProps.Icon.isUri("🔔"))
+
+        assertEquals("🔔", PopupProps.Icon.parse("  🔔  "))
+        assertEquals("🔔", PopupProps.Icon.parse("\t🔔\n"))
+        assertEquals("⚠️", PopupProps.Icon.parse("⚠️"))
+        assertEquals("👨‍👩‍👧‍👦", PopupProps.Icon.parse("👨‍👩‍👧‍👦"))
+        val longUrl = "https://example.com/very/long/path/icon.svg"
+        assertEquals(longUrl, PopupProps.Icon.parse(longUrl))
+        assertNull(PopupProps.Icon.parse("   "))
+        assertNull(PopupProps.Icon.parse("🔔\n🚨"))
+        assertNull(PopupProps.Icon.parse("A\tB"))
+        assertNull(PopupProps.Icon.parse("A\rB"))
+        assertNull(PopupProps.Icon.parse("This is way too long to be an emoji icon"))
+
+        val emojiProps = PopupProps.fromJson("""{"title":"Door","icon":"🚪","iconPosition":"right","iconWidth":64}""")
+        assertEquals("🚪", emojiProps.icon)
+        val rt = PopupProps.fromJson(emojiProps.toJson())
+        assertEquals("🚪", rt.icon)
+        assertEquals("right", rt.iconPosition)
+        assertEquals(64, rt.iconWidth)
     }
 }

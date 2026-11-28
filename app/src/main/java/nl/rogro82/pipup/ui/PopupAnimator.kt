@@ -24,7 +24,7 @@ class PopupAnimator(private val view: View) {
         isAnimatedIn = false
         isAnimatingOut = false
         view.animate().cancel()
-        resetAnimationProps()
+        resetAnimationProps(props)
         animateIn(props)
     }
 
@@ -32,7 +32,8 @@ class PopupAnimator(private val view: View) {
      * Plays the entrance animation for the popup.
      */
     fun animateIn(props: PopupProps) {
-        val alreadyVisible = view.alpha == 1.0f &&
+        val targetAlpha = props.targetAlpha
+        val alreadyVisible = view.alpha == targetAlpha &&
             view.scaleX == 1.0f &&
             view.translationX == 0f &&
             view.translationY == 0f &&
@@ -42,8 +43,8 @@ class PopupAnimator(private val view: View) {
         val duration = props.animationDuration.toLong()
         view.animate().cancel()
         view.animate().interpolator = null
-        resetAnimationProps()
-        if (props.animationType == 0 || duration <= 0) return
+        resetAnimationProps(props)
+        if (props.effectiveAnimationType == PopupProps.ANIM_NONE || duration <= 0) return
 
         view.alpha = 0f
         val pos = props.getPositionEnum()
@@ -51,13 +52,14 @@ class PopupAnimator(private val view: View) {
     }
 
     private fun dispatchEntranceAnimation(props: PopupProps, pos: PopupProps.Position, duration: Long) {
-        when (props.animationType) {
-            ANIM_FADE -> view.animate()
-                .alpha(1f).setDuration(duration).withEndAction { resetAnimationProps(props) }.start()
-            ANIM_SLIDE, ANIM_SLIDE_OVERSHOOT, ANIM_SLIDE_TADA -> animateSlideIn(props, pos, duration)
+        val targetAlpha = props.targetAlpha
+        when (props.effectiveAnimationType) {
+            PopupProps.ANIM_FADE -> view.animate()
+                .alpha(targetAlpha).setDuration(duration).withEndAction { resetAnimationProps(props) }.start()
+            PopupProps.ANIM_SLIDE, ANIM_SLIDE_OVERSHOOT, ANIM_SLIDE_TADA -> animateSlideIn(props, pos, duration)
             ANIM_ZOOM, ANIM_ZOOM_OVERSHOOT, ANIM_ZOOM_TADA -> animateZoomIn(props, duration)
             ANIM_SLIDE_SCALE -> {
-                view.alpha = 1f
+                view.alpha = targetAlpha
                 view.scaleX = SLIDE_SCALE_START
                 view.scaleY = SLIDE_SCALE_START
                 applySlideStartOffset(pos)
@@ -66,12 +68,12 @@ class PopupAnimator(private val view: View) {
                     .setDuration(duration).withEndAction { resetAnimationProps(props) }.start()
             }
             ANIM_SLIDE_FLIP -> {
-                view.alpha = 1f
+                view.alpha = targetAlpha
                 view.rotationY = FLIP_ROTATION_DEG
                 applySlideStartOffset(pos)
                 view.animate()
                     .translationX(0f).translationY(0f).rotationY(0f)
-                    .setDuration(duration).withEndAction { resetAnimationProps() }.start()
+                    .setDuration(duration).withEndAction { resetAnimationProps(props) }.start()
             }
             ANIM_FLY_IN -> {
                 view.alpha = 0f
@@ -83,20 +85,20 @@ class PopupAnimator(private val view: View) {
                 }
                 view.translationY = ty
                 view.animate()
-                    .alpha(1f).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f)
-                    .setDuration(duration).withEndAction { resetAnimationProps() }.start()
+                    .alpha(targetAlpha).translationX(0f).translationY(0f).scaleX(1f).scaleY(1f)
+                    .setDuration(duration).withEndAction { resetAnimationProps(props) }.start()
             }
         }
     }
 
     private fun animateSlideIn(props: PopupProps, pos: PopupProps.Position, duration: Long) {
-        view.alpha = 1f
+        view.alpha = props.targetAlpha
         applySlideStartOffset(pos)
         val anim = view.animate().translationX(0f).translationY(0f).setDuration(duration)
-        if (props.animationType == ANIM_SLIDE_OVERSHOOT) {
+        if (props.effectiveAnimationType == ANIM_SLIDE_OVERSHOOT) {
             anim.interpolator = OvershootInterpolator(OVERSHOOT_TENSION)
         }
-        val endAction = if (props.animationType == ANIM_SLIDE_TADA) {
+        val endAction = if (props.effectiveAnimationType == ANIM_SLIDE_TADA) {
             Runnable { executeTaDa() }
         } else {
             Runnable { resetAnimationProps(props) }
@@ -107,11 +109,11 @@ class PopupAnimator(private val view: View) {
     private fun animateZoomIn(props: PopupProps, duration: Long) {
         view.scaleX = 0f
         view.scaleY = 0f
-        val anim = view.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(duration)
-        if (props.animationType == ANIM_ZOOM_OVERSHOOT) {
+        val anim = view.animate().alpha(props.targetAlpha).scaleX(1f).scaleY(1f).setDuration(duration)
+        if (props.effectiveAnimationType == ANIM_ZOOM_OVERSHOOT) {
             anim.interpolator = OvershootInterpolator(OVERSHOOT_TENSION)
         }
-        val endAction = if (props.animationType == ANIM_ZOOM_TADA) {
+        val endAction = if (props.effectiveAnimationType == ANIM_ZOOM_TADA) {
             Runnable {
                 executeTaDa()
                 resetAnimationProps(props)
@@ -150,16 +152,17 @@ class PopupAnimator(private val view: View) {
         isAnimatingOut = true
         view.animate().cancel()
         view.animate().interpolator = null
-        if (props.animationType == 0 || duration <= 0 || !props.animationExit) {
+        val animType = props.effectiveAnimationType
+        if (animType == PopupProps.ANIM_NONE || duration <= 0 || !props.animationExit) {
             val exitDuration = if (duration > 0) duration else DEFAULT_EXIT_DURATION_MS
             view.animate().alpha(0f).setDuration(exitDuration).withEndAction(completion).start()
             return
         }
 
         val pos = props.getPositionEnum()
-        when (props.animationType) {
-            ANIM_FADE -> view.animate().alpha(0f).setDuration(duration).withEndAction(completion).start()
-            ANIM_SLIDE, ANIM_SLIDE_OVERSHOOT, ANIM_SLIDE_TADA -> {
+        when (animType) {
+            PopupProps.ANIM_FADE -> view.animate().alpha(0f).setDuration(duration).withEndAction(completion).start()
+            PopupProps.ANIM_SLIDE, ANIM_SLIDE_OVERSHOOT, ANIM_SLIDE_TADA -> {
                 val (tx, ty) = computeExitSlideOffset(pos)
                 view.animate().translationX(tx).translationY(ty).setDuration(duration).withEndAction(completion).start()
             }
@@ -235,7 +238,8 @@ class PopupAnimator(private val view: View) {
 
     private fun resetAnimationProps(props: PopupProps? = null) {
         if (isAnimatingOut) return
-        view.alpha = 1f; view.scaleX = 1f; view.scaleY = 1f; view.translationX = 0f; view.translationY = 0f
+        view.alpha = props?.targetAlpha ?: 1f
+        view.scaleX = 1f; view.scaleY = 1f; view.translationX = 0f; view.translationY = 0f
         view.rotationY = 0f; view.rotation = 0f
         props?.let {
             android.util.Log.d(
@@ -247,8 +251,6 @@ class PopupAnimator(private val view: View) {
 
     /** Animation type identifiers and motion constants for [PopupAnimator]. */
     companion object {
-        private const val ANIM_FADE = 1
-        private const val ANIM_SLIDE = 2
         private const val ANIM_SLIDE_OVERSHOOT = 3
         private const val ANIM_ZOOM = 4
         private const val ANIM_ZOOM_OVERSHOOT = 5

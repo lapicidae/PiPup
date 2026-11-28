@@ -23,32 +23,67 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical">
 
-                <TextView
-                    android:id="@+id/popup_title"
+                <LinearLayout
+                    android:id="@+id/header_row"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:textStyle="bold"
-                    android:textColor="@color/popup_text_default"
-                    android:textSize="20sp"
-                    android:visibility="gone"/>
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
 
-                <ScrollView
-                    android:id="@+id/popup_scroll_view"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="4dp"
-                    android:scrollbars="none"
-                    android:fillViewport="true"
-                    android:overScrollMode="never"
-                    android:visibility="gone">
-
-                    <TextView
-                        android:id="@+id/popup_message"
+                    <ImageView
+                        android:id="@+id/popup_icon_left"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/popup_text_default"
-                        android:textSize="14sp"/>
-                </ScrollView>
+                        android:layout_marginEnd="12dp"
+                        android:adjustViewBounds="true"
+                        android:scaleType="fitCenter"
+                        android:contentDescription="@null"
+                        android:visibility="gone"/>
+
+                    <LinearLayout
+                        android:id="@+id/text_column"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <TextView
+                            android:id="@+id/popup_title"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:textStyle="bold"
+                            android:textColor="@color/popup_text_default"
+                            android:textSize="20sp"
+                            android:visibility="gone"/>
+
+                        <ScrollView
+                            android:id="@+id/popup_scroll_view"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:scrollbars="none"
+                            android:fillViewport="true"
+                            android:overScrollMode="never"
+                            android:visibility="gone">
+
+                            <TextView
+                                android:id="@+id/popup_message"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:textColor="@color/popup_text_default"
+                                android:textSize="14sp"/>
+                        </ScrollView>
+                    </LinearLayout>
+
+                    <ImageView
+                        android:id="@+id/popup_icon_right"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="12dp"
+                        android:adjustViewBounds="true"
+                        android:scaleType="fitCenter"
+                        android:contentDescription="@null"
+                        android:visibility="gone"/>
+                </LinearLayout>
             </LinearLayout>
 
             <FrameLayout
@@ -81,6 +116,14 @@
             </FrameLayout>
 
         </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/popup_progress_bar"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="4dp"
+            android:layout_marginTop="8dp"
+            android:visibility="gone"/>
 
     </LinearLayout>
 

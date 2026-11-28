@@ -5,6 +5,7 @@ import android.content.Context
 import android.graphics.drawable.GradientDrawable
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
@@ -18,6 +19,7 @@ import android.widget.LinearLayout
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.media3.common.util.UnstableApi
+import com.bumptech.glide.Glide
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.PopupProps
 import nl.rogro82.pipup.R
@@ -90,6 +92,9 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     private var isCleanedUp = false
     private var lastMediaError: String? = null
     private var liveBadgeRevealed = false
+    private var progressTicker: Runnable? = null
+    private var activeIconKey: String? = null
+    private var hasGlideIconTarget = false
 
     private val adjustHeightsRunnable = Runnable {
         applyHeightConstraints(notifyCallback = true)
@@ -171,7 +176,7 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         layoutController.calculateTargetDimensions(newMedia, newProps)
         updateVisuals()
 
-        if (contentChanged || newMedia is PopupProps.Media.Bitmap) {
+        if (contentChanged) {
             setupMediaContent()
         } else {
             mediaRendererInstance?.updateFullscreenProps(newProps)
@@ -181,9 +186,10 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
                     mediaRendererInstance?.updateWhepVideoFit(newMedia.videoFit)
                 }
             }
-            configureLiveBadgeAppearance()
-            if (liveBadgeRevealed) {
+            if (liveBadgeRevealed || props.isPreview) {
                 revealLiveBadge()
+            } else {
+                configureLiveBadgeAppearance()
             }
             adjustHeights()
         }
@@ -257,9 +263,11 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
     fun cleanup() {
         if (isCleanedUp) return
         isCleanedUp = true
+        stopProgressBar()
         mainHandler.removeCallbacksAndMessages(null)
         layoutController.cleanup()
         buttonController.cleanup()
+        clearAllIconViews()
         mediaRendererInstance?.fullCleanup(binding.popupMediaFrame, props.media)
         mediaCallbackInstance = null
     }
@@ -352,13 +360,13 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         if (layoutParams == null) {
             layoutParams = ViewGroup.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT)
         }
-        alpha = 1.0f
+        alpha = props.targetAlpha
         if (background != null) background = null
         setPadding(0, 0, 0, 0)
 
         val scaledPadding = props.scaleValue(context, props.contentPadding ?: settings.contentPadding)
-        val borderPx = if (props.borderWidth > 0) props.scaleValue(context, props.borderWidth) else 0
-        val radiusPx = props.scaleValue(context, props.borderRadius).toFloat()
+        val borderPx = if (props.effectiveBorderWidth > 0) props.scaleValue(context, props.effectiveBorderWidth) else 0
+        val radiusPx = props.scaleValue(context, props.effectiveBorderRadius).toFloat()
 
         layoutController.applyContainerPaddingAndOutline(props, scaledPadding, borderPx, radiusPx)
         binding.popupMessage.maxLines = Integer.MAX_VALUE
@@ -376,9 +384,100 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
 
         layoutController.reorderViews(props)
         bindTextContent()
+        bindHeaderIcon()
+        bindProgressBar()
         buttonController.updateButtons(props, layoutController.isFullBleedActive(props)) { onButton?.invoke(it) }
         buttonController.updateCloseButton(props) { onClose?.invoke() }
         applyHeightConstraints(notifyCallback = false)
+    }
+
+    private fun bindHeaderIcon() {
+        val iconValue = PopupProps.Icon.parse(props.icon)
+        if (iconValue == null) {
+            if (activeIconKey != null || binding.popupIconLeft.isVisible || binding.popupIconRight.isVisible) {
+                clearAllIconViews()
+            }
+            return
+        }
+        val onRight = props.iconPosition.equals(PopupProps.ICON_POSITION_RIGHT, ignoreCase = true)
+        val scaledW = props.scaleValue(context, props.effectiveIconWidth)
+        val isUri = PopupProps.Icon.isUri(iconValue)
+        val textColor = props.getTitleColorInt()
+        val iconKey = if (isUri) "$iconValue|$onRight|$scaledW" else "$iconValue|$onRight|$scaledW|$textColor"
+        if (iconKey == activeIconKey) return
+
+        val activeView = if (onRight) binding.popupIconRight else binding.popupIconLeft
+        val inactiveView = if (onRight) binding.popupIconLeft else binding.popupIconRight
+        clearIconView(inactiveView)
+        inactiveView.isVisible = false
+
+        (activeView.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+            lp.width = scaledW
+            lp.height = if (isUri) LinearLayout.LayoutParams.WRAP_CONTENT else scaledW
+            activeView.layoutParams = lp
+        }
+        activeView.isVisible = true
+        if (isUri) {
+            hasGlideIconTarget = true
+            Glide.with(context.applicationContext)
+                .load(iconValue)
+                .override(scaledW)
+                .into(activeView)
+        } else {
+            clearIconView(activeView)
+            hasGlideIconTarget = false
+            activeView.setImageDrawable(EmojiDrawable(iconValue, scaledW, textColor))
+        }
+        activeIconKey = iconKey
+    }
+
+    private fun clearAllIconViews() {
+        clearIconView(binding.popupIconLeft)
+        clearIconView(binding.popupIconRight)
+        binding.popupIconLeft.isVisible = false
+        binding.popupIconRight.isVisible = false
+        hasGlideIconTarget = false
+        activeIconKey = null
+    }
+
+    private fun clearIconView(view: ImageView) {
+        if (hasGlideIconTarget) {
+            try {
+                Glide.with(context.applicationContext).clear(view)
+            } catch (_: IllegalArgumentException) {}
+        }
+        view.setImageDrawable(null)
+    }
+
+    private fun bindProgressBar() {
+        stopProgressBar()
+        val bar = binding.popupProgressBar
+        if (!props.showProgress || props.duration <= 0) {
+            bar.isVisible = false
+            return
+        }
+        bar.max = PROGRESS_MAX
+        bar.progress = PROGRESS_MAX
+        bar.isVisible = true
+        if (props.isPreview) return
+
+        val totalMs = props.duration * MS_PER_SECOND
+        val startedAt = SystemClock.elapsedRealtime()
+        val ticker = object : Runnable {
+            override fun run() {
+                if (progressTicker !== this || isCleanedUp) return
+                val left = totalMs - (SystemClock.elapsedRealtime() - startedAt)
+                bar.progress = if (left <= 0L) 0 else ((left * PROGRESS_MAX) / totalMs).toInt()
+                if (left > 0L) bar.postDelayed(this, PROGRESS_TICK_MS)
+            }
+        }
+        progressTicker = ticker
+        bar.post(ticker)
+    }
+
+    private fun stopProgressBar() {
+        progressTicker?.let { binding.popupProgressBar.removeCallbacks(it) }
+        progressTicker = null
     }
 
     private fun bindTextContent() {
@@ -464,15 +563,21 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         val showLiveBadge = props.liveBadge ?: settings.liveBadge
         val badge = binding.popupLiveBadge
         if (!showLiveBadge || (!isStreamMedia() && !props.isPreview)) {
+            badge.animate().cancel()
             badge.isVisible = false
             return
         }
         configureLiveBadgeAppearance()
         if (!badge.isVisible) {
-            badge.alpha = 0f
-            badge.isVisible = true
             badge.bringToFront()
-            badge.animate().alpha(1f).setDuration(LIVE_BADGE_FADE_IN_MS).start()
+            if (props.isPreview) {
+                badge.alpha = 1f
+                badge.isVisible = true
+            } else {
+                badge.alpha = 0f
+                badge.isVisible = true
+                badge.animate().alpha(1f).setDuration(LIVE_BADGE_FADE_IN_MS).start()
+            }
         }
     }
 
@@ -523,6 +628,8 @@ class PopupView(context: Context, var props: PopupProps) : FrameLayout(context) 
         private const val LIVE_BADGE_MARGIN_DP = 8
         private const val LIVE_BADGE_FADE_IN_MS = 150L
         private const val MS_PER_SECOND = 1000L
+        private const val PROGRESS_MAX = 1000
+        private const val PROGRESS_TICK_MS = 50L
 
         /** Creates, binds, and initializes a [PopupView] with optional [listener]. */
         fun build(context: Context, props: PopupProps, listener: ReadyListener? = null): PopupView {

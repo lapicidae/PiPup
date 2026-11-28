@@ -146,8 +146,9 @@ internal class PopupLayoutController(
 
     private fun hasTextOrInlineButtons(props: PopupProps): Boolean {
         val hasAnyText = !props.title.isNullOrBlank() || !props.message.isNullOrBlank()
+        val hasIcon = !props.icon.isNullOrBlank()
         val hasInlineButtons = props.buttonsInline && props.buttons.isNotEmpty()
-        return hasAnyText || hasInlineButtons
+        return hasAnyText || hasIcon || hasInlineButtons
     }
 
     private fun applyFullBleedTextPadding(pos: Int, scaledPadding: Int, gap: Int, hasPaddedContent: Boolean) {

@@ -108,7 +108,12 @@ internal class PopupButtonController(
         }
 
         val targetParent = if (props.buttonsInline) binding.textContainer else binding.popupContainer
-        targetParent.addView(buttonRow)
+        if (targetParent === binding.popupContainer) {
+            val progressIdx = targetParent.indexOfChild(binding.popupProgressBar)
+            if (progressIdx >= 0) targetParent.addView(buttonRow, progressIdx) else targetParent.addView(buttonRow)
+        } else {
+            targetParent.addView(buttonRow)
+        }
         if (!props.isPreview) {
             firstButton?.post { firstButton.requestFocus() }
         }
