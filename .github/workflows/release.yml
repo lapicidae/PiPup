@@ -1,80 +1,214 @@
 # ====================================================================
-# GitHub Actions Workflow: Release Production APK
-# Purpose: Compiles a production-ready release APK and attaches it
-#          directly to a GitHub Release.
+# GitHub Actions Workflow: Build & Release
+# Purpose: Automatically builds and publishes a GitHub (Pre-)Release
+#          when the `pipup` version changes in gradle/libs.versions.toml,
+#          and supports manual releases via workflow_dispatch.
 # ====================================================================
 
-name: Release
+name: Build & Release
 
 on:
-  # Manual trigger for controlled releases
+  push:
+    branches: [ master, main ]
+    paths:
+      - 'gradle/libs.versions.toml'
   workflow_dispatch:
-  # Note: Release-based triggers are currently commented out
-  # to prevent accidental automated deployments.
-#  release:
-#    types:
-#      - "published"
+    inputs:
+      release_type:
+        description: 'Release type (auto derives from pipup version in libs.versions.toml)'
+        required: true
+        default: 'auto'
+        type: choice
+        options:
+          - auto
+          - prerelease
+          - release
+      version_note:
+        description: 'Note for the release'
+        required: false
+        default: 'Manual Build'
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build and Deploy Release Asset
+  detect:
+    name: Detect Release Version
     runs-on: ubuntu-latest
-
-    # Required permissions for creating and updating GitHub Releases
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      should_release: ${{ steps.version_check.outputs.should_release }}
+      release_type: ${{ steps.version_check.outputs.release_type }}
+      version: ${{ steps.version_check.outputs.version }}
+      display_date: ${{ steps.version_check.outputs.display_date }}
+      version_note: ${{ steps.version_check.outputs.version_note }}
 
     steps:
-      # Step 1: Clone the repository onto the virtual runner
-      - name: Checkout Source Code
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Determine release metadata
+        id: version_check
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          INPUT_RELEASE_TYPE: ${{ github.event.inputs.release_type }}
+          INPUT_VERSION_NOTE: ${{ github.event.inputs.version_note }}
+        run: |
+          set -euo pipefail
+
+          extract_pipup_version() {
+            awk '
+              /^\[versions\]/ { in_versions=1; next }
+              /^\[/           { in_versions=0 }
+              in_versions && /^[[:space:]]*pipup[[:space:]]*=/ {
+                if (match($0, /"[^"]*"/)) {
+                  print substr($0, RSTART + 1, RLENGTH - 2)
+                  exit
+                }
+              }
+            '
+          }
+
+          NEW_VERSION=$(extract_pipup_version < gradle/libs.versions.toml)
+          if [ -z "$NEW_VERSION" ]; then
+            echo "::error::Could not extract 'pipup' version from gradle/libs.versions.toml."
+            exit 1
+          fi
+
+          if [ "$EVENT_NAME" = "push" ]; then
+            if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
+              echo "::notice::Previous commit ($BEFORE_SHA) unavailable; skipping automated release."
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            OLD_VERSION=$(git show "${BEFORE_SHA}:gradle/libs.versions.toml" 2>/dev/null | extract_pipup_version || true)
+            echo "Detected pipup version change: '${OLD_VERSION}' -> '${NEW_VERSION}'"
+
+            if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
+              echo "::notice::pipup version unchanged (${NEW_VERSION}); skipping release."
+              echo "should_release=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+          fi
+
+          # Determine release type
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_RELEASE_TYPE" ] && [ "$INPUT_RELEASE_TYPE" != "auto" ]; then
+            RELEASE_TYPE="$INPUT_RELEASE_TYPE"
+          elif [[ "$NEW_VERSION" == *-* ]]; then
+            RELEASE_TYPE="prerelease"
+          else
+            RELEASE_TYPE="release"
+          fi
+
+          # Guard against publishing a stable release whose version string contains a pre-release suffix
+          if [ "$RELEASE_TYPE" = "release" ] && [[ "$NEW_VERSION" == *-* ]]; then
+            echo "::error::Cannot publish a final release from pre-release version '${NEW_VERSION}'. Remove the '-...' suffix in gradle/libs.versions.toml or choose 'prerelease'."
+            exit 1
+          fi
+
+          # Compute final version string (UTC):
+          # - Final releases use clean SemVer (e.g. 0.16.0)
+          # - Pre-releases append a dot-separated UTC timestamp (e.g. 0.16.0-beta.20261127.0221)
+          #   so existing UpdateManager.compareVersions orders all pre-releases and the subsequent
+          #   final release monotonically.
+          UTC_TIMESTAMP=$(date -u +'%Y%m%d.%H%M')
+          DISPLAY_DATE=$(date -u +'%Y-%m-%d %H:%M UTC')
+
+          if [ "$RELEASE_TYPE" = "prerelease" ]; then
+            if [[ "$NEW_VERSION" == *-* ]]; then
+              RELEASE_VERSION="${NEW_VERSION}.${UTC_TIMESTAMP}"
+            else
+              RELEASE_VERSION="${NEW_VERSION}-prerelease.${UTC_TIMESTAMP}"
+            fi
+          else
+            RELEASE_VERSION="$NEW_VERSION"
+          fi
+
+          # Prevent duplicate automated releases when reverting to an already-tagged version
+          if [ "$EVENT_NAME" = "push" ] && git rev-parse -q --verify "refs/tags/v${RELEASE_VERSION}" >/dev/null 2>&1; then
+            echo "::notice::Tag v${RELEASE_VERSION} already exists; skipping automated release."
+            echo "should_release=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            VERSION_NOTE="${INPUT_VERSION_NOTE:-Manual Build}"
+          else
+            VERSION_NOTE="Automated Release"
+          fi
+          VERSION_NOTE=$(printf '%s' "$VERSION_NOTE" | tr '\r\n' '  ')
+
+          {
+            echo "should_release=true"
+            echo "release_type=${RELEASE_TYPE}"
+            echo "version=${RELEASE_VERSION}"
+            echo "display_date=${DISPLAY_DATE}"
+            echo "version_note=${VERSION_NOTE}"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Prepared ${RELEASE_TYPE} build for v${RELEASE_VERSION}"
+
+  build_and_publish:
+    name: Build, Tag, and Deploy
+    needs: detect
+    if: needs.detect.outputs.should_release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Essential for creating the Release and pushing the Tag
+
+    steps:
+      # Step 1: Initialize environment and fetch source
+      - name: Checkout code
         uses: actions/checkout@v7
         with:
           fetch-depth: 0 # Fetch all history for accurate tag comparison
           fetch-tags: true
 
-      # Step 2: Configure Java Environment
-      # Sets up JDK 21 with Temurin and configures server-id for
-      # potential publication to Maven-style repositories.
-      - name: Set up JDK 21
+      # Step 2: Configure Java environment with integrated caching
+      - name: Setup Java
         uses: actions/setup-java@v6.3.0
         with:
           java-version: '21'
           distribution: 'temurin'
-          server-id: github
-          settings-path: ${{ github.workspace }}
+          cache: 'gradle'
 
-      # Step 3: Initialize Gradle
-      # Automates Gradle environment setup, including dependency caching
-      # and build-scan integration.
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v6.4.1
+      # Step 3: Provision Android SDK build tools
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v4
 
-      # Step 4: Extract the exact version string first via your Gradle task
-      - name: Get Version from Gradle Task
-        id: gradle_version
-        run: |
-          VERSION=$(./gradlew -q :app:printAppVersion)
-          printf "version=%s\n" "$VERSION" >> "$GITHUB_OUTPUT"
+      # Step 4: Prepare the wrapper for execution
+      - name: Make Gradle executable
+        run: chmod +x ./gradlew
 
       # Step 5: Get the latest existing tag from git history depending on release type
       - name: Get Last Git Tag
         id: get_last_tag
+        shell: bash
+        env:
+          RELEASE_TYPE: ${{ needs.detect.outputs.release_type }}
         run: |
+          set -euo pipefail
           ALL_TAGS=$(git tag --sort=-creatordate)
           CURRENT_HEAD_TAG=$(git tag --points-at HEAD)
 
-          if [ "${{ github.event.inputs.release_type }}" = "prerelease" ]; then
-            if [ -n "$CURRENT_HEAD_TAG" ]; then
-              LAST_TAG=$(printf "%s\n" "$ALL_TAGS" | grep -v -x "$CURRENT_HEAD_TAG" | head -n 1)
-            else
-              LAST_TAG=$(printf "%s\n" "$ALL_TAGS" | head -n 1)
-            fi
+          if [ "$RELEASE_TYPE" = "prerelease" ]; then
+            CANDIDATE_TAGS="$ALL_TAGS"
           else
-            if [ -n "$CURRENT_HEAD_TAG" ]; then
-              LAST_TAG=$(printf "%s\n" "$ALL_TAGS" | grep -v "-" | grep -v -x "$CURRENT_HEAD_TAG" | head -n 1)
-            else
-              LAST_TAG=$(printf "%s\n" "$ALL_TAGS" | grep -v "-" | head -n 1)
-            fi
+            CANDIDATE_TAGS=$(printf "%s\n" "$ALL_TAGS" | grep -Evi -- '-(alpha|beta|rc|pre)' || true)
+          fi
+
+          if [ -n "$CURRENT_HEAD_TAG" ]; then
+            LAST_TAG=$(printf "%s\n" "$CANDIDATE_TAGS" | grep -v -F -x "$CURRENT_HEAD_TAG" | head -n 1 || true)
+          else
+            LAST_TAG=$(printf "%s\n" "$CANDIDATE_TAGS" | head -n 1 || true)
           fi
 
           if [ -z "$LAST_TAG" ]; then
@@ -114,27 +248,65 @@ jobs:
           rm release.jks.base64
           ls -l app/keystore/release.jks
 
-      # Step 8: Compile Production Binary
-      # Passes the extracted version string back into Gradle to freeze it
-      - name: Build Release APK
-        run: ./gradlew clean assembleRelease -PprojectVersion="${{ steps.gradle_version.outputs.version }}"
+      # Step 8: Execute Parallel Compilation
+      - name: Build APKs
         env:
+          APP_STATUS: ${{ needs.detect.outputs.release_type }}
+          PROJECT_VERSION: ${{ needs.detect.outputs.version }}
           ANDROID_KEYSTORE_PATH: "app/keystore/release.jks"
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          ./gradlew clean assembleDebug assembleRelease \
+            -PappStatus="$APP_STATUS" \
+            -PprojectVersion="$PROJECT_VERSION"
 
-      # Step 9: Publish Asset to GitHub Release
-      - name: Attach APK to GitHub Release
+      # Step 9: Create GitHub Release and Upload Artifacts
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: "v${{ steps.gradle_version.outputs.version }}"
+          tag_name: "v${{ needs.detect.outputs.version }}"
           target_commitish: ${{ github.sha }}
+          name: "${{ needs.detect.outputs.release_type == 'release' && 'Final Release' || 'Pre-Release' }} v${{ needs.detect.outputs.version }}"
           body: |
+            ### Build Information
+            - **App Version:** `${{ needs.detect.outputs.version }}`
+            - **Type:** ${{ needs.detect.outputs.release_type }}
+            - **Note:** ${{ needs.detect.outputs.version_note }}
+            - **Build Date:** ${{ needs.detect.outputs.display_date }}
+
             ### Changelog
             ${{ steps.build_changelog.outputs.changelog }}
           draft: false
-          prerelease: false
-          files: app/build/outputs/apk/release/*.apk
+          prerelease: ${{ needs.detect.outputs.release_type == 'prerelease' }}
+          files: |
+            app/build/outputs/apk/debug/*.apk
+            app/build/outputs/apk/release/*.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Step 10: Remove superseded pre-releases (keeping Git tags for history)
+      - name: Cleanup Superseded Pre-Releases
+        if: needs.detect.outputs.release_type == 'release'
+        continue-on-error: true
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_VERSION: ${{ needs.detect.outputs.version }}
+        run: |
+          set -euo pipefail
+          PREFIX="v${RELEASE_VERSION}-"
+          PRERELEASE_TAGS=$(gh release list --limit 100 --json tagName,isPrerelease \
+            | jq -r --arg prefix "$PREFIX" '.[] | select(.isPrerelease == true and (.tagName | startswith($prefix))) | .tagName')
+
+          if [ -z "$PRERELEASE_TAGS" ]; then
+            echo "No pre-releases matching '${PREFIX}*' found."
+            exit 0
+          fi
+
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            echo "Deleting superseded pre-release (keeping tag): $tag"
+            gh release delete "$tag" --yes || echo "::warning::Failed to delete pre-release $tag"
+          done <<< "$PRERELEASE_TAGS"
