@@ -123,7 +123,7 @@ For a detailed list of all endpoints and response formats, please refer to the [
     "borderWidth": 0,
     "borderColor": "#00000000",
     "contentPadding": 20,
-    "animationType": 0,
+    "animation": 0,
     "animationDuration": 500,
     "animationExit": false,
     "overwrite": false,
@@ -155,37 +155,45 @@ All fields below are optional.
 
 #### General & Text Settings
 
-| _Field_                  | _Type_  | _Default_ | _Description_                                                            |
-| ------------------------ | ------- | --------- | ------------------------------------------------------------------------ |
-| **id**                   | String  | null      | Unique identifier for popup stacking and in-place updates                |
-| **duration**             | Integer | 10        | Duration in seconds                                                      |
-| **position**             | Integer | 0         | Position index on the screen (0..8)                                      |
-| **stack**                | String  | null      | Stacking axis direction (`"vertical"` or `"horizontal"`)                 |
-| **contentPadding**       | Integer | 20        | Inner padding in pixels between the border and content                   |
-| **title**                | String  |           | Title text                                                               |
-| **titleSize**            | Float   | 22        | Title font size                                                          |
-| **titleColor**           | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format                           |
-| **titleAlignment**       | Integer | 0         | Title alignment (0..2)                                                   |
-| **message**              | String  |           | Message text                                                             |
-| **messageSize**          | Float   | 16        | Message font size                                                        |
-| **messageColor**         | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format                         |
-| **messageAlignment**     | Integer | 0         | Message alignment (0..2)                                                 |
-| **animationType**        | Integer | 0         | Animation type index for popup entrance (0..10)                          |
-| **animationDuration**    | Integer | 500       | Duration of the entrance animation in milliseconds                       |
-| **animationExit**        | Boolean | false     | Toggles whether the entrance animation is inverted upon dismissal        |
-| **overwrite**            | Boolean | false     | Toggles whether to interrupt the current popup and prioritize this one   |
-| **mediaTimeout**         | Integer | 10        | Global timeout in seconds for loading external media (1..30)             |
-| **mediaRetries**         | Integer | 3         | Number of retry attempts when loading media streams fails (0..10)        |
-| **popupLoadingBehavior** | Integer | 0         | Stacking loading behavior (0: Strict Sequential, 1: Parallel Fast-Track) |
+| _Field_                  | _Type_  | _Default_ | _Description_                                                                                                                                        |
+| ------------------------ | ------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **id**                   | String  | null      | Unique identifier for popup stacking and in-place updates                                                                                            |
+| **duration**             | Integer | 10        | Duration in seconds                                                                                                                                  |
+| **position**             | Integer | 0         | Position index on the screen (0..8)                                                                                                                  |
+| **stack**                | String  | null      | Stacking axis direction (`"vertical"` or `"horizontal"`)                                                                                             |
+| **contentPadding**       | Integer | 20        | Inner padding in pixels between the border and content                                                                                               |
+| **title**                | String  |           | Title text                                                                                                                                           |
+| **titleSize**            | Float   | 22        | Title font size                                                                                                                                      |
+| **titleColor**           | String  | #FFFFFF   | Color of the title text in `[AA]RRGGBB` format                                                                                                       |
+| **titleAlignment**       | Integer | 0         | Title alignment (0..2)                                                                                                                               |
+| **message**              | String  |           | Message text                                                                                                                                         |
+| **messageSize**          | Float   | 16        | Message font size                                                                                                                                    |
+| **messageColor**         | String  | #FFFFFF   | Color of the message text in `[AA]RRGGBB` format                                                                                                     |
+| **messageAlignment**     | Integer | 0         | Message alignment (0..2)                                                                                                                             |
+| **icon**                 | String  | null      | Optional header icon beside title/message: image URL (`http(s)://`, `data:`) or emoji/short glyph (e.g. `"🔔"`)                                      |
+| **iconPosition**         | String  | `"left"`  | Placement of `icon` relative to title/message (`"left"` or `"right"`; inherits Media Settings default)                                               |
+| **iconWidth**            | Integer | 96        | Width of `icon` in pixels (`16..512`; inherits Media Settings default)                                                                               |
+| **animation**            | Int/Str | 0         | Entrance animation (`0..10`, or `"none"`, `"fade"`, `"slide_left"`, `"slide_right"`, `"slide_top"`, `"slide_bottom"`; legacy alias: `animationType`) |
+| **animationDuration**    | Integer | 500       | Duration of the entrance animation in milliseconds                                                                                                   |
+| **animationExit**        | Boolean | false     | Toggles whether the entrance animation is inverted upon dismissal                                                                                    |
+| **overwrite**            | Boolean | false     | Toggles whether to interrupt the current popup and prioritize this one                                                                               |
+| **bringToFront**         | Boolean | false     | Raises an in-place updated popup to the top of the stack                                                                                             |
+| **dismissScreensaver**   | Boolean | true      | Wakes the display before showing a popup if the screensaver (DreamService) is active                                                                 |
+| **showProgress**         | Boolean | false     | Displays a countdown progress bar at the bottom of the popup when `duration > 0`                                                                     |
+| **mediaTimeout**         | Integer | 10        | Global timeout in seconds for loading external media (1..30)                                                                                         |
+| **mediaRetries**         | Integer | 3         | Number of retry attempts when loading media streams fails (0..10)                                                                                    |
+| **popupLoadingBehavior** | Integer | 0         | Stacking loading behavior (0: Strict Sequential, 1: Parallel Fast-Track)                                                                             |
 
 #### Background & Border Styling
 
-| _Field_             | _Type_  | _Default_ | _Description_                                                  |
-| ------------------- | ------- | --------- | -------------------------------------------------------------- |
-| **backgroundColor** | String  | #CC000000 | Color of the background in `[AA]RRGGBB` format                 |
-| **borderRadius**    | Integer | 0         | Radius in pixels (scaled) to round the background corners      |
-| **borderWidth**     | Integer | 0         | Width of the border around the notification in pixels (scaled) |
-| **borderColor**     | String  | #00000000 | Color of the border in `[AA]RRGGBB` format                     |
+| _Field_             | _Type_  | _Default_ | _Description_                                                                                            |
+| ------------------- | ------- | --------- | -------------------------------------------------------------------------------------------------------- |
+| **backgroundColor** | String  | #CC000000 | Color of the background in `[AA]RRGGBB` format                                                           |
+| **opacity**         | Float   | 1.0       | Whole-popup window opacity (`0.0..1.0`)                                                                  |
+| **urgency**         | String  | null      | Material 3 border preset shorthand (`"info"`, `"warning"`, `"critical"`); overridden by explicit borders |
+| **borderRadius**    | Integer | 0         | Radius in pixels (scaled) to round the background corners (omit to inherit App Settings; `0` disables)   |
+| **borderWidth**     | Integer | 0         | Width of the border in pixels (scaled) (omit to inherit `urgency`/App Settings; `0` disables)            |
+| **borderColor**     | String  | #00000000 | Color of the border in `[AA]RRGGBB` format (omit to inherit `urgency`/App Settings)                      |
 
 #### Media Options
 
@@ -235,7 +243,7 @@ All fields below are optional.
 | **2**   | Left          | Media is placed to the left of the text  |
 | **3**   | Right         | Media is placed to the right of the text |
 
-- **`animationType`** defines the entrance animation of the popup:
+- **`animation`** defines the entrance animation of the popup (accepts `0..10`, or compatibility strings `"none"`, `"fade"`, `"slide_left"`, `"slide_right"`, `"slide_top"`, `"slide_bottom"`; legacy alias: `animationType`):
 
 | _Value_ | _Animation_    |
 | ------- | -------------- |
@@ -245,7 +253,7 @@ All fields below are optional.
 | **3**   | Slide & Bounce |
 | **4**   | Scale In       |
 | **5**   | Scale & Bounce |
-| **6**   | Scale Ta-da    |
+| **6**   | Scale & Ta-da  |
 | **7**   | Slide & Zoom   |
 | **8**   | Slide & Flip   |
 | **9**   | Slide & Ta-da  |
@@ -257,12 +265,13 @@ All fields below are optional.
 
 To clear the notification queue, remove the currently displayed notification, or cancel a specific notification by its unique ID:
 
-| _Property_  | _Value_                                          |
-| ----------- | ------------------------------------------------ |
-| **Path:**   | `/cancel`, `/cancel?all=true`, `/cancel?id=<id>` |
-| **Method:** | `POST`                                           |
+| _Property_  | _Value_                                                                  |
+| ----------- | ------------------------------------------------------------------------ |
+| **Path:**   | `/cancel`, `/cancel?all=true`, `/cancel?current=true`, `/cancel?id=<id>` |
+| **Method:** | `POST`                                                                   |
 
 - **`/cancel`** or **`/cancel?all=true`**: Clears the notification queue and cancels all active notifications.
+- **`/cancel?current=true`**: Cancels only the currently active (most recently shown) notification while keeping the queue intact.
 - **`/cancel?id=<id>`**: Cancels the specific notification matching the given unique ID (whether active on screen or waiting in the queue).
 
 ---
@@ -311,7 +320,9 @@ Retrieves a JSON object containing all current styling and layout configurations
     "titleAlignment": 0,
     "messageAlignment": 0,
     "mediaPosition": 0,
-    "animationType": 0,
+    "iconPosition": "left",
+    "iconWidth": 96,
+    "animation": 0,
     "animationDuration": 500,
     "animationExit": false,
     "mediaTimeout": 10,

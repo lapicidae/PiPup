@@ -9,6 +9,7 @@ set -euo pipefail
 # GLOBALS
 #######################################
 readonly DEFAULT_IP='127.0.0.1'
+readonly DEFAULT_ICON='🔔'
 readonly PORT='7979'
 readonly DURATION=5
 STRESS_ITERATIONS=50
@@ -1199,8 +1200,21 @@ send_json_notification() {
   local is_fullscreen="${23:-false}"
   local dismiss_on_back="${24:-false}"
   local close_button="${25:-}"
+  local icon_url="${26:-}"
+  local icon_pos="${27:-}"
+  local icon_width="${28:-}"
   local close_btn_json="null"
   [[ -n "${close_button}" ]] && close_btn_json="\"${close_button}\""
+  local icon_json="null"
+  if [[ -n "${icon_url}" ]]; then
+    local escaped_icon="${icon_url//\\/\\\\}"
+    escaped_icon="${escaped_icon//\"/\\\"}"
+    icon_json="\"${escaped_icon}\""
+  fi
+  local icon_pos_json="null"
+  [[ -n "${icon_pos}" ]] && icon_pos_json="\"${icon_pos}\""
+  local icon_width_field=""
+  [[ -n "${icon_url}" && -n "${icon_width}" ]] && icon_width_field=$'\n'"  \"iconWidth\": ${icon_width},"
 
   local endpoint="http://${target_ip}:${PORT}/notify"
 
@@ -1226,6 +1240,8 @@ send_json_notification() {
   "messageColor": "${msg_color}",
   "messageSize": ${msg_size},
   "messageAlignment": ${msg_align},
+  "icon": ${icon_json},
+  "iconPosition": ${icon_pos_json},${icon_width_field}
   "backgroundColor": "${bg_color}",
   "borderRadius": ${border_radius},
   "borderWidth": ${border_width},
@@ -1236,7 +1252,7 @@ send_json_notification() {
   "fullscreen": ${is_fullscreen},
   "dismissOnBack": ${dismiss_on_back},
   "closeButton": ${close_btn_json},
-  "animationType": ${anim_type},
+  "animation": ${anim_type},
   "animationDuration": ${anim_duration},
   "overwrite": ${overwrite},
   "media": ${media_json}
@@ -1288,6 +1304,9 @@ send_multipart_test() {
   local is_fullscreen="${10:-false}"
   local dismiss_on_back="${11:-false}"
   local close_button="${12:-}"
+  local icon_url="${13:-}"
+  local icon_pos="${14:-}"
+  local icon_width="${15:-}"
   local endpoint="http://${target_ip}:${PORT}/notify"
 
   local rand_idx=$(( RANDOM % ${#MULTIPART_IMAGES[@]} ))
@@ -1313,6 +1332,12 @@ send_multipart_test() {
   if [[ -n "${close_button}" ]]; then
     close_btn_args=(-F "closeButton=${close_button}")
   fi
+  local icon_args=()
+  if [[ -n "${icon_url}" ]]; then
+    icon_args=(-F "icon=${icon_url}")
+    [[ -n "${icon_pos}" ]] && icon_args+=(-F "iconPosition=${icon_pos}")
+    [[ -n "${icon_width}" ]] && icon_args+=(-F "iconWidth=${icon_width}")
+  fi
 
   local response
   response=$(curl -s --max-time 60 -w "\n%{http_code}" -X POST "${endpoint}" \
@@ -1321,6 +1346,7 @@ send_multipart_test() {
     -F "image=@${img_file}" \
     "${width_args[@]}" \
     "${close_btn_args[@]}" \
+    "${icon_args[@]}" \
     -F "duration=${popup_duration}" \
     -F "position=${position}" \
     -F "mediaPosition=${media_pos}" \
@@ -1328,7 +1354,7 @@ send_multipart_test() {
     -F "fullscreen=${is_fullscreen}" \
     -F "dismissOnBack=${dismiss_on_back}" \
     -F "contentPadding=${padding}" \
-    -F "animationType=${anim_type}" \
+    -F "animation=${anim_type}" \
     -F "animationDuration=${anim_duration}" \
     -F "overwrite=${overwrite}" || printf '\n000')
 
@@ -1361,7 +1387,8 @@ send_multipart_test() {
 usage() {
   cat <<EOF
 Usage: ${0##*/} [-d device] [-w [min]] [-t type] [-u url] [-r [count]]
-       [-a] [-l] [-o] [-F] [-b] [-x [pos]] [-C] [-c] [-s] [-k] [-h]
+       [-a] [-l] [-o] [-F] [-b] [-x [pos]] [-i [left|right] [width] [url|emoji]]
+       [-C] [-c] [-s] [-k] [-h]
 Options:
   -d    Target IP (default: ${DEFAULT_IP})
   -p    Screen position index (0: TopRight, 1: TopLeft, 2: BottomRight, 3: BottomLeft, 4: Center, 5: TopCenter, 6: BottomCenter, 7: CenterLeft, 8: CenterRight)
@@ -1376,6 +1403,8 @@ Options:
   -b    Dismiss popup when Back key is pressed (dismissOnBack)
   -x    Show overlaid close button (optional corner: top_right, top_left,
         bottom_right, bottom_left; default: top_right)
+  -i    Show header icon beside title/message (optional args in any order:
+        left|right, width 16..512, http(s) URL, or emoji; defaults: left, 96, ${DEFAULT_ICON})
   -C    Disable media caching (for URL-based media)
   -c    Immediately trigger a service-wide cancel request
   -s    Execute a high-frequency parallel stress test
@@ -1429,6 +1458,9 @@ main() {
   local fullscreen="false"
   local dismiss_on_back="false"
   local close_button=""
+  local icon_url=""
+  local icon_pos=""
+  local icon_width=""
   local monitor_mem="false"
   local trigger_unload="false"
   local USE_CACHE="true"
@@ -1436,7 +1468,7 @@ main() {
   local repeat_count=1
   local repeat_explicit="false"
 
-  while getopts "d:t:u:p:alFbxockswmghrCM?" opt; do
+  while getopts "d:t:u:p:alFbxockiswmghrCM?" opt; do
     case "${opt}" in
       d) target_ip="${OPTARG}" ;;
       C) USE_CACHE="false" ;;
@@ -1457,6 +1489,35 @@ main() {
             OPTIND=$((OPTIND + 1))
             ;;
         esac
+        ;;
+      i)
+        icon_url="${DEFAULT_ICON}"
+        icon_pos="left"
+        icon_width="96"
+        while [[ -n "${!OPTIND:-}" ]]; do
+          local next_arg="${!OPTIND}"
+          case "${next_arg}" in
+            left|right)
+              icon_pos="${next_arg}"
+              OPTIND=$((OPTIND + 1))
+              ;;
+            http://*|https://*)
+              icon_url="${next_arg}"
+              OPTIND=$((OPTIND + 1))
+              ;;
+            *)
+              if [[ "${next_arg}" =~ ^[0-9]+$ ]]; then
+                icon_width="${next_arg}"
+                OPTIND=$((OPTIND + 1))
+              elif [[ "${next_arg}" != -* ]]; then
+                icon_url="${next_arg}"
+                OPTIND=$((OPTIND + 1))
+              else
+                break
+              fi
+              ;;
+          esac
+        done
         ;;
       c) immediate_cancel="true" ;;
       k) kill_whep_pipeline="true" ;;
@@ -1734,7 +1795,7 @@ main() {
       "${msg_c}" "${radius}" "${rand_media_pos}" "${padding}" "${anim_type}" \
       "${anim_dur}" "${overwrite}" "${rand_t_a}" "${rand_m_a}" "${title_s}" \
       "${msg_s}" "${popup_duration}" "${full_bleed}" "${fullscreen}" \
-      "${dismiss_on_back}" "${close_button}")
+      "${dismiss_on_back}" "${close_button}" "${icon_url}" "${icon_pos}" "${icon_width}")
 
     local table_type="${type^^}"
     if [[ "${type}" == "whep" ]]; then
@@ -1796,11 +1857,13 @@ main() {
       if [[ "${is_async}" == "true" ]]; then
         send_multipart_test "${target_ip}" "${pos}" "${suffix}" \
           "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" \
-          "${fullscreen}" "${dismiss_on_back}" "${close_button}" &
+          "${fullscreen}" "${dismiss_on_back}" "${close_button}" \
+          "${icon_url}" "${icon_pos}" "${icon_width}" &
       else
         send_multipart_test "${target_ip}" "${pos}" "${suffix}" \
           "$((RANDOM % 4))" "" "" "" "${overwrite}" "${popup_duration}" \
-          "${fullscreen}" "${dismiss_on_back}" "${close_button}"
+          "${fullscreen}" "${dismiss_on_back}" "${close_button}" \
+          "${icon_url}" "${icon_pos}" "${icon_width}"
       fi
     else
       local radius border_w padding anim_type anim_dur fit title_s msg_s _

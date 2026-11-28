@@ -78,7 +78,7 @@ Content-Type: application/json
   "titleAlignment": 1,
   "messageAlignment": 1,
   "mediaPosition": 1,
-  "animationType": 2,
+  "animation": 2,
   "animationDuration": 750,
   "animationExit": true,
   "mediaTimeout": 15,
@@ -156,8 +156,11 @@ Content-Type: application/json
 ### Pull Current Settings
 GET {{baseUrl}}/settings
 
-### Cancel current popup
+### Cancel all popups
 POST {{baseUrl}}/cancel
+
+### Cancel only current (most recent active) popup
+POST {{baseUrl}}/cancel?current=true
 
 
 # ---------------------------------------------------------
