@@ -74,11 +74,13 @@ class PowerModule : PiPupModule {
             if (!success && !target && method == null) {
                 moduleContext?.showToast(moduleContext?.getString(R.string.error_power_permission_missing) ?: "")
             }
+            val reached = success && PowerController.waitForScreen(context, target)
 
             val body = Json.writeValueAsString(
                 mapOf(
                     "state" to if (target) "on" else "off",
                     "ok" to success,
+                    "reached" to reached,
                     "method" to method,
                     "screenOn" to PowerController.isScreenOn(context),
                 ),

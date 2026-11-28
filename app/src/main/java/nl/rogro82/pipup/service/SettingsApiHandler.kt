@@ -8,14 +8,15 @@ import fi.iki.elonen.NanoHTTPD
 import nl.rogro82.pipup.AppSettings
 import nl.rogro82.pipup.PiPupApp
 import nl.rogro82.pipup.Pusher
-import nl.rogro82.pipup.readExactBytes
+import nl.rogro82.pipup.core.PayloadParser
 import org.json.JSONException
 import org.json.JSONObject
 import java.net.URI
 import java.net.URISyntaxException
 
 /**
- * Handles GET and POST `/settings` HTTP requests, including webhook validation and live sync.
+ * Handles GET and POST `/settings` HTTP requests, including webhook validation,
+ * Home Assistant `updateChecks` / read-only `updateSource` compatibility, and live sync.
  */
 internal class SettingsApiHandler(
     private val context: Context,
@@ -24,15 +25,20 @@ internal class SettingsApiHandler(
     private val onSettingsApplied: (AppSettings.SettingsData?) -> Unit,
     private val onEmitSettings: () -> Unit,
 ) {
+    private data class ParsedMeta(
+        val webhook: String? = null,
+        val hasWebhook: Boolean = false,
+        val webhookHeartbeat: Int? = null,
+        val updateChecks: Boolean? = null,
+        val hasReadOnlyMeta: Boolean = false,
+        val error: String? = null,
+    ) {
+        val hasAnyUpdate: Boolean
+            get() = hasWebhook || webhookHeartbeat != null || updateChecks != null || hasReadOnlyMeta
+    }
+
     fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response = when (session.method) {
-        NanoHTTPD.Method.GET -> {
-            val json = settings.getAll().toJSONObject().toString()
-            NanoHTTPD.newFixedLengthResponse(
-                NanoHTTPD.Response.Status.OK,
-                "application/json",
-                json,
-            ).apply { setGzipEncoding(false) }
-        }
+        NanoHTTPD.Method.GET -> jsonSettingsResponse(settings.getAll())
         NanoHTTPD.Method.POST -> handleSettingsPost(session)
         else -> NanoHTTPD.newFixedLengthResponse(
             NanoHTTPD.Response.Status.METHOD_NOT_ALLOWED,
@@ -42,81 +48,130 @@ internal class SettingsApiHandler(
     }
 
     private fun handleSettingsPost(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
-        val (webhookUpdated, queryError) = applyWebhookQueryParams(session)
-        if (queryError != null) return invalidRequest(queryError)
+        val queryMeta = parseQueryMeta(session)
+        if (queryMeta.error != null) return invalidRequest(queryMeta.error)
 
-        val length = session.headers["content-length"]?.toIntOrNull() ?: 0
+        val bodyText = PayloadParser.readJsonBody(session, requireChunkedHeader = true)
         return when {
-            length > 0 -> applySettingsJsonBody(String(session.inputStream.readExactBytes(length), Charsets.UTF_8))
-            webhookUpdated -> {
+            bodyText.isNotEmpty() -> applySettingsJsonBody(bodyText, queryMeta)
+            queryMeta.hasAnyUpdate -> {
+                applyMeta(queryMeta)
                 onSettingsApplied(null)
                 onEmitSettings()
-                ok()
+                jsonSettingsResponse(settings.getAll())
             }
             else -> invalidRequest("Empty")
         }
     }
 
-    private fun applyWebhookQueryParams(session: NanoHTTPD.IHTTPSession): Pair<Boolean, String?> {
-        var updated = false
-        var error: String? = null
-        session.parameters["webhook"]?.firstOrNull()?.let { raw ->
-            error = applyWebhookUrl(raw)
-            updated = true
-        }
-        if (error == null) {
-            session.parameters["webhookHeartbeat"]?.firstOrNull()?.let { raw ->
-                error = applyWebhookHeartbeat(raw)
-                updated = true
-            }
-        }
-        return updated to error
-    }
+    private data class RawMeta(
+        val hasWebhook: Boolean = false,
+        val rawWebhook: String? = null,
+        val hasHeartbeat: Boolean = false,
+        val rawHeartbeat: String? = null,
+        val hasUpdateChecks: Boolean = false,
+        val rawUpdateChecks: String? = null,
+        val hasReadOnlySource: Boolean = false,
+    )
 
-    private fun applySettingsJsonBody(bodyText: String): NanoHTTPD.Response {
+    private fun parseQueryMeta(session: NanoHTTPD.IHTTPSession): ParsedMeta = parseMetaFields(
+        RawMeta(
+            hasWebhook = session.parameters.containsKey("webhook"),
+            rawWebhook = session.parameters["webhook"]?.firstOrNull(),
+            hasHeartbeat = session.parameters.containsKey("webhookHeartbeat"),
+            rawHeartbeat = session.parameters["webhookHeartbeat"]?.firstOrNull(),
+            hasUpdateChecks = session.parameters.containsKey("updateChecks"),
+            rawUpdateChecks = session.parameters["updateChecks"]?.firstOrNull(),
+            hasReadOnlySource = session.parameters.containsKey("updateSource"),
+        ),
+    )
+
+    private fun applySettingsJsonBody(bodyText: String, queryMeta: ParsedMeta): NanoHTTPD.Response {
         val json = try {
             JSONObject(bodyText)
         } catch (e: JSONException) {
             return invalidRequest(e.message)
         }
 
-        val (parsedHeartbeat, webhookError) = validateJsonWebhookFields(json)
+        val jsonMeta = parseMetaFields(
+            RawMeta(
+                hasWebhook = json.has("webhook"),
+                rawWebhook = if (json.isNull("webhook")) "" else json.optString("webhook", ""),
+                hasHeartbeat = json.has("webhookHeartbeat"),
+                rawHeartbeat = if (json.isNull("webhookHeartbeat")) "0" else json.get("webhookHeartbeat").toString(),
+                hasUpdateChecks = json.has("updateChecks") && !json.isNull("updateChecks"),
+                rawUpdateChecks = if (json.has("updateChecks")) json.get("updateChecks").toString() else null,
+                hasReadOnlySource = json.has("updateSource"),
+            ),
+        )
         val keys = buildSet { json.keys().forEach { add(it) } }
-        val isWebhookOnlyJson = keys.isNotEmpty() && keys.all { it == "webhook" || it == "webhookHeartbeat" }
+        val isMetaOnlyJson = keys.isNotEmpty() && keys.all { it in META_ONLY_KEYS }
         return when {
-            webhookError != null -> invalidRequest(webhookError)
-            isWebhookOnlyJson -> {
-                if (parsedHeartbeat != null) settings.webhookHeartbeat = parsedHeartbeat
+            jsonMeta.error != null -> invalidRequest(jsonMeta.error)
+            isMetaOnlyJson -> {
+                applyMeta(queryMeta)
+                applyMeta(jsonMeta)
                 onSettingsApplied(null)
                 onEmitSettings()
-                ok()
+                jsonSettingsResponse(settings.getAll())
             }
-            else -> applyFullSettingsJson(bodyText, parsedHeartbeat)
+            else -> applyFullSettingsJson(bodyText, queryMeta, jsonMeta)
         }
     }
 
-    private fun validateJsonWebhookFields(json: JSONObject): Pair<Int?, String?> {
-        var parsedHeartbeat: Int? = null
-        var error: String? = null
-        if (json.has("webhookHeartbeat")) {
-            val rawHb = if (json.isNull("webhookHeartbeat")) "0" else json.get("webhookHeartbeat").toString()
-            parsedHeartbeat = parseWebhookHeartbeat(rawHb)
-            if (parsedHeartbeat == null) error = "webhookHeartbeat must be a non-negative integer"
-        }
-        if (error == null && json.has("webhook")) {
-            val rawUrl = if (json.isNull("webhook")) "" else json.optString("webhook", "")
-            error = applyWebhookUrl(rawUrl)
-        }
-        return parsedHeartbeat to error
+    private fun parseMetaFields(raw: RawMeta): ParsedMeta {
+        val webhook = if (raw.hasWebhook) validateWebhookUrl(raw.rawWebhook.orEmpty()) else (null to null)
+        val heartbeat = if (raw.hasHeartbeat) validateHeartbeat(raw.rawHeartbeat.orEmpty()) else (null to null)
+        val checks = if (raw.hasUpdateChecks) validateUpdateChecks(raw.rawUpdateChecks) else (null to null)
+        val error = webhook.second ?: heartbeat.second ?: checks.second
+        return ParsedMeta(
+            webhook = webhook.first,
+            hasWebhook = raw.hasWebhook,
+            webhookHeartbeat = heartbeat.first,
+            updateChecks = checks.first,
+            hasReadOnlyMeta = raw.hasReadOnlySource,
+            error = error,
+        )
     }
 
-    private fun applyFullSettingsJson(bodyText: String, parsedHeartbeat: Int?): NanoHTTPD.Response = try {
+    private fun applyWebhook(meta: ParsedMeta) {
+        if (!meta.hasWebhook) return
+        val url = meta.webhook.orEmpty()
+        settings.webhook = url
+        Pusher.url = url.ifEmpty { null }
+    }
+
+    private fun resolveUpdateInterval(currentInterval: Int, enabled: Boolean?): Int = when (enabled) {
+        true -> if (currentInterval <= 0) AppSettings.DEFAULT_UPDATE_INTERVAL else currentInterval
+        false -> 0
+        null -> currentInterval
+    }
+
+    private fun applyMeta(meta: ParsedMeta) {
+        applyWebhook(meta)
+        meta.webhookHeartbeat?.let { settings.webhookHeartbeat = it }
+        meta.updateChecks?.let {
+            settings.updateInterval = resolveUpdateInterval(settings.updateInterval, it)
+        }
+    }
+
+    private fun applyFullSettingsJson(
+        bodyText: String,
+        queryMeta: ParsedMeta,
+        jsonMeta: ParsedMeta,
+    ): NanoHTTPD.Response = try {
         val parsed = AppSettings.SettingsData.fromJson(bodyText, defaults = settings.getAll())
-        val data = if (parsedHeartbeat != null) parsed.copy(webhookHeartbeat = parsedHeartbeat) else parsed
+        val effectiveHeartbeat = jsonMeta.webhookHeartbeat ?: queryMeta.webhookHeartbeat ?: parsed.webhookHeartbeat
+        val effectiveChecks = jsonMeta.updateChecks ?: queryMeta.updateChecks
+        val data = parsed.copy(
+            webhookHeartbeat = effectiveHeartbeat,
+            updateInterval = resolveUpdateInterval(parsed.updateInterval, effectiveChecks),
+        )
+        applyWebhook(queryMeta)
+        applyWebhook(jsonMeta)
         mainHandler.post {
             settings.apply(data)
             onSettingsApplied(data)
-
             val intent = Intent(PiPupApp.ACTION_SETTINGS_CHANGED).apply {
                 setPackage(PiPupApp.APP_PACKAGE)
                 putExtra("origin", "remote")
@@ -124,59 +179,61 @@ internal class SettingsApiHandler(
             context.sendBroadcast(intent)
         }
         onEmitSettings()
-        ok()
+        jsonSettingsResponse(data)
     } catch (e: JSONException) {
         invalidRequest(e.message)
     } catch (e: IllegalArgumentException) {
         invalidRequest(e.message)
     }
 
-    private fun applyWebhookUrl(raw: String): String? {
+    private fun validateWebhookUrl(raw: String): Pair<String?, String?> {
         val v = raw.trim()
-        if (v.isEmpty()) {
-            settings.webhook = null
-            Pusher.url = null
-            return null
-        }
+        if (v.isEmpty()) return "" to null
         val valid = try {
             val uri = URI(v)
-            uri.scheme in setOf("http", "https") && !uri.host.isNullOrBlank()
+            uri.scheme in HTTP_SCHEMES && !uri.host.isNullOrBlank()
         } catch (_: URISyntaxException) {
             false
         }
-        if (valid) {
-            settings.webhook = v
-            Pusher.url = v
+        return if (valid) v to null else null to "webhook must be a valid http(s) URL"
+    }
+
+    private fun validateHeartbeat(raw: String): Pair<Int?, String?> {
+        val parsed = raw.trim().toIntOrNull()?.let { AppSettings.normalizeWebhookHeartbeat(it) }
+        return if (parsed != null) parsed to null else null to "webhookHeartbeat must be a non-negative integer"
+    }
+
+    private fun validateUpdateChecks(raw: String?): Pair<Boolean?, String?> {
+        val parsed = PayloadParser.parseFlexibleBoolean(raw)
+        return if (parsed != null) parsed to null else null to "updateChecks must be true or false"
+    }
+
+    private fun jsonSettingsResponse(data: AppSettings.SettingsData): NanoHTTPD.Response {
+        val jsonObj = data.toJSONObject().apply {
+            put("updateChecks", data.updateInterval > 0)
+            put("updateSource", AppSettings.DEFAULT_UPDATE_SOURCE)
+            put("webhook", !Pusher.url.isNullOrBlank())
         }
-        return if (valid) null else "webhook must be a valid http(s) URL"
-    }
-
-    private fun parseWebhookHeartbeat(raw: String): Int? {
-        val parsed = raw.trim().toIntOrNull() ?: return null
-        return AppSettings.normalizeWebhookHeartbeat(parsed)
-    }
-
-    private fun applyWebhookHeartbeat(raw: String): String? {
-        val normalized = parseWebhookHeartbeat(raw)
-            ?: return "webhookHeartbeat must be a non-negative integer"
-        settings.webhookHeartbeat = normalized
-        return null
-    }
-
-    private fun ok(): NanoHTTPD.Response {
-        Log.d(TAG, "Response OK")
-        return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", "OK")
+        Log.d(TAG, "Response OK (JSON)")
+        return NanoHTTPD.newFixedLengthResponse(
+            NanoHTTPD.Response.Status.OK,
+            "application/json",
+            jsonObj.toString(),
+        ).apply { setGzipEncoding(false) }
     }
 
     private fun invalidRequest(message: String?): NanoHTTPD.Response {
+        Log.w(TAG, "Invalid settings request: $message")
         return NanoHTTPD.newFixedLengthResponse(
             NanoHTTPD.Response.Status.BAD_REQUEST,
             "text/plain",
-            "invalid request: ${message ?: "unknown error"}",
+            "Invalid request: $message",
         )
     }
 
     companion object {
         private const val TAG = "SettingsApiHandler"
+        private val HTTP_SCHEMES = setOf("http", "https")
+        private val META_ONLY_KEYS = setOf("webhook", "webhookHeartbeat", "updateChecks", "updateSource")
     }
 }

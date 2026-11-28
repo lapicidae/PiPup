@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.PowerManager
+import android.os.SystemClock
 import android.util.Log
 import nl.rogro82.pipup.service.AdminReceiver
 import nl.rogro82.pipup.service.PiPupAccessibilityService
@@ -22,6 +23,9 @@ object PowerController {
     const val METHOD_ACCESSIBILITY = "accessibility"
 
     private const val WAKE_LOCK_TIMEOUT_MS = 3_000L
+    /** Default timeout in ms to wait for the display power state to settle after wake/sleep. */
+    const val SCREEN_WAIT_MS = 3_000L
+    private const val SCREEN_POLL_MS = 100L
 
     /** Checks if the screen is currently interactive (on). */
     fun isScreenOn(context: Context): Boolean =
@@ -97,6 +101,27 @@ object PowerController {
             Log.e(TAG, "WakeActivity launch failed", e)
         }
         return success
+    }
+
+    /**
+     * Blocks the calling worker thread up to [timeoutMs] until [isScreenOn] matches [targetOn].
+     * Never call on the main thread.
+     *
+     * @return True if the screen reached [targetOn] before [timeoutMs] elapsed.
+     */
+    fun waitForScreen(context: Context, targetOn: Boolean, timeoutMs: Long = SCREEN_WAIT_MS): Boolean {
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        var reached = isScreenOn(context) == targetOn
+        while (!reached && SystemClock.elapsedRealtime() < deadline) {
+            try {
+                Thread.sleep(SCREEN_POLL_MS)
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                break
+            }
+            reached = isScreenOn(context) == targetOn
+        }
+        return reached
     }
 
     /**

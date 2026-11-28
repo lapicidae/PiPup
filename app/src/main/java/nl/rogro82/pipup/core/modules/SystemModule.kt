@@ -253,21 +253,24 @@ class SystemModule : PiPupModule {
 
     private fun cancelResponse(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
         val id = session.parameters["id"]?.firstOrNull()
-        val all = session.parameters["all"]?.firstOrNull()?.lowercase() in setOf("true", "1", "on")
+        val all = PayloadParser.parseFlexibleBoolean(session.parameters["all"]?.firstOrNull()) == true
+        val current = PayloadParser.parseFlexibleBoolean(session.parameters["current"]?.firstOrNull()) == true
         val nm = moduleContext?.notificationManager ?: return NanoHTTPD.newFixedLengthResponse("Service not ready")
 
-        val msg = if (!all && id != null) {
-            when (nm.cancelById(id)) {
+        val msg = when {
+            !all && id != null -> when (nm.cancelById(id)) {
                 NotificationManager.CancelResult.CANCELLED_ACTIVE -> "OK: Cancelled"
                 NotificationManager.CancelResult.REMOVED_FROM_QUEUE -> "OK: Removed from queue"
                 NotificationManager.CancelResult.NOT_FOUND -> {
                     if (!nm.isDisplaying()) "OK: Nothing to cancel" else "ID not found: $id"
                 }
             }
-        } else {
-            val isDisplaying = nm.isDisplaying()
-            nm.cancelAll()
-            if (isDisplaying) "OK: Cancelled" else "OK: Nothing to cancel"
+            !all && current -> if (nm.cancelCurrent()) "OK: Cancelled" else "OK: Nothing to cancel"
+            else -> {
+                val isDisplaying = nm.isDisplaying()
+                nm.cancelAll()
+                if (isDisplaying) "OK: Cancelled" else "OK: Nothing to cancel"
+            }
         }
         return NanoHTTPD.newFixedLengthResponse(NanoHTTPD.Response.Status.OK, "text/plain", msg)
     }

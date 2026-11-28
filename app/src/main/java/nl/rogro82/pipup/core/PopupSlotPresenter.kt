@@ -90,6 +90,7 @@ internal class PopupSlotPresenter(
         current.expire?.let { handler.removeCallbacks(it) }
         current.expire = null
         handler.removeCallbacksAndMessages(current)
+        wakeIfDreaming(props)
 
         if (positionChanged && !reattachSlotToNewPosition(id, current, props, newPos)) {
             return
@@ -97,6 +98,12 @@ internal class PopupSlotPresenter(
 
         current.props = props
         current.shownAt = SystemClock.elapsedRealtime()
+        if (props.bringToFront) {
+            host.shownSlots.remove(id)
+            host.shownSlots[id] = current
+            current.view.bringToFront()
+            current.container?.bringToFront()
+        }
         current.view.updateFromProps(props)
         overlayHost.measurePopupView(current.view)
         if (positionChanged) {
@@ -357,6 +364,7 @@ internal class PopupSlotPresenter(
         val slotKey = shown.key
         val props = shown.props
         val view = shown.view
+        wakeIfDreaming(props)
         val container = overlayHost.ensurePositionContainer(
             props.getPositionEnum(),
             props.effectiveStack,
@@ -517,6 +525,12 @@ internal class PopupSlotPresenter(
             activeItems = activeItems,
             replaceSlotKey = replaceSlotKey,
         )
+    }
+
+    private fun wakeIfDreaming(props: PopupProps) {
+        if (props.dismissScreensaver && PipUpService.getInstance()?.isDreaming == true) {
+            PowerController.wake(context)
+        }
     }
 
     companion object {

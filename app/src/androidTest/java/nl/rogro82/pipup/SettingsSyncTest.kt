@@ -121,6 +121,101 @@ class SettingsSyncTest {
             assertEquals("top_right", enqueuedProps.liveBadgePosition)
             assertEquals(800, (enqueuedProps.media as PopupProps.Media.Video).bufferMs)
 
+            // Explicit zero/none values must NOT be overridden by global defaults
+            PiPupApp.settings.borderWidth = 6
+            PiPupApp.settings.animationType = 3
+            val explicitZero = PiPupApp.settings.applyDefaults(
+                PopupProps(
+                    title = "Explicit Zero",
+                    borderWidth = 0,
+                    borderRadius = 0,
+                    animationType = 0,
+                )
+            )
+            assertEquals(0, explicitZero.borderWidth)
+            assertEquals(0, explicitZero.borderRadius)
+            assertEquals(0, explicitZero.animationType)
+
+            // Urgency preset applies Material 3 border width/color for Dark & Light themes unless overridden
+            PiPupApp.settings.appTheme = 0 // Dark Mode
+            val urgentDark = PiPupApp.settings.applyDefaults(
+                PopupProps(title = "Alert Dark", urgency = "critical")
+            )
+            assertEquals(8, urgentDark.borderWidth)
+            assertEquals("#F2B8B5", urgentDark.borderColor)
+
+            PiPupApp.settings.appTheme = 1 // Light Mode
+            val urgentLight = PiPupApp.settings.applyDefaults(
+                PopupProps(title = "Alert Light", urgency = "critical")
+            )
+            assertEquals(8, urgentLight.borderWidth)
+            assertEquals("#B3261E", urgentLight.borderColor)
+        } finally {
+            PiPupApp.settings.apply(originalSettings)
+        }
+    }
+
+    @Test
+    fun testIconDefaultsInheritanceAndOverride() {
+        val originalSettings = PiPupApp.settings.getAll()
+        try {
+            PiPupApp.settings.iconPosition = "right"
+            PiPupApp.settings.iconWidth = 128
+            val inheritedIcon = PiPupApp.settings.applyDefaults(
+                PopupProps(title = "With Icon", icon = "https://example.com/icon.png")
+            )
+            assertEquals("right", inheritedIcon.iconPosition)
+            assertEquals(128, inheritedIcon.iconWidth)
+
+            val overriddenIcon = PiPupApp.settings.applyDefaults(
+                PopupProps(
+                    title = "Custom Icon",
+                    icon = "https://example.com/icon.png",
+                    iconPosition = "left",
+                    iconWidth = 64,
+                )
+            )
+            assertEquals("left", overriddenIcon.iconPosition)
+            assertEquals(64, overriddenIcon.iconWidth)
+        } finally {
+            PiPupApp.settings.apply(originalSettings)
+        }
+    }
+
+    @Test
+    fun testHaPipupSettingsCompatQueryAndJsonResponse() {
+        val originalSettings = PiPupApp.settings.getAll()
+        try {
+            // updateChecks mutates updateInterval; read-only updateSource is silently ignored
+            val conn = (URL("http://localhost:7979/settings?updateChecks=false&updateSource=github:owner/repo")
+                .openConnection() as HttpURLConnection)
+            try {
+                conn.requestMethod = "POST"
+                assertEquals(200, conn.responseCode)
+                val body = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = org.json.JSONObject(body)
+                assertFalse(json.getBoolean("updateChecks"))
+                assertEquals(AppSettings.DEFAULT_UPDATE_SOURCE, json.getString("updateSource"))
+                assertTrue(json.has("webhook"))
+            } finally {
+                conn.disconnect()
+            }
+            assertEquals(0, PiPupApp.settings.updateInterval)
+
+            // JSON POST immediately reflects updated value in the response body (no stale race)
+            val jsonConn = (URL("http://localhost:7979/settings").openConnection() as HttpURLConnection)
+            try {
+                jsonConn.requestMethod = "POST"
+                jsonConn.doOutput = true
+                jsonConn.setRequestProperty("Content-Type", "application/json")
+                jsonConn.outputStream.use { it.write("""{"maxPopups": 4}""".toByteArray(Charsets.UTF_8)) }
+                assertEquals(200, jsonConn.responseCode)
+                val json = org.json.JSONObject(jsonConn.inputStream.bufferedReader().use { it.readText() })
+                assertEquals(4, json.getInt("maxPopups"))
+                assertEquals(AppSettings.DEFAULT_UPDATE_SOURCE, json.getString("updateSource"))
+            } finally {
+                jsonConn.disconnect()
+            }
         } finally {
             PiPupApp.settings.apply(originalSettings)
         }

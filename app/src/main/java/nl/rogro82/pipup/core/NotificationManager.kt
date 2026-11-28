@@ -124,14 +124,6 @@ class NotificationManager(
     }
 
     /**
-     * Returns the properties of the currently displayed notification, or null if none.
-     */
-    @Suppress("unused")
-    fun getCurrentProps(): PopupProps? = synchronized(this) {
-        shownSlots.values.lastOrNull()?.props
-    }
-
-    /**
      * Checks if a given ID or key belongs to an internal update popup.
      */
     fun isInternalUpdate(idOrKey: String): Boolean = synchronized(this) {
@@ -187,6 +179,16 @@ class NotificationManager(
     }
 
     /**
+     * Cancels only the currently active (most recently shown) popup, leaving any queued or
+     * remaining stacked popups intact so the next item in the queue can advance.
+     *
+     * @return True if an active popup was found and cancelled.
+     */
+    fun cancelCurrent(): Boolean = runOnMainSync(false) {
+        performCancelCurrent()
+    }
+
+    /**
      * Cancels all notifications and clears the queue.
      * Blocks until UI thread cleanup is done if called from a background thread.
      */
@@ -216,7 +218,6 @@ class NotificationManager(
             overlayHost.prepareIdleOverlay()
             handler.removeCallbacks(idleOverlayRemovalRunnable)
             if (preparingSlots.isEmpty() && readyWaiting.isEmpty() && queue.isEmpty()) {
-                lastPopup = null
                 handler.postDelayed(idleOverlayRemovalRunnable, OVERLAY_IDLE_GRACE_MS)
             }
         }
@@ -401,6 +402,12 @@ class NotificationManager(
             oldProps.getPositionEnum() == newProps.getPositionEnum() &&
             oldProps.effectiveStack == newProps.effectiveStack
 
+    private fun performCancelCurrent(): Boolean = synchronized(this) {
+        val target = shownSlots.values.maxByOrNull { it.shownAt } ?: return false
+        presenter.removePopupByKey(target.key, "cancelled")
+        true
+    }
+
     private fun performCancelById(id: String): CancelResult = synchronized(this) {
         when {
             shownSlots.containsKey(id) || exitingSlots.containsKey(id) -> {
@@ -491,7 +498,6 @@ class NotificationManager(
 
             notifyStateChanged(false)
             overlayHost.removeOverlay()
-            lastPopup = null
         }
     }
 

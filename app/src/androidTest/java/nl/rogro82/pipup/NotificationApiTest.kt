@@ -84,7 +84,7 @@ class NotificationApiTest {
             val json = """{
                 "title": "Animation: ${anims[i]}",
                 "message": "Media Position: ${mediaPos[i % mediaPos.size]}",
-                "animationType": ${anims[i]},
+                "animation": ${anims[i]},
                 "animationExit": true,
                 "mediaPosition": ${mediaPos[i % mediaPos.size]},
                 "duration": 2,
@@ -743,6 +743,57 @@ class NotificationApiTest {
             ApiResponse(code, body)
         } finally {
             try { conn.disconnect() } catch (_: Exception) {}
+        }
+    }
+
+    @Test
+    fun testCancelCurrentAdvancesQueueAndStateRetainsLastPopupAndHaHeaders() {
+        val origSettings = PiPupApp.settings.getAll()
+        try {
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            sendPostWithResponse("$baseUrl/settings", """{"maxPopups": 1}""".toByteArray())
+            Thread.sleep(300)
+
+            assertEquals(
+                200,
+                sendPost("$baseUrl/notify", """{"id":"cur_1","title":"First","duration":20}""".toByteArray())
+            )
+            Thread.sleep(500)
+            assertEquals(
+                200,
+                sendPost("$baseUrl/notify", """{"id":"cur_2","title":"Second","duration":20}""".toByteArray())
+            )
+            Thread.sleep(300)
+
+            val cancelCurrent = sendPostWithResponse("$baseUrl/cancel?current=true", ByteArray(0))
+            assertEquals(200, cancelCurrent.code)
+            assertEquals("OK: Cancelled", cancelCurrent.body)
+            Thread.sleep(700)
+
+            // Verify second queued popup advanced to active screen and HA headers are recorded
+            val stateConn = URL("$baseUrl/state").openConnection() as HttpURLConnection
+            try {
+                stateConn.requestMethod = "GET"
+                stateConn.setRequestProperty("X-HA-PiPup-Version", "1.32.0")
+                stateConn.setRequestProperty("X-HA-PiPup-Auto-Update", "on")
+                assertEquals(200, stateConn.responseCode)
+                val stateJson = org.json.JSONObject(stateConn.inputStream.bufferedReader().use { it.readText() })
+                assertEquals("cur_2", stateJson.getJSONObject("popup").getString("id"))
+                assertEquals("1.32.0", stateJson.getJSONObject("haPipup").getString("connected"))
+                assertTrue(stateJson.getJSONObject("update").getBoolean("haManaged"))
+            } finally {
+                stateConn.disconnect()
+            }
+
+            // Cancel all and verify lastPopup is retained for diagnostics
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            Thread.sleep(300)
+            val afterCancel = org.json.JSONObject(sendGetWithResponse("$baseUrl/state").body)
+            assertFalse(afterCancel.getBoolean("visible"))
+            assertTrue("lastPopup should remain available after dismissal", afterCancel.has("lastPopup"))
+        } finally {
+            sendPostWithResponse("$baseUrl/cancel", ByteArray(0))
+            PiPupApp.settings.apply(origSettings)
         }
     }
 

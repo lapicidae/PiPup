@@ -33,6 +33,7 @@ import nl.rogro82.pipup.Pusher
 import nl.rogro82.pipup.R
 import nl.rogro82.pipup.UpdateManager
 import nl.rogro82.pipup.UpdateWorker
+import nl.rogro82.pipup.core.PayloadParser
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -145,6 +146,13 @@ class PipUpService : Service() {
     private val startedAt = SystemClock.elapsedRealtime()
 
     @Volatile private var dreaming = false
+
+    @Volatile private var haPipupVersion: String? = null
+
+    @Volatile private var haAutoUpdate: Boolean? = null
+
+    /** True while the device screensaver (DreamService / ambient mode) is active. */
+    val isDreaming: Boolean get() = dreaming
     private val dreamReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             dreaming = intent?.action == Intent.ACTION_DREAMING_STARTED
@@ -384,6 +392,7 @@ class PipUpService : Service() {
     }
 
     private fun handleRequest(session: NanoHTTPD.IHTTPSession): NanoHTTPD.Response {
+        recordIntegrationHeaders(session)
         val uri = session.uri.lowercase()
         val method = session.method
 
@@ -428,6 +437,15 @@ class PipUpService : Service() {
         }
     }
 
+    private fun recordIntegrationHeaders(session: NanoHTTPD.IHTTPSession) {
+        session.headers["x-ha-pipup-version"]?.trim()?.takeIf { it.isNotEmpty() }?.let {
+            haPipupVersion = it
+        }
+        PayloadParser.parseFlexibleBoolean(
+            session.headers["x-ha-pipup-auto-update"],
+        )?.let { haAutoUpdate = it }
+    }
+
     private fun captureStateSnapshot(): PopupStateSnapshot = PopupStateSnapshot(
         activeSlots = notificationManager.getActiveSlotDetails(),
         visible = notificationManager.isDisplaying(),
@@ -465,7 +483,7 @@ class PipUpService : Service() {
             ),
             "permissions" to Permissions.asMap(this),
             "update" to buildUpdateState(),
-            "haPipup" to mapOf("recommended" to null, "minimum" to "1.0.0", "connected" to null),
+            "haPipup" to mapOf("recommended" to null, "minimum" to "1.0.0", "connected" to haPipupVersion),
             "push" to buildPushState(),
         )
 
@@ -498,13 +516,14 @@ class PipUpService : Service() {
     }
 
     private fun buildUpdateState(): Map<String, Any?> = mapOf(
-        "checksEnabled" to true,
-        "source" to "github",
+        "checksEnabled" to (settings.updateInterval > 0),
+        "source" to AppSettings.DEFAULT_UPDATE_SOURCE,
         "available" to UpdateManager.updateAvailable(this),
         "latest" to UpdateManager.latestVersion,
         "installing" to UpdateManager.isInstalling,
         "phase" to if (UpdateManager.isInstalling) "installing" else null,
         "silent" to UpdateManager.silentInstall,
+        "haManaged" to (haAutoUpdate == true),
         "checkedSecondsAgo" to UpdateManager.lastCheckedAt.takeIf { it > 0 }
             ?.let { (System.currentTimeMillis() - it) / MS_PER_SECOND },
         "error" to UpdateManager.lastError,
@@ -523,7 +542,7 @@ class PipUpService : Service() {
             "media" to mediaInfo(last),
             "tts" to false,
             "sound" to false,
-            "animation" to last.animationType,
+            "animation" to last.effectiveAnimationType,
             "buttons" to last.buttons.size,
             "firstFrameMs" to notificationManager.lastFirstFrameMs,
             "mediaError" to notificationManager.lastMediaError,
@@ -609,7 +628,8 @@ class PipUpService : Service() {
             "popup" to props.id,
             "button" to btn.id,
             "label" to btn.label,
-            "device" to settings.deviceId
+            "device" to settings.deviceId,
+            "name" to deviceName(),
         )
         Pusher.push("button", Json.writeValueAsString(payload))
 
